@@ -10,6 +10,7 @@ configurar, como testar manualmente, e limitações conhecidas.
 4. [Tronco TDM (gateway)](manual-04-tronco-tdm.md)
 5. [Auto-provisionamento](manual-05-provisionamento.md)
 6. [Telefonista web (WebRTC + presença/BLF)](manual-06-telefonista-web.md)
+7. [Transferência assistida (com consulta)](manual-07-transferencia-assistida.md)
 
 ## Regra de manutenção
 

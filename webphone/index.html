@@ -291,6 +291,28 @@
     color: var(--text-muted);
     display: block;
   }
+
+  /* Transferência assistida (consulta) */
+  .consult-leg {
+    text-align: left;
+    background: var(--panel-alt);
+    border-radius: 5px;
+    padding: 10px 12px;
+    margin-top: 10px;
+    font-size: 13px;
+  }
+  .consult-leg-label {
+    display: block;
+    color: var(--text-muted);
+    font-size: 11px;
+    margin-bottom: 2px;
+  }
+  .consult-leg-peer { font-weight: 600; }
+  .consult-leg-state {
+    color: var(--amber);
+    margin-left: 8px;
+    font-size: 12px;
+  }
 </style>
 </head>
 <body>
@@ -378,6 +400,31 @@
         <input id="transferTarget" placeholder="Ramal para transferir">
         <button class="btn-ghost" id="transferBtn">Transferir</button>
       </div>
+      <div class="transfer-row">
+        <button class="btn-ghost" id="consultBtn" style="width:100%;">
+          Consultar antes de transferir
+        </button>
+      </div>
+    </div>
+
+    <!-- Consulta em andamento (transferência assistida) -->
+    <div id="consultView" class="call-card" style="display:none;">
+      <div class="call-state">Transferência assistida</div>
+      <div class="consult-leg">
+        <span class="consult-leg-label">Chamada em espera</span>
+        <span class="consult-leg-peer" id="consultHeldPeer">—</span>
+      </div>
+      <div class="consult-leg">
+        <span class="consult-leg-label">Consultando</span>
+        <span class="consult-leg-peer" id="consultTargetPeer">—</span>
+        <span class="consult-leg-state" id="consultTargetState">chamando…</span>
+      </div>
+      <div class="call-controls" style="margin-top:16px;">
+        <button class="btn-ghost" id="cancelConsultBtn">Cancelar</button>
+        <button class="btn-primary" id="completeConsultBtn" style="margin:0;" disabled>
+          Completar transferência
+        </button>
+      </div>
     </div>
 
   </main>
@@ -407,6 +454,12 @@
   let timerInterval = null;
   const callLogEntries = [];
 
+  // Transferência assistida (consulta)
+  let expectingConsultCall = false;
+  let primarySession = null;   // chamada original, colocada em espera
+  let consultSession = null;   // chamada de consulta com o colega
+  let consultExt = null;
+
   // Ramais colegas a monitorar (BLF). Ajuste esta lista conforme os
   // ramais reais do seu tenant/hints em extensions.conf. O próprio
   // ramal conectado deve ficar de fora da lista.
@@ -423,7 +476,7 @@
 
   // ---------- UI: troca de telas ----------
   function showView(view) {
-    ['idleView', 'incomingView', 'activeView'].forEach((v) => {
+    ['idleView', 'incomingView', 'activeView', 'consultView'].forEach((v) => {
       el(v).style.display = 'none';
     });
     if (view) {
@@ -639,6 +692,30 @@
   function handleNewSession(data) {
     const session = data.session;
 
+    // Chamada de consulta que NÓS mesmos iniciamos (transferência
+    // assistida) - tratamento separado, não passa pelo fluxo normal
+    // de "uma chamada por vez".
+    if (expectingConsultCall && session.direction === 'outgoing') {
+      expectingConsultCall = false;
+      consultSession = session;
+      const peer = session.remote_identity.uri.user || consultExt;
+      el('consultTargetPeer').textContent = peer;
+      el('consultTargetState').textContent = 'chamando…';
+
+      session.on('accepted', () => {
+        el('consultTargetState').textContent = 'em conversa';
+        el('completeConsultBtn').disabled = false;
+      });
+      session.on('confirmed', () => {
+        session.connection.addEventListener('track', (ev) => {
+          remoteAudio.srcObject = ev.streams[0];
+        });
+      });
+      session.on('ended', () => handleConsultEnded());
+      session.on('failed', () => handleConsultEnded());
+      return;
+    }
+
     if (currentSession) {
       // já em chamada — recusa automaticamente a segunda (fora do escopo do MVP)
       session.terminate();
@@ -750,6 +827,70 @@
     currentSession.refer(`sip:${target}@${domain}`);
     el('transferTarget').value = '';
   });
+
+  // ---------- Transferência assistida (consulta) ----------
+  el('consultBtn').addEventListener('click', () => {
+    const target = el('transferTarget').value.trim();
+    if (!currentSession || !currentSession.isEstablished() || !target) return;
+
+    primarySession = currentSession;
+    el('consultHeldPeer').textContent = el('activePeer').textContent;
+    primarySession.hold();
+
+    consultExt = target;
+    expectingConsultCall = true;
+    el('completeConsultBtn').disabled = true;
+    el('consultTargetPeer').textContent = target;
+    el('consultTargetState').textContent = 'chamando…';
+    showView('consultView');
+
+    const domain = el('wssUrl').value.replace('wss://', '').replace('ws://', '').split(/[:/]/)[0];
+    ua.call(`sip:${target}@${domain}`, { mediaConstraints: { audio: true, video: false } });
+  });
+
+  el('cancelConsultBtn').addEventListener('click', () => {
+    if (consultSession) consultSession.terminate();
+    // handleConsultEnded() cuida de voltar para a chamada original
+  });
+
+  el('completeConsultBtn').addEventListener('click', () => {
+    if (!primarySession || !consultSession || !consultExt) return;
+    const domain = el('wssUrl').value.replace('wss://', '').replace('ws://', '').split(/[:/]/)[0];
+
+    // Envia a chamada original para o colega (REFER) e encerra as
+    // duas pernas do lado da telefonista - o chamador passa a tocar
+    // direto no ramal do colega, com quem já foi feita a consulta.
+    primarySession.refer(`sip:${consultExt}@${domain}`);
+    logCall(consultExt, 'out', 'transferida com consulta');
+
+    const peerToClean = consultSession;
+    const primaryToClean = primarySession;
+    resetConsultState();
+    primaryToClean.terminate();
+    peerToClean.terminate();
+    resetCallUI();
+  });
+
+  function handleConsultEnded() {
+    // A consulta caiu (colega recusou/desligou) ou foi cancelada -
+    // volta pra chamada original, tirando ela da espera.
+    if (primarySession && primarySession.isEstablished()) {
+      primarySession.unhold();
+      currentSession = primarySession;
+      el('activePeer').textContent = el('consultHeldPeer').textContent;
+      showView('activeView');
+    } else {
+      showView('idleView');
+    }
+    resetConsultState();
+  }
+
+  function resetConsultState() {
+    expectingConsultCall = false;
+    primarySession = null;
+    consultSession = null;
+    consultExt = null;
+  }
 
   renderDial();
 })();

@@ -40,6 +40,9 @@ https://github.com/jeffaxe81/pabx-mvp
   Asterisk): bolinha livre/tocando/em chamada
 - Clicar num colega liga direto pra ele (se ocioso) ou transfere a
   chamada atual na hora (se em chamada)
+- Transferência assistida: consulta o colega antes de completar a
+  transferência (hold + chamada de consulta + REFER); não é bridge
+  invisível - o cliente percebe a troca (ver docs/manual-07)
 - Requer WSS habilitado (`asterisk/http.conf`, porta 8089) e endpoint
   com `webrtc=yes` (`t1-recepcao`, ramal 1000)
 
@@ -50,7 +53,7 @@ https://github.com/jeffaxe81/pabx-mvp
 - Softphones para teste: Zoiper / Linphone
 
 ## Ideias futuras (backlog, ainda não implementadas)
-1. Transferência assistida (com consulta antes de completar)
+1. ~~Transferência assistida~~ — IMPLEMENTADO, ver docs/manual-07
 2. Fila de atendimento com painel de chamadas em espera (pickup)
 3. Gravação de chamadas com player embutido na interface
 4. Multi-chamada (segunda linha) — hoje a 2ª chamada é recusada

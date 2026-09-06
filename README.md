@@ -160,6 +160,10 @@ transferência cega e histórico de chamadas da sessão. **Também mostra em
 tempo real quais colegas estão livres, tocando ou em chamada** (BLF via
 SIP SUBSCRIBE aos hints do Asterisk) — clique num colega da lista para
 ligar direto pra ele, ou para transferir a chamada atual na hora.
+**E agora também transferência assistida** (consulta antes de
+completar) — ver `docs/manual-07-transferencia-assistida.md` para o
+fluxo completo e uma ressalva técnica importante sobre como a troca é
+percebida pelo cliente.
 
 Para ajustar quais ramais aparecem na lista de colegas, edite o array
 `COLLEAGUES` no início do `<script>` em `webphone/index.html`. Cada
