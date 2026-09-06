@@ -122,6 +122,70 @@ https://github.com/jeffaxe81/pabx-mvp
 10. Painel de administração web para cadastro de ramais/tenants (hoje
     é tudo manual editando os arquivos `.conf`)
 
+## Backlog fase 2/3 (a partir do documento de funcionalidades completo)
+
+Comparado contra um documento de funcionalidades de PABX/CCaaS
+completo (roadmap enviado em 2026-09-06). Itens que **já existem** no
+produto (ramais SIP, filas, correio de voz, gravação, softphone web,
+click-to-call, multi-telefonista, transferência, multi-chamada, BLF,
+PWA) não estão listados aqui de novo — só o que falta ou está parcial.
+
+**Completar o que já existe (parcial)**
+11. Painel operacional em tempo real consolidado (hoje fila/presença/
+    métricas são painéis separados)
+12. Relatórios por atendente, setor e período histórico (hoje só
+    "hoje", sem separação por tenant/operadora - ver limitação do
+    manual 13)
+13. Integração CRM na direção PABX→CRM: identificar cliente pelo
+    número e abrir cadastro automaticamente (screen-pop) - hoje só
+    temos CRM→PABX (click-to-call, manual 12)
+14. Regras de discagem externa: bloqueio de números/DDIs, prefixos
+    por rota, múltiplos troncos por operadora (hoje é 1 tronco fixo)
+15. Busca de gravações por atendente/número e política de retenção
+    (hoje só lista por data, sem expurgo automático - manual 09)
+16. Envio de correio de voz por e-mail (infraestrutura já existe em
+    `voicemail.conf`, falta configurar o envio)
+
+**Fase 2 — Gestão (novo)**
+17. URA (menus de voz: "digite 1 para vendas...", horários e
+    mensagens por feriado)
+18. Grupos de toque (vários ramais tocando ao mesmo tempo ou em
+    sequência - diferente de fila, é hunt group simples)
+19. Controle de permissões e perfis (admin/supervisor/atendente) -
+    pré-requisito natural do painel de administração (item 10)
+20. Autenticação em dois fatores para o painel de administração
+
+**Fase 3 — Diferenciais e IA (novo)**
+21. Transcrição automática de chamadas
+22. Resumo automático de chamada com identificação de tarefas
+23. Análise de sentimento (detectar insatisfação/urgência)
+24. Atendente virtual com IA (primeira camada de triagem)
+25. Discador automático para campanhas (outbound em massa)
+26. Chamada de retorno (callback) sem permanecer na fila
+27. Pesquisa de satisfação pós-atendimento
+28. Transferência inteligente por regra (horário/cliente/assunto)
+29. Presença corporativa avançada (ausente/reunião/férias) com
+    sincronização de calendário
+30. Atendimento multilíngue
+
+**Infraestrutura e segurança (novo)**
+31. Lista de bloqueio (números/DDIs/anônimas)
+32. Detecção de fraude (alerta de volume anormal, limite de gasto)
+33. Alta disponibilidade e backup automático (hoje é container único,
+    sem failover)
+34. Monitoramento de qualidade de chamada (jitter/latência/perda de
+    pacotes)
+
+**Fora de escopo deste projeto (mencionados no documento, mas são
+produtos à parte, não itens de backlog)**
+- Videoconferência
+- Aplicativo móvel nativo (a PWA do manual 15 cobre parte disso em
+  Android/Chrome, mas não é o mesmo que um app nativo)
+- Integração ampla com WhatsApp como inbox omnichannel (hoje só
+  enviamos notificação de chamada perdida, manual 11)
+- Agenda/contatos compartilhados e integração com calendário externo
+  (Google/Microsoft/LDAP)
+
 ## Objetivo desta etapa
 [DESCREVER AQUI qual item do backlog (ou algo novo) você quer atacar agora]
 
