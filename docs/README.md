@@ -24,6 +24,7 @@ configurar, como testar manualmente, e limitações conhecidas.
 18. [Relatórios por atendente, tenant e período](manual-18-relatorios.md)
 19. [Integração CRM: screen-pop PABX→CRM](manual-19-crm-screen-pop.md)
 20. [Regras de discagem externa](manual-20-discagem-externa.md)
+21. [Busca de gravações e política de retenção](manual-21-busca-retencao-gravacoes.md)
 
 ## Regra de manutenção
 

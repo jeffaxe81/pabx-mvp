@@ -14,12 +14,15 @@ servido por um container nginx diferente (porta 8082) do desta API.
 """
 import json
 import os
+import threading
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 
 from ami_client import AMIClient
 from queue_state import QueueStateTracker
 from recordings import list_recordings, safe_recording_path
+from recordings import delete_expired_recordings
 from missed_calls import parse_missed_call_event, MissedCallsLog
 from notifiers import dispatch_notifications
 from click_to_call import build_originate_action, validate_click_to_call_request
@@ -39,6 +42,9 @@ PICKUP_ALLOWED_EXTENSIONS = [
 ]
 HTTP_PORT = int(os.environ.get("HTTP_PORT", "8090"))
 RECORDINGS_DIR = os.environ.get("RECORDINGS_DIR", "/app/recordings")
+# Retenção de gravações (backlog #15) - 0 (padrão) = desabilitado.
+# Apagar gravação é irreversível, então isso é opt-in de propósito.
+RECORDINGS_RETENTION_DAYS = int(os.environ.get("RECORDINGS_RETENTION_DAYS", "0"))
 CALL_LOG_PATH = os.environ.get("CALL_LOG_PATH", "/app/data/call_log.jsonl")
 
 # Screen-pop pro CRM (PABX -> CRM) - vazio = desabilitado, mesmo
@@ -126,7 +132,7 @@ class Handler(BaseHTTPRequestHandler):
         if self.path.startswith("/api/queue"):
             self._send_json(200, {"waiting": state.waiting_list()})
         elif self.path.startswith("/api/recordings"):
-            self._send_json(200, {"recordings": list_recordings(RECORDINGS_DIR)})
+            self._handle_list_recordings()
         elif self.path.startswith("/api/missed-calls"):
             self._send_json(200, {"missed_calls": missed_calls_log.list()})
         elif self.path.startswith("/api/metrics/today"):
@@ -154,6 +160,17 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json(200, {"groups": group_by(records, group_field)})
         else:
             self._send_json(200, aggregate(records))
+
+    def _handle_list_recordings(self):
+        query = parse_qs(urlparse(self.path).query)
+        recordings = list_recordings(
+            RECORDINGS_DIR,
+            caller_number=query.get("caller_number", [None])[0],
+            destination=query.get("destination", [None])[0],
+            start_date=query.get("start_date", [None])[0],
+            end_date=query.get("end_date", [None])[0],
+        )
+        self._send_json(200, {"recordings": recordings})
 
     def _serve_recording_file(self):
         filename = self.path[len("/recordings/"):]
@@ -237,11 +254,28 @@ class Handler(BaseHTTPRequestHandler):
         pass  # log padrão do BaseHTTPRequestHandler é barulhento demais
 
 
+def _retention_cleanup_loop():
+    """
+    Roda em background, uma vez por dia, apagando gravações mais
+    antigas que RECORDINGS_RETENTION_DAYS - só faz alguma coisa se
+    essa variável for > 0 (desabilitado por padrão).
+    """
+    while True:
+        if RECORDINGS_RETENTION_DAYS > 0:
+            deleted = delete_expired_recordings(RECORDINGS_DIR, RECORDINGS_RETENTION_DAYS)
+            if deleted:
+                print(f"[retenção] {len(deleted)} gravação(ões) expurgada(s): {deleted}")
+        time.sleep(24 * 3600)
+
+
 def main():
     global ami
     ami = AMIClient(AMI_HOST, AMI_PORT, AMI_USERNAME, AMI_SECRET, on_event=handle_ami_event)
     ami.connect_and_login()
     ami.start_event_loop()
+
+    if RECORDINGS_RETENTION_DAYS > 0:
+        threading.Thread(target=_retention_cleanup_loop, daemon=True).start()
 
     server = ThreadingHTTPServer(("0.0.0.0", HTTP_PORT), Handler)
     print(f"queue-api ouvindo em :{HTTP_PORT}, conectado ao AMI em {AMI_HOST}:{AMI_PORT}")

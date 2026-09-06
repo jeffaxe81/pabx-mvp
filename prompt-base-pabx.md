@@ -157,8 +157,9 @@ PWA) não estão listados aqui de novo — só o que falta ou está parcial.
 14. ~~Regras de discagem externa~~ — IMPLEMENTADO (bloqueio via
     AstDB gerenciado pelo painel, rota alternativa por prefixo,
     2º tronco gateway-tdm-2), ver docs/manual-20
-15. Busca de gravações por atendente/número e política de retenção
-    (hoje só lista por data, sem expurgo automático - manual 09)
+15. ~~Busca de gravações e retenção~~ — IMPLEMENTADO (filtro por
+    número/destino/período extraído do nome do arquivo, expurgo
+    automático opt-in), ver docs/manual-21
 16. Envio de correio de voz por e-mail (infraestrutura já existe em
     `voicemail.conf`, falta configurar o envio)
 

@@ -24,7 +24,7 @@ REQUIRED_IDS = [
     "cancelConsultBtn", "completeConsultBtn",
     "callLog", "colleaguesPanel", "colleaguesList",
     "remoteAudio", "queueApiUrl", "queueList",
-    "recordingsList", "refreshRecordingsBtn",
+    "recordingsList", "refreshRecordingsBtn", "recordingsSearchInput", "recordingsSearchBtn",
     "lineSwitcher", "linePill0", "linePill1",
     "secondLineBanner", "secondLinePeer", "answerSecondLineBtn", "declineSecondLineBtn",
     "missedCallsList", "metricsPanel", "metricsGrid",
@@ -218,6 +218,15 @@ def test_incoming_call_views_set_screen_pop_link():
     body = html[fn_start:fn_end]
     assert "setScreenPopLink('screenPopLink', peer)" in body
     assert "setScreenPopLink('secondLineScreenPopLink', peer)" in body
+
+
+def test_recordings_search_sends_caller_number_filter():
+    html = load_html()
+    fn_start = html.index("function fetchRecordings")
+    fn_end = html.index("function renderRecordings")
+    body = html[fn_start:fn_end]
+    assert "caller_number=" in body
+    assert "recordingsSearchInput" in body
 
 
 def test_pickup_sends_own_extension_along_with_channel():

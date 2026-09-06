@@ -563,6 +563,10 @@
         Atualizar
       </button>
     </div>
+    <div style="display:flex; gap:6px; margin:8px 0;">
+      <input id="recordingsSearchInput" placeholder="Buscar por número..." style="font-size:12px; padding:6px 8px;">
+      <button class="btn-ghost" id="recordingsSearchBtn" style="padding:6px 10px; font-size:11px;">Buscar</button>
+    </div>
     <div id="recordingsList">
       <div class="log-empty">Nenhuma gravação encontrada.</div>
     </div>
@@ -1087,7 +1091,10 @@
     const apiUrl = el('queueApiUrl').value.trim();
     if (!apiUrl) return;
 
-    fetch(`${apiUrl}/api/recordings`)
+    const search = el('recordingsSearchInput').value.trim();
+    const query = search ? `?caller_number=${encodeURIComponent(search)}` : '';
+
+    fetch(`${apiUrl}/api/recordings${query}`)
       .then((res) => res.json())
       .then((data) => renderRecordings(apiUrl, data.recordings || []))
       .catch(() => {
@@ -1115,6 +1122,7 @@
   }
 
   el('refreshRecordingsBtn').addEventListener('click', fetchRecordings);
+  el('recordingsSearchBtn').addEventListener('click', fetchRecordings);
 
   // ---------- Presença dos colegas (BLF via SUBSCRIBE) ----------
   function startPresenceMonitoring(domain) {

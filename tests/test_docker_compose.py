@@ -83,6 +83,24 @@ def test_recordings_volume_shared_between_asterisk_and_queue_api():
     assert any(v.startswith("./recordings:") for v in queue_api_volumes)
 
 
+def test_recordings_volume_is_writable_for_retention_cleanup():
+    """
+    Expurgo automático (backlog #15) precisa apagar arquivo - se o
+    volume estiver montado só leitura (:ro), a função de retenção
+    falharia silenciosamente sempre que fosse rodar de verdade.
+    """
+    compose = load_compose()
+    queue_api_volumes = compose["services"]["queue-api"].get("volumes", [])
+    recordings_volume = next(v for v in queue_api_volumes if v.startswith("./recordings:"))
+    assert not recordings_volume.endswith(":ro")
+
+
+def test_recordings_retention_disabled_by_default():
+    compose = load_compose()
+    env = compose["services"]["queue-api"].get("environment", {})
+    assert env.get("RECORDINGS_RETENTION_DAYS") == "0"
+
+
 def test_notify_channels_env_present_and_disabled_by_default():
     """
     Notificação de chamada perdida deve vir DESLIGADA por padrão (o

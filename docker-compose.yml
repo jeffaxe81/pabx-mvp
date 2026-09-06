@@ -34,7 +34,7 @@ services:
     working_dir: /app
     volumes:
       - ./queue-api:/app:ro
-      - ./recordings:/app/recordings:ro
+      - ./recordings:/app/recordings
       - queue_api_data:/app/data
     environment:
       AMI_HOST: "127.0.0.1"
@@ -46,6 +46,10 @@ services:
       # uma chamada da fila. Adicione novos operadores aqui também.
       PICKUP_ALLOWED_EXTENSIONS: "t1-recepcao,t1-recepcao-2"
       RECORDINGS_DIR: "/app/recordings"
+      # Retenção de gravações (backlog #15) - 0 = desabilitado (nunca
+      # apaga nada sozinho). Defina em dias (ex: "90") pra ativar o
+      # expurgo automático diário.
+      RECORDINGS_RETENTION_DAYS: "0"
       CALL_LOG_PATH: "/app/data/call_log.jsonl"
       # Screen-pop pro CRM (backlog #13) - vazio = desabilitado. Quando
       # uma chamada começa a tocar, o queue-api faz um POST nessa URL
