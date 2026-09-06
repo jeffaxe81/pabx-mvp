@@ -62,6 +62,16 @@ class AMIClient:
             "Priority": str(priority),
         })
 
+    def block_number(self, number: str) -> dict:
+        """
+        Bloqueia um número na mesma família 'blocklist' do AstDB já
+        consultada pelo dialplan (manual 20) - usado pelo bloqueio
+        automático de destino suspeito (backlog #32).
+        """
+        return self.send_action({
+            "Action": "DBPut", "Family": "blocklist", "Key": number, "Val": "1",
+        })
+
     def start_event_loop(self):
         """Roda em thread separada, lendo eventos continuamente."""
         self._running = True

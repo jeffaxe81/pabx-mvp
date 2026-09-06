@@ -29,8 +29,9 @@ from click_to_call import build_originate_action, validate_click_to_call_request
 from metrics import DailyMetrics
 from pickup import validate_pickup_request
 from extension_states import ExtensionStateTracker
-from reports import parse_cdr_for_report, CallLogStore, aggregate, group_by
+from reports import parse_cdr_for_report, CallLogStore, aggregate, group_by, extract_operator
 from screen_pop import dispatch_screen_pop
+from fraud_detection import CallRateTracker, FraudAlertsLog, is_external_call, is_over_spending_limit
 
 AMI_HOST = os.environ.get("AMI_HOST", "127.0.0.1")
 AMI_PORT = int(os.environ.get("AMI_PORT", "5038"))
@@ -50,6 +51,15 @@ CALL_LOG_PATH = os.environ.get("CALL_LOG_PATH", "/app/data/call_log.jsonl")
 # Screen-pop pro CRM (PABX -> CRM) - vazio = desabilitado, mesmo
 # padrão de segurança/opt-in das outras integrações.
 CRM_WEBHOOK_URL = os.environ.get("CRM_WEBHOOK_URL", "")
+
+# Detecção de fraude (backlog #32) - tudo desligado/conservador por
+# padrão: bloqueio automático é opt-in de propósito (bloquear um
+# destino legítimo por engano é pior que deixar passar um alerta).
+FRAUD_RATE_WINDOW_SECONDS = int(os.environ.get("FRAUD_RATE_WINDOW_SECONDS", "60"))
+FRAUD_RATE_THRESHOLD = int(os.environ.get("FRAUD_RATE_THRESHOLD", "10"))
+FRAUD_AUTO_BLOCK = os.environ.get("FRAUD_AUTO_BLOCK", "false").lower() == "true"
+FRAUD_COST_PER_MINUTE = float(os.environ.get("FRAUD_COST_PER_MINUTE", "0"))
+FRAUD_DAILY_COST_LIMIT = float(os.environ.get("FRAUD_DAILY_COST_LIMIT", "0"))  # 0 = desabilitado
 
 # Notificação de chamada perdida - canais habilitados via variável de
 # ambiente (ex: "email,whatsapp"). Vazio = notificação desabilitada,
@@ -88,11 +98,13 @@ missed_calls_log = MissedCallsLog()
 daily_metrics = DailyMetrics()
 extension_states = ExtensionStateTracker()
 call_log_store = CallLogStore(CALL_LOG_PATH)
+rate_tracker = CallRateTracker()
+fraud_alerts_log = FraudAlertsLog()
 ami = None  # inicializado em main(), None durante os testes automatizados
 
 
 def handle_ami_event(event: dict):
-    """Callback único do AMI: alimenta fila, chamadas perdidas, métricas, estado dos ramais e relatórios."""
+    """Callback único do AMI: alimenta fila, chamadas perdidas, métricas, estado dos ramais, relatórios e fraude."""
     state.apply_event(event)
     daily_metrics.apply_cdr_event(event)
     extension_states.apply_event(event)
@@ -101,9 +113,50 @@ def handle_ami_event(event: dict):
     if report_record:
         call_log_store.append(report_record)
 
+        # Limite de gasto diário (checado após cada chamada atendida
+        # terminar - não bloqueia em tempo real no meio da ligação,
+        # ver limitação no manual 27)
+        if report_record.get("operator") and FRAUD_DAILY_COST_LIMIT > 0:
+            today = report_record["date"]
+            todays_calls = call_log_store.query(start=today, end=today, operator=report_record["operator"])
+            if is_over_spending_limit(todays_calls, FRAUD_COST_PER_MINUTE, FRAUD_DAILY_COST_LIMIT):
+                fraud_alerts_log.append(
+                    "limite_gasto", report_record["operator"],
+                    f"Limite diário de R$ {FRAUD_DAILY_COST_LIMIT:.2f} excedido",
+                )
+
+    check_call_volume(event)
+
     screen_pop_error = dispatch_screen_pop(event, CRM_WEBHOOK_URL)
     if screen_pop_error:
         print(f"[AVISO] falha no screen-pop: {screen_pop_error}")
+
+
+def check_call_volume(event: dict):
+    """
+    Volume anormal de chamadas de saída pelo mesmo ramal - o padrão
+    clássico de um PABX comprometido discando em massa.
+    """
+    if not is_external_call(event) or event.get("Event") != "DialBegin":
+        return
+
+    source_extension = extract_operator(event.get("Channel", ""))
+    destination = event.get("DestExten", "")
+    if not source_extension:
+        return
+
+    rate_tracker.track_call(source_extension, destination)
+    if rate_tracker.is_abnormal(source_extension, FRAUD_RATE_WINDOW_SECONDS, FRAUD_RATE_THRESHOLD):
+        fraud_alerts_log.append(
+            "volume_anormal", source_extension,
+            f"Mais de {FRAUD_RATE_THRESHOLD} chamadas externas em {FRAUD_RATE_WINDOW_SECONDS}s",
+        )
+        if FRAUD_AUTO_BLOCK and destination and ami is not None:
+            try:
+                ami.block_number(destination)
+                fraud_alerts_log.append("bloqueio_automatico", source_extension, f"Número {destination} bloqueado automaticamente")
+            except Exception as exc:  # noqa: BLE001
+                print(f"[AVISO] falha ao bloquear automaticamente {destination}: {exc}")
 
     missed = parse_missed_call_event(event)
     if missed:
@@ -135,6 +188,8 @@ class Handler(BaseHTTPRequestHandler):
             self._handle_list_recordings()
         elif self.path.startswith("/api/missed-calls"):
             self._send_json(200, {"missed_calls": missed_calls_log.list()})
+        elif self.path.startswith("/api/fraud-alerts"):
+            self._send_json(200, {"alerts": fraud_alerts_log.list()})
         elif self.path.startswith("/api/metrics/today"):
             self._send_json(200, daily_metrics.snapshot())
         elif self.path.startswith("/api/extension-states"):

@@ -206,3 +206,16 @@ def test_crm_webhook_disabled_by_default():
     env = compose["services"]["queue-api"].get("environment", {})
     assert "CRM_WEBHOOK_URL" in env
     assert env["CRM_WEBHOOK_URL"] == ""
+
+
+def test_fraud_auto_block_and_spending_limit_disabled_by_default():
+    """
+    Detecção de fraude (backlog #32): alerta pode vir ligado (é só
+    visibilidade), mas bloqueio automático e limite de gasto são
+    ações com efeito colateral real - precisam vir desligadas até
+    alguém configurar de propósito.
+    """
+    compose = load_compose()
+    env = compose["services"]["queue-api"].get("environment", {})
+    assert env.get("FRAUD_AUTO_BLOCK") == "false"
+    assert env.get("FRAUD_DAILY_COST_LIMIT") == "0"

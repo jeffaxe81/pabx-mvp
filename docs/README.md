@@ -30,6 +30,7 @@ configurar, como testar manualmente, e limitações conhecidas.
 24. [Grupos de toque](manual-24-grupos-de-toque.md)
 25. [Permissões e perfis](manual-25-permissoes-perfis.md)
 26. [Autenticação em dois fatores (2FA)](manual-26-2fa.md)
+27. [Detecção de fraude](manual-27-deteccao-fraude.md)
 
 ## Regra de manutenção
 

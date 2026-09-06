@@ -252,6 +252,11 @@ vetor de teste oficial do RFC 6238 — ver `docs/manual-26-2fa.md`.
 
 Com isso, a **Fase 2 do backlog está completa**.
 
+**E detecção de fraude**: alerta de volume anormal de chamadas
+externas, bloqueio automático de destino suspeito (reaproveitando a
+lista de bloqueio existente) e limite de gasto diário por ramal — ver
+`docs/manual-27-deteccao-fraude.md`.
+
 Para ajustar quais ramais aparecem na lista de colegas, edite o array
 `COLLEAGUES` no início do `<script>` em `webphone/index.html`. Cada
 ramal monitorado precisa ter um `hint` correspondente em
@@ -276,7 +281,7 @@ cd ../queue-api
 python3 -m pytest tests/ -v
 ```
 
-343 testes estáticos no total, em 4 suítes (`tests/`, `queue-api/tests/`,
+364 testes estáticos no total, em 4 suítes (`tests/`, `queue-api/tests/`,
 `admin-api/tests/`, `asterisk/scripts/tests/`) — nenhuma delas sobe o
 Asterisk de verdade. Detalhes em `tests/README.md`.
 

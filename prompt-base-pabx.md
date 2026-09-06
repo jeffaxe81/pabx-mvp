@@ -195,7 +195,9 @@ PWA) não estão listados aqui de novo — só o que falta ou está parcial.
 
 **Infraestrutura e segurança (novo)**
 31. Lista de bloqueio (números/DDIs/anônimas)
-32. Detecção de fraude (alerta de volume anormal, limite de gasto)
+32. ~~Detecção de fraude~~ — IMPLEMENTADO (volume anormal via
+    DialBegin, bloqueio automático reaproveitando AstDB do manual
+    20, limite de gasto), ver docs/manual-27
 33. Alta disponibilidade e backup automático (hoje é container único,
     sem failover)
 34. Monitoramento de qualidade de chamada (jitter/latência/perda de

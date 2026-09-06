@@ -7,7 +7,7 @@ from pathlib import Path
 PANEL_HTML = Path(__file__).parent.parent / "webphone" / "painel-operacional.html"
 WEBPHONE_HTML = Path(__file__).parent.parent / "webphone" / "index.html"
 
-REQUIRED_IDS = ["metricsRow", "extensionsList", "queueList", "lastUpdate"]
+REQUIRED_IDS = ["metricsRow", "extensionsList", "queueList", "lastUpdate", "fraudAlertsList"]
 
 
 def load_panel_html():
@@ -25,6 +25,12 @@ def test_fetches_all_three_data_sources():
     assert "/api/metrics/today" in html
     assert "/api/extension-states" in html
     assert "/api/queue" in html
+
+
+def test_fetches_fraud_alerts_too():
+    html = load_panel_html()
+    assert "/api/fraud-alerts" in html
+    assert "renderFraudAlerts" in html
 
 
 def test_polls_periodically_for_supervision_use_case():

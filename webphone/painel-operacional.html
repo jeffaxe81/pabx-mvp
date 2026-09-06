@@ -72,6 +72,11 @@
   </div>
 </div>
 
+<div class="panel" style="margin-top: 16px;">
+  <h2>Alertas de fraude</h2>
+  <div id="fraudAlertsList"><div class="empty">Carregando...</div></div>
+</div>
+
 <script>
 (function () {
   'use strict';
@@ -87,12 +92,34 @@
       fetch(`${apiUrl}/api/metrics/today`).then((r) => r.json()).catch(() => null),
       fetch(`${apiUrl}/api/extension-states`).then((r) => r.json()).catch(() => null),
       fetch(`${apiUrl}/api/queue`).then((r) => r.json()).catch(() => null),
-    ]).then(([metrics, extensions, queue]) => {
+      fetch(`${apiUrl}/api/fraud-alerts`).then((r) => r.json()).catch(() => null),
+    ]).then(([metrics, extensions, queue, fraud]) => {
       if (metrics) renderMetrics(metrics);
       if (extensions) renderExtensions(extensions.extensions || []);
       if (queue) renderQueue(queue.waiting || []);
+      if (fraud) renderFraudAlerts(fraud.alerts || []);
       el('lastUpdate').textContent = `Atualizado às ${new Date().toLocaleTimeString('pt-BR')}`;
     });
+  }
+
+  function renderFraudAlerts(alerts) {
+    if (alerts.length === 0) {
+      el('fraudAlertsList').innerHTML = '<div class="empty">Nenhum alerta.</div>';
+      return;
+    }
+    const typeLabel = {
+      volume_anormal: 'Volume anormal',
+      limite_gasto: 'Limite de gasto excedido',
+      bloqueio_automatico: 'Bloqueio automático',
+    };
+    el('fraudAlertsList').innerHTML = alerts.map((a) => {
+      const when = new Date(a.timestamp * 1000).toLocaleString('pt-BR');
+      return `<div class="item-row">
+        <span><span class="dot em-espera"></span>${typeLabel[a.type] || a.type} — ramal ${a.extension}</span>
+        <span class="mono">${when}</span>
+      </div>
+      <div style="font-size:12px; color:var(--text-muted); margin:-4px 0 6px 16px;">${a.detail}</div>`;
+    }).join('');
   }
 
   function renderMetrics(m) {

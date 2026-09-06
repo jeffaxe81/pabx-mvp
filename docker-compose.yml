@@ -68,6 +68,14 @@ services:
       # com o número/nome de quem está ligando, pro CRM abrir o
       # cadastro do cliente automaticamente.
       CRM_WEBHOOK_URL: ""
+      # Detecção de fraude (backlog #32) - alerta sempre ativo (limiar
+      # padrão razoável); bloqueio automático e limite de gasto vêm
+      # DESLIGADOS por padrão (opt-in, ver manual 27).
+      FRAUD_RATE_WINDOW_SECONDS: "60"
+      FRAUD_RATE_THRESHOLD: "10"
+      FRAUD_AUTO_BLOCK: "false"
+      FRAUD_COST_PER_MINUTE: "0"
+      FRAUD_DAILY_COST_LIMIT: "0"
       # Notificação de chamada perdida - vazio = desabilitado.
       # Preencha com "email", "whatsapp" ou "email,whatsapp" pra ativar.
       NOTIFY_CHANNELS: ""
