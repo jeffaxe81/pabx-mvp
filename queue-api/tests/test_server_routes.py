@@ -25,6 +25,35 @@ def test_click_to_call_disabled_by_default():
     assert 'os.environ.get("CLICK_TO_CALL_API_KEY", "")' in source
 
 
+def test_campaigns_reuse_click_to_call_api_key_protection():
+    """
+    Campanhas originam chamada via AMI, mesma categoria de risco do
+    click-to-call - por isso precisam da mesma checagem de chave,
+    ANTES de qualquer criação/disparo.
+    """
+    source = load_source()
+    for fn_name in ("_handle_list_campaigns", "_handle_get_campaign", "_handle_create_campaign", "_handle_dial_next_contact"):
+        fn_start = source.index(f"def {fn_name}")
+        fn_end = source.index("\n    def ", fn_start + 10)
+        body = source[fn_start:fn_end]
+        assert "_require_campaign_api_key()" in body, f"{fn_name} sem checagem de chave"
+
+
+def test_dial_next_contact_marks_calling_before_originating():
+    """
+    O contato precisa ser marcado como 'discando' ANTES do Originate
+    de verdade - senão uma corrida entre dois cliques de 'discar
+    próximo' poderia tentar ligar pro mesmo contato duas vezes.
+    """
+    source = load_source()
+    fn_start = source.index("def _handle_dial_next_contact")
+    fn_end = source.index("\n    def ", fn_start + 10)
+    body = source[fn_start:fn_end]
+    mark_pos = body.index("mark_contact_calling(")
+    originate_pos = body.index("ami.send_action(action)")
+    assert mark_pos < originate_pos
+
+
 def test_click_to_call_validates_before_touching_ami():
     """
     A validação (chave de API, ramal permitido, número sanitizado)

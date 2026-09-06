@@ -258,3 +258,9 @@ def test_quality_monitoring_thresholds_configured():
     assert "QUALITY_JITTER_THRESHOLD_MS" in env
     assert "QUALITY_PACKET_LOSS_THRESHOLD_PERCENT" in env
     assert float(env["QUALITY_JITTER_THRESHOLD_MS"]) > 0
+
+
+def test_campaigns_path_configured():
+    compose = load_compose()
+    env = compose["services"]["queue-api"].get("environment", {})
+    assert "CAMPAIGNS_PATH" in env

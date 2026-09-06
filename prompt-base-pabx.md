@@ -185,7 +185,9 @@ PWA) não estão listados aqui de novo — só o que falta ou está parcial.
 22. Resumo automático de chamada com identificação de tarefas
 23. Análise de sentimento (detectar insatisfação/urgência)
 24. Atendente virtual com IA (primeira camada de triagem)
-25. Discador automático para campanhas (outbound em massa)
+25. ~~Discador automático (campanhas)~~ — IMPLEMENTADO (reaproveita
+    contexto do click-to-call, retry ate 3 tentativas), ver
+    docs/manual-30
 26. Chamada de retorno (callback) sem permanecer na fila
 27. Pesquisa de satisfação pós-atendimento
 28. Transferência inteligente por regra (horário/cliente/assunto)

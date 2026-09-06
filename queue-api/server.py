@@ -26,6 +26,11 @@ from recordings import delete_expired_recordings
 from missed_calls import parse_missed_call_event, MissedCallsLog
 from notifiers import dispatch_notifications
 from click_to_call import build_originate_action, validate_click_to_call_request
+from campaigns import (
+    create_campaign, load_campaigns, find_campaign, next_pending_contact,
+    mark_contact_calling, mark_contact_result, campaign_summary,
+    extract_dialed_number,
+)
 from metrics import DailyMetrics
 from pickup import validate_pickup_request
 from extension_states import ExtensionStateTracker
@@ -100,6 +105,11 @@ CLICK_TO_CALL_CONFIG = {
     ],
 }
 
+# Discador automático / campanhas (backlog #25) - reaproveita a MESMA
+# chave do click-to-call (mesma categoria de risco: originar chamada
+# via AMI) e o mesmo contexto de dialplan.
+CAMPAIGNS_PATH = os.environ.get("CAMPAIGNS_PATH", "/app/data/campaigns.json")
+
 state = QueueStateTracker()
 missed_calls_log = MissedCallsLog()
 daily_metrics = DailyMetrics()
@@ -143,6 +153,32 @@ def handle_ami_event(event: dict):
     screen_pop_error = dispatch_screen_pop(event, CRM_WEBHOOK_URL)
     if screen_pop_error:
         print(f"[AVISO] falha no screen-pop: {screen_pop_error}")
+
+    apply_campaign_dial_result(event)
+
+
+def apply_campaign_dial_result(event: dict):
+    """
+    Quando um DialEnd chega, confere se o número discado corresponde a
+    um contato de campanha "discando" no momento - se sim, registra o
+    resultado (atendida/ocupado/sem resposta/etc.).
+    """
+    if event.get("Event") != "DialEnd":
+        return
+
+    disposition = event.get("DialStatus")
+    number = extract_dialed_number(event)
+    if not disposition or not number:
+        return
+
+    for campaign in load_campaigns(CAMPAIGNS_PATH):
+        contact = next(
+            (c for c in campaign["contacts"] if c["number"] == number and c["status"] == "discando"),
+            None,
+        )
+        if contact:
+            mark_contact_result(CAMPAIGNS_PATH, campaign["id"], number, disposition)
+            break
 
 
 def check_call_volume(event: dict):
@@ -211,6 +247,10 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json(200, {"extensions": extension_states.snapshot()})
         elif self.path.startswith("/api/reports"):
             self._handle_reports()
+        elif self.path.startswith("/api/campaigns/"):
+            self._handle_get_campaign()
+        elif self.path.startswith("/api/campaigns"):
+            self._handle_list_campaigns()
         elif self.path.startswith("/recordings/"):
             self._serve_recording_file()
         else:
@@ -268,6 +308,10 @@ class Handler(BaseHTTPRequestHandler):
             self._handle_pickup()
         elif self.path == "/api/click-to-call":
             self._handle_click_to_call()
+        elif self.path == "/api/campaigns":
+            self._handle_create_campaign()
+        elif self.path.startswith("/api/campaigns/") and self.path.endswith("/dial-next"):
+            self._handle_dial_next_contact()
         else:
             self._send_json(404, {"error": "not found"})
 
@@ -322,6 +366,82 @@ class Handler(BaseHTTPRequestHandler):
         response = ami.send_action(action)
         if response.get("Response") == "Success":
             self._send_json(200, {"ok": True})
+        else:
+            self._send_json(502, {"error": "falha ao originar chamada", "detail": response})
+
+    def _require_campaign_api_key(self):
+        """
+        Campanhas usam a MESMA chave e checagem do click-to-call
+        (mesma categoria de risco: originar chamada via AMI). Retorna
+        True se autorizado, senão já respondeu o erro e retorna False.
+        """
+        api_key = self.headers.get("X-Click-To-Call-Key", "")
+        configured_key = CLICK_TO_CALL_CONFIG.get("api_key", "")
+        if not configured_key:
+            self._send_json(503, {"error": "campanhas não configuradas (sem API key definida)"})
+            return False
+        if api_key != configured_key:
+            self._send_json(403, {"error": "chave de API inválida"})
+            return False
+        return True
+
+    def _handle_list_campaigns(self):
+        if not self._require_campaign_api_key():
+            return
+        campaigns = load_campaigns(CAMPAIGNS_PATH)
+        summaries = [{**c, "summary": campaign_summary(c)} for c in campaigns]
+        self._send_json(200, {"campaigns": summaries})
+
+    def _handle_get_campaign(self):
+        if not self._require_campaign_api_key():
+            return
+        campaign_id = self.path[len("/api/campaigns/"):].split("/")[0]
+        campaign = find_campaign(load_campaigns(CAMPAIGNS_PATH), campaign_id)
+        if not campaign:
+            self._send_json(404, {"error": "campanha não encontrada"})
+            return
+        self._send_json(200, {**campaign, "summary": campaign_summary(campaign)})
+
+    def _handle_create_campaign(self):
+        if not self._require_campaign_api_key():
+            return
+        length = int(self.headers.get("Content-Length", 0))
+        try:
+            data = json.loads(self.rfile.read(length) or b"{}")
+        except json.JSONDecodeError:
+            self._send_json(400, {"error": "JSON invalido"})
+            return
+
+        ok, error, campaign = create_campaign(CAMPAIGNS_PATH, data)
+        if not ok:
+            self._send_json(400, {"error": error})
+            return
+        self._send_json(201, campaign)
+
+    def _handle_dial_next_contact(self):
+        if not self._require_campaign_api_key():
+            return
+
+        campaign_id = self.path[len("/api/campaigns/"):].split("/")[0]
+        campaign = find_campaign(load_campaigns(CAMPAIGNS_PATH), campaign_id)
+        if not campaign:
+            self._send_json(404, {"error": "campanha não encontrada"})
+            return
+
+        contact = next_pending_contact(campaign)
+        if not contact:
+            self._send_json(200, {"done": True, "message": "nenhum contato pendente"})
+            return
+
+        if ami is None:
+            self._send_json(503, {"error": "AMI nao conectado"})
+            return
+
+        mark_contact_calling(CAMPAIGNS_PATH, campaign_id, contact["number"])
+        action = build_originate_action(f"PJSIP/{campaign['agent_extension']}", contact["number"], CLICK_TO_CALL_CONTEXT)
+        response = ami.send_action(action)
+        if response.get("Response") == "Success":
+            self._send_json(200, {"ok": True, "dialing": contact["number"]})
         else:
             self._send_json(502, {"error": "falha ao originar chamada", "detail": response})
 

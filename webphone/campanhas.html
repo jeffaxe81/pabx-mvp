@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Campanhas — PABX</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #14181F; --panel: #1D2330; --panel-alt: #242B3A; --border: #2E3646;
+    --text: #E8EAED; --text-muted: #8B93A3; --green: #3FAE7A; --amber: #E3A038; --red: #D14343;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font-family: 'Inter', sans-serif; padding: 28px; max-width: 900px; margin: 0 auto; }
+  .mono { font-family: 'IBM Plex Mono', monospace; }
+  h1 { font-size: 18px; margin: 0 0 20px; }
+  h2 { font-size: 14px; margin: 0 0 14px; }
+
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 20px; margin-bottom: 20px; }
+  label { display: block; font-size: 12px; color: var(--text-muted); margin: 12px 0 5px; }
+  label:first-of-type { margin-top: 0; }
+  input, textarea {
+    width: 100%; background: var(--panel-alt); border: 1px solid var(--border); color: var(--text);
+    padding: 9px 10px; border-radius: 4px; font-size: 14px; font-family: 'Inter', sans-serif;
+  }
+  textarea { min-height: 100px; font-family: 'IBM Plex Mono', monospace; font-size: 13px; }
+  button {
+    font-family: 'Inter', sans-serif; font-weight: 600; font-size: 14px;
+    border: none; border-radius: 4px; padding: 10px 14px; cursor: pointer;
+  }
+  .btn-primary { background: var(--green); color: #0C1712; margin-top: 14px; }
+  .btn-ghost { background: transparent; border: 1px solid var(--border); color: var(--text); }
+  .error-msg { color: var(--red); font-size: 13px; margin-top: 10px; }
+
+  .campaign-card { border-bottom: 1px solid var(--border); padding: 14px 0; }
+  .campaign-card:last-child { border-bottom: none; }
+  .campaign-name { font-weight: 600; margin-bottom: 6px; }
+  .status-row { display: flex; gap: 10px; flex-wrap: wrap; font-size: 12px; color: var(--text-muted); margin-bottom: 10px; }
+  .status-chip { background: var(--panel-alt); padding: 3px 8px; border-radius: 10px; }
+  .empty { color: var(--text-muted); font-size: 13px; }
+</style>
+</head>
+<body>
+
+<h1>Campanhas de discagem automática</h1>
+
+<div class="panel">
+  <h2>Nova campanha</h2>
+  <label for="campaignApiKey">Chave de API (X-Click-To-Call-Key)</label>
+  <input id="campaignApiKey" type="password" placeholder="mesma chave do click-to-call">
+  <label for="campaignName">Nome</label>
+  <input id="campaignName" placeholder="Campanha de cobrança">
+  <label for="campaignAgent">Ramal do atendente</label>
+  <input id="campaignAgent" placeholder="t1-recepcao">
+  <label for="campaignContacts">Contatos (um número por linha)</label>
+  <textarea id="campaignContacts" placeholder="11999998888&#10;11988887777"></textarea>
+  <button class="btn-primary" id="createCampaignBtn">Criar campanha</button>
+  <div class="error-msg" id="createCampaignError"></div>
+</div>
+
+<div class="panel">
+  <div style="display:flex; justify-content:space-between; align-items:center;">
+    <h2 style="margin:0;">Campanhas</h2>
+    <button class="btn-ghost" id="refreshCampaignsBtn">Atualizar</button>
+  </div>
+  <div id="campaignsList" style="margin-top:14px;"><div class="empty">Carregando...</div></div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  const el = (id) => document.getElementById(id);
+  const params = new URLSearchParams(window.location.search);
+  const apiUrl = params.get('api') || 'http://pabx.local:8090';
+
+  function apiKey() {
+    return el('campaignApiKey').value.trim();
+  }
+
+  function apiFetch(path, options = {}) {
+    return fetch(`${apiUrl}${path}`, {
+      ...options,
+      headers: { 'Content-Type': 'application/json', 'X-Click-To-Call-Key': apiKey(), ...(options.headers || {}) },
+    }).then(async (res) => {
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || `erro ${res.status}`);
+      return data;
+    });
+  }
+
+  const statusLabel = {
+    pendente: 'Pendente', discando: 'Discando', atendida: 'Atendida',
+    ocupado: 'Ocupado', sem_resposta: 'Sem resposta', cancelada: 'Cancelada',
+    falha: 'Falha', esgotado: 'Esgotado', total: 'Total',
+  };
+
+  function loadCampaigns() {
+    apiFetch('/api/campaigns')
+      .then((data) => renderCampaigns(data.campaigns || []))
+      .catch((err) => { el('campaignsList').innerHTML = `<div class="error-msg">${err.message}</div>`; });
+  }
+
+  function renderCampaigns(campaigns) {
+    if (campaigns.length === 0) {
+      el('campaignsList').innerHTML = '<div class="empty">Nenhuma campanha ainda.</div>';
+      return;
+    }
+    el('campaignsList').innerHTML = campaigns.map((c) => {
+      const chips = Object.entries(c.summary || {})
+        .map(([status, count]) => `<span class="status-chip">${statusLabel[status] || status}: ${count}</span>`)
+        .join('');
+      return `<div class="campaign-card">
+        <div class="campaign-name">${c.name} <span class="mono" style="color:var(--text-muted); font-size:12px;">(${c.agent_extension})</span></div>
+        <div class="status-row">${chips}</div>
+        <button class="btn-ghost" data-dial="${c.id}">Discar próximo contato</button>
+      </div>`;
+    }).join('');
+
+    document.querySelectorAll('[data-dial]').forEach((btn) => {
+      btn.addEventListener('click', () => dialNext(btn.dataset.dial));
+    });
+  }
+
+  function dialNext(campaignId) {
+    apiFetch(`/api/campaigns/${campaignId}/dial-next`, { method: 'POST' })
+      .then((data) => {
+        if (data.done) {
+          alert('Nenhum contato pendente nessa campanha.');
+        } else {
+          alert(`Discando para ${data.dialing} - o ramal do atendente vai tocar.`);
+        }
+        loadCampaigns();
+      })
+      .catch((err) => alert(err.message));
+  }
+
+  el('createCampaignBtn').addEventListener('click', () => {
+    el('createCampaignError').textContent = '';
+    const contacts = el('campaignContacts').value.split('\n').map((s) => s.trim()).filter(Boolean);
+
+    apiFetch('/api/campaigns', {
+      method: 'POST',
+      body: JSON.stringify({
+        name: el('campaignName').value,
+        agent_extension: el('campaignAgent').value,
+        contacts,
+      }),
+    })
+      .then(() => {
+        el('campaignName').value = '';
+        el('campaignContacts').value = '';
+        loadCampaigns();
+      })
+      .catch((err) => { el('createCampaignError').textContent = err.message; });
+  });
+
+  el('refreshCampaignsBtn').addEventListener('click', loadCampaigns);
+
+  loadCampaigns();
+})();
+</script>
+
+</body>
+</html>

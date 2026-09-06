@@ -33,6 +33,7 @@ configurar, como testar manualmente, e limitações conhecidas.
 27. [Detecção de fraude](manual-27-deteccao-fraude.md)
 28. [Alta disponibilidade e backup](manual-28-backup-disponibilidade.md)
 29. [Monitoramento de qualidade de chamada](manual-29-monitoramento-qualidade.md)
+30. [Discador automático / campanhas](manual-30-discador-campanhas.md)
 
 ## Regra de manutenção
 

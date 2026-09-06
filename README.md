@@ -267,7 +267,11 @@ e RTT capturados via RTCP nas chamadas da telefonista, com alerta
 automático — ver `docs/manual-29-monitoramento-qualidade.md`.
 
 Com isso, os **itens de infraestrutura do backlog (31-34) estão
-completos** — resta só a Fase 3 (recursos de IA/ML).
+completos** — resta a Fase 3 (recursos de IA/ML).
+
+**E discador automático (campanhas)**: lista de contatos, controle de
+tentativas, reaproveitando o mesmo mecanismo do click-to-call — ver
+`docs/manual-30-discador-campanhas.md`.
 
 Para ajustar quais ramais aparecem na lista de colegas, edite o array
 `COLLEAGUES` no início do `<script>` em `webphone/index.html`. Cada
@@ -293,7 +297,7 @@ cd ../queue-api
 python3 -m pytest tests/ -v
 ```
 
-396 testes estáticos no total, em 5 suítes (`tests/`, `queue-api/tests/`,
+423 testes estáticos no total, em 5 suítes (`tests/`, `queue-api/tests/`,
 `admin-api/tests/`, `asterisk/scripts/tests/`, `backup/tests/`) —
 nenhuma delas sobe o Asterisk de verdade. Detalhes em `tests/README.md`.
 
