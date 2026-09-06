@@ -17,6 +17,7 @@ configurar, como testar manualmente, e limitações conhecidas.
 11. [Notificação de chamada perdida](manual-11-notificacao-chamada-perdida.md)
 12. [Discagem por clique a partir do CRM](manual-12-click-to-call.md)
 13. [Dashboard de métricas do dia](manual-13-dashboard-metricas.md)
+14. [Múltiplas telefonistas simultâneas](manual-14-multiplas-telefonistas.md)
 
 ## Regra de manutenção
 

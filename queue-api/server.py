@@ -23,12 +23,16 @@ from missed_calls import parse_missed_call_event, MissedCallsLog
 from notifiers import dispatch_notifications
 from click_to_call import build_originate_action, validate_click_to_call_request
 from metrics import DailyMetrics
+from pickup import validate_pickup_request
 
 AMI_HOST = os.environ.get("AMI_HOST", "127.0.0.1")
 AMI_PORT = int(os.environ.get("AMI_PORT", "5038"))
 AMI_USERNAME = os.environ.get("AMI_USERNAME", "queue-api")
 AMI_SECRET = os.environ.get("AMI_SECRET", "troque_esta_senha_ami")
 PICKUP_CONTEXT = os.environ.get("PICKUP_CONTEXT", "pickup-target")
+PICKUP_ALLOWED_EXTENSIONS = [
+    e.strip() for e in os.environ.get("PICKUP_ALLOWED_EXTENSIONS", "t1-recepcao,t1-recepcao-2").split(",") if e.strip()
+]
 HTTP_PORT = int(os.environ.get("HTTP_PORT", "8090"))
 RECORDINGS_DIR = os.environ.get("RECORDINGS_DIR", "/app/recordings")
 
@@ -144,16 +148,19 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json(400, {"error": "JSON invalido"})
             return
 
-        channel = data.get("channel")
-        if not channel:
-            self._send_json(400, {"error": "campo 'channel' obrigatorio"})
+        ok, error, channel, extension = validate_pickup_request(
+            data, {"allowed_extensions": PICKUP_ALLOWED_EXTENSIONS}
+        )
+        if not ok:
+            status = 403 if "autorizado" in error else 400
+            self._send_json(status, {"error": error})
             return
 
         if ami is None:
             self._send_json(503, {"error": "AMI nao conectado"})
             return
 
-        response = ami.redirect_channel(channel, PICKUP_CONTEXT)
+        response = ami.redirect_channel(channel, PICKUP_CONTEXT, exten=extension)
         if response.get("Response") == "Success":
             state.remove(channel)
             self._send_json(200, {"ok": True})

@@ -9,7 +9,7 @@ from conf_parser import parse_blocks, blocks_by_type
 EXTENSIONS_CONF = Path(__file__).parent.parent / "asterisk" / "extensions.conf"
 PJSIP_CONF = Path(__file__).parent.parent / "asterisk" / "pjsip.conf"
 
-HINT_RE = re.compile(r"exten\s*=>\s*(\S+),hint,PJSIP/(\S+)")
+HINT_RE = re.compile(r"exten\s*=>\s*(\S+),hint,(\S+)")
 
 
 def load_ext_blocks():
@@ -36,10 +36,14 @@ def test_expected_contexts_present():
 
 
 def test_receptionist_extension_1000_routes_to_web_endpoint():
+    """
+    Com múltiplas telefonistas (backlog #8), o ramal 1000 vira a
+    entrada da fila (round-robin entre quem estiver logada), não mais
+    um Dial() fixo pra uma única pessoa.
+    """
     blocks = blocks_as_dict(load_ext_blocks())
     text = blocks["t1-internal"].replace(" ", "")
-    assert "exten=>1000,1,MixMonitor(" in text
-    assert "Dial(PJSIP/t1-recepcao" in text
+    assert "exten=>1000,1,Queue(fila-t1)" in text
 
 
 def test_unmatched_incoming_calls_go_into_the_queue():
@@ -57,12 +61,27 @@ def test_unmatched_incoming_calls_go_into_the_queue():
 def test_pickup_target_context_dials_receptionist():
     """
     O contexto usado pelo pickup dirigido (Redirect via AMI) precisa
-    realmente discar pro ramal da telefonista - senão o queue-api
-    "puxa" a chamada da fila e ela cai no vazio.
+    ter uma entrada por telefonista - o Redirect especifica QUAL
+    ramal deve receber a chamada puxada (backlog #8).
     """
     blocks = blocks_as_dict(load_ext_blocks())
-    pickup_block = blocks["pickup-target"]
-    assert "Dial(PJSIP/t1-recepcao" in pickup_block.replace(" ", "")
+    pickup_block = blocks["pickup-target"].replace(" ", "")
+    assert "exten=>t1-recepcao,1," in pickup_block
+    assert "Dial(PJSIP/t1-recepcao,20)" in pickup_block
+    assert "exten=>t1-recepcao-2,1," in pickup_block
+    assert "Dial(PJSIP/t1-recepcao-2,20)" in pickup_block
+
+
+def test_direct_operator_extensions_are_recorded():
+    """
+    Os ramais diretos de cada telefonista (1010/1011, uso interno da
+    equipe) precisam gravar via MixMonitor, já que não passam pela
+    fila (que grava sozinha via monitor-type).
+    """
+    blocks = blocks_as_dict(load_ext_blocks())
+    text = blocks["t1-internal"]
+    assert "1010" in text and "MixMonitor(" in text
+    assert "1011" in text and "Dial(PJSIP/t1-recepcao-2" in text
 
 
 def test_receptionist_calls_are_recorded():
@@ -92,7 +111,9 @@ def test_every_hint_references_an_endpoint_that_exists_in_pjsip_conf():
     """
     Todo 'hint,PJSIP/xxx' em extensions.conf precisa ter um endpoint
     'xxx' de verdade no pjsip.conf - senão o BLF simplesmente não
-    funciona e ninguém percebe até testar na mão.
+    funciona e ninguém percebe até testar na mão. Hints combinados
+    (ex: PJSIP/a&PJSIP/b, usados pra representar um grupo) são
+    separados antes de checar cada dispositivo individualmente.
     """
     pjsip_blocks = parse_blocks(PJSIP_CONF)
     endpoint_names = {b["name"] for b in blocks_by_type(pjsip_blocks, "endpoint")}
@@ -100,7 +121,9 @@ def test_every_hint_references_an_endpoint_that_exists_in_pjsip_conf():
     hint_targets = set()
     for block in load_ext_blocks():
         for match in HINT_RE.finditer(block["text"]):
-            hint_targets.add(match.group(2))
+            for device in match.group(2).split("&"):
+                if device.startswith("PJSIP/"):
+                    hint_targets.add(device[len("PJSIP/"):])
 
     assert hint_targets, "Nenhum hint encontrado - verifique se o arquivo não quebrou"
     missing = hint_targets - endpoint_names

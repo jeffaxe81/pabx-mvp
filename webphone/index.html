@@ -558,6 +558,7 @@
   'use strict';
 
   let ua = null;
+  let myExtension = null; // ramal com o qual esta sessão está registrada
   // Multi-chamada: até 2 linhas simultâneas. Cada posição é null ou
   // {session, peer, direction, state, startTime}. state: 'ringing' |
   // 'active' | 'held'.
@@ -582,7 +583,9 @@
   // ramais reais do seu tenant/hints em extensions.conf. O próprio
   // ramal conectado deve ficar de fora da lista.
   const COLLEAGUES = [
-    { ext: '1000', label: 'Recepção (web)' },
+    { ext: '1000', label: 'Recepção (fila)' },
+    { ext: '1010', label: 'Telefonista 1' },
+    { ext: '1011', label: 'Telefonista 2' },
     { ext: '1001', label: 'Ramal 1001' },
     { ext: '1002', label: 'Ramal 1002' },
   ];
@@ -796,6 +799,7 @@
     ua.on('connecting', () => setStatus('', 'Conectando…'));
     ua.on('disconnected', () => setStatus('error', 'Conexão perdida'));
     ua.on('registered', () => {
+      myExtension = extension;
       setStatus('online', `Conectado como ${extension}`);
       el('connectForm').style.display = 'none';
       el('disconnectBtn').style.display = 'block';
@@ -822,6 +826,7 @@
     stopMissedCallsPolling();
     stopMetricsPolling();
     clearInterval(timerInterval);
+    myExtension = null;
     if (ua) ua.stop();
     setStatus('', 'Desconectado');
     el('connectForm').style.display = 'block';
@@ -882,7 +887,7 @@
     fetch(`${apiUrl}/api/queue/pickup`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ channel }),
+      body: JSON.stringify({ channel, extension: myExtension }),
     })
       .then((res) => res.json())
       .then((data) => {

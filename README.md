@@ -195,6 +195,11 @@ webphone): chamadas totais, atendidas, perdidas, TMA e taxa de
 perdidas, calculados a partir do CDR do Asterisk — ver
 `docs/manual-13-dashboard-metricas.md`.
 
+**E múltiplas telefonistas simultâneas**: duas (ou mais) operadoras
+logadas ao mesmo tempo, com a fila distribuindo chamadas em
+round-robin entre elas, e o pickup dirigido sabendo pra qual delas
+mandar cada chamada puxada — ver `docs/manual-14-multiplas-telefonistas.md`.
+
 Para ajustar quais ramais aparecem na lista de colegas, edite o array
 `COLLEAGUES` no início do `<script>` em `webphone/index.html`. Cada
 ramal monitorado precisa ter um `hint` correspondente em
@@ -219,7 +224,7 @@ cd ../queue-api
 python3 -m pytest tests/ -v
 ```
 
-122 testes estáticos no total — nenhum deles sobe o Asterisk de
+132 testes estáticos no total — nenhum deles sobe o Asterisk de
 verdade. Detalhes em `tests/README.md`.
 
 ## Documentação

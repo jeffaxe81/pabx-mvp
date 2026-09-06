@@ -39,7 +39,7 @@ def test_tls_transport_has_certificates():
 def test_expected_endpoints_present():
     blocks = load_blocks()
     endpoint_names = {b["name"] for b in blocks_by_type(blocks, "endpoint")}
-    expected = {"t1-1001", "t1-1002", "t1-recepcao", "t2-1001", "gateway-tdm"}
+    expected = {"t1-1001", "t1-1002", "t1-recepcao", "t1-recepcao-2", "t2-1001", "gateway-tdm"}
     missing = expected - endpoint_names
     assert not missing, f"Endpoints esperados ausentes: {missing}"
 
@@ -71,12 +71,13 @@ def test_every_endpoint_has_matching_auth_and_aor():
 def test_web_endpoint_uses_webrtc_and_wss():
     blocks = load_blocks()
     endpoints = {b["name"]: b for b in blocks_by_type(blocks, "endpoint")}
-    assert "t1-recepcao" in endpoints
-    block = endpoints["t1-recepcao"]
-    assert get_key_inherited(block, "webrtc", blocks) == "yes", (
-        "t1-recepcao deveria resultar em webrtc=yes (direto ou herdado de template)"
-    )
-    assert get_key_inherited(block, "transport", blocks) == "transport-wss"
+    for name in ("t1-recepcao", "t1-recepcao-2"):
+        assert name in endpoints
+        block = endpoints[name]
+        assert get_key_inherited(block, "webrtc", blocks) == "yes", (
+            f"{name} deveria resultar em webrtc=yes (direto ou herdado de template)"
+        )
+        assert get_key_inherited(block, "transport", blocks) == "transport-wss"
 
 
 def test_secure_endpoints_use_encryption():

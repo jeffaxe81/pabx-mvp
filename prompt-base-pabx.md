@@ -54,6 +54,14 @@ https://github.com/jeffaxe81/pabx-mvp
 - Originate via AMI: liga pro ramal da telefonista, ela atende,
   Asterisk completa pro número do cliente
 
+**Múltiplas telefonistas simultâneas**
+- 2 operadoras (t1-recepcao, t1-recepcao-2), ramal 1000 agora entra
+  na fila (Queue) em vez de discar fixo; fila usa strategy=rrmemory
+- Pickup dirigido agora exige extension no corpo da requisição -
+  cada operadora só recebe o que ela mesma puxou
+- Ramais diretos 1010/1011 pra uso interno (falar com uma
+  operadora específica, não com "a recepção")
+
 **Dashboard de métricas do dia**
 - Painel no webphone: chamadas totais, atendidas, perdidas, TMA,
   taxa de perdidas - via CDR do Asterisk (cdr.conf + cdr_manager.conf)
@@ -101,8 +109,7 @@ https://github.com/jeffaxe81/pabx-mvp
 5. ~~Notificação de chamada perdida~~ — IMPLEMENTADO (email/WhatsApp via AMI DialEnd/QueueCallerAbandon), ver docs/manual-11
 6. ~~Discagem por clique a partir do CRM~~ — IMPLEMENTADO (API com chave, Originate via AMI), ver docs/manual-12
 7. ~~Dashboard de métricas do dia~~ — IMPLEMENTADO (via CDR do Asterisk; ainda sem separação por tenant), ver docs/manual-13
-8. Múltiplas telefonistas simultâneas com roteamento round-robin das
-   chamadas de entrada
+8. ~~Múltiplas telefonistas simultâneas~~ — IMPLEMENTADO (2 operadoras, fila rrmemory, pickup por-operador), ver docs/manual-14
 9. PWA instalável com notificação nativa (tocar mesmo em segundo
    plano/tela bloqueada)
 10. Painel de administração web para cadastro de ramais/tenants (hoje

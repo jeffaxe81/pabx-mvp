@@ -195,3 +195,21 @@ def test_metrics_polling_starts_and_stops_with_connection():
     assert "startMetricsPolling()" in html
     assert "stopMetricsPolling()" in html
     assert "/api/metrics/today" in html
+
+
+def test_pickup_sends_own_extension_along_with_channel():
+    """
+    Com múltiplas telefonistas, o pickup precisa dizer ao queue-api
+    QUEM está puxando a chamada (myExtension), não só qual chamada -
+    senão o Asterisk não saberia pra qual ramal redirecionar.
+    """
+    html = load_html()
+    fn_start = html.index("function pickupFromQueue")
+    fn_end = html.index("}", html.index("catch", fn_start))
+    body = html[fn_start:fn_end]
+    assert "extension: myExtension" in body
+
+
+def test_my_extension_is_captured_on_registration():
+    html = load_html()
+    assert "myExtension = extension;" in html

@@ -13,6 +13,17 @@ def test_queue_fila_t1_exists_with_receptionist_as_member():
     blocks = {b["name"]: b["text"] for b in parse_blocks(QUEUES_CONF)}
     assert "fila-t1" in blocks
     assert "member => PJSIP/t1-recepcao" in blocks["fila-t1"]
+    assert "member => PJSIP/t1-recepcao-2" in blocks["fila-t1"]
+
+
+def test_queue_uses_round_robin_strategy_for_multiple_operators():
+    """
+    Com múltiplas telefonistas (backlog #8), a fila precisa distribuir
+    as chamadas em round-robin (rrmemory) em vez de tocar em todas ao
+    mesmo tempo (ringall, que fazia sentido só com 1 membro).
+    """
+    blocks = {b["name"]: b["text"] for b in parse_blocks(QUEUES_CONF)}
+    assert get_key(blocks["fila-t1"], "strategy") == "rrmemory"
 
 
 def test_queue_has_sane_ringall_timeout():

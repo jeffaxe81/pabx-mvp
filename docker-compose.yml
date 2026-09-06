@@ -37,6 +37,9 @@ services:
       AMI_USERNAME: "queue-api"
       AMI_SECRET: "troque_esta_senha_ami"   # deve bater com manager.conf
       HTTP_PORT: "8090"
+      # Pickup dirigido (backlog #2/#8) - quais ramais podem "puxar"
+      # uma chamada da fila. Adicione novos operadores aqui também.
+      PICKUP_ALLOWED_EXTENSIONS: "t1-recepcao,t1-recepcao-2"
       RECORDINGS_DIR: "/app/recordings"
       # Notificação de chamada perdida - vazio = desabilitado.
       # Preencha com "email", "whatsapp" ou "email,whatsapp" pra ativar.
