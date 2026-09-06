@@ -169,8 +169,8 @@ PWA) não estão listados aqui de novo — só o que falta ou está parcial.
 17. ~~URA (menus de voz)~~ — IMPLEMENTADO (modo feriado via AstDB
     com prioridade sobre horário comercial, roteamento por dígito,
     áudio placeholder), ver docs/manual-23
-18. Grupos de toque (vários ramais tocando ao mesmo tempo ou em
-    sequência - diferente de fila, é hunt group simples)
+18. ~~Grupos de toque~~ — IMPLEMENTADO (ramal 900 simultâneo, 901
+    em sequência, com hints combinados), ver docs/manual-24
 19. Controle de permissões e perfis (admin/supervisor/atendente) -
     pré-requisito natural do painel de administração (item 10)
 20. Autenticação em dois fatores para o painel de administração

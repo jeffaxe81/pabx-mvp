@@ -27,6 +27,7 @@ configurar, como testar manualmente, e limitações conhecidas.
 21. [Busca de gravações e política de retenção](manual-21-busca-retencao-gravacoes.md)
 22. [E-mail de correio de voz](manual-22-email-correio-voz.md)
 23. [URA / IVR](manual-23-ura.md)
+24. [Grupos de toque](manual-24-grupos-de-toque.md)
 
 ## Regra de manutenção
 

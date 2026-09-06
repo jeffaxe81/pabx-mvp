@@ -191,6 +191,43 @@ def test_ura_test_extension_exists_for_internal_testing():
     assert "exten=>700,1,Goto(ura-principal,s,1)" in text
 
 
+def test_simultaneous_ring_group_dials_all_members_at_once():
+    """
+    Grupo simultâneo (backlog #18) precisa usar '&' pra discar todos
+    os membros de uma vez só - um único Dial(), não vários separados.
+    """
+    blocks = blocks_as_dict(load_ext_blocks())
+    text = blocks["t1-internal"].replace(" ", "")
+    ring_group_start = text.index("exten=>900,1,")
+    ring_group_end = text.index("exten=>", ring_group_start + 1)
+    ring_group_block = text[ring_group_start:ring_group_end]
+    assert "Dial(PJSIP/t1-1001&PJSIP/t1-1002&PJSIP/t1-recepcao,20)" in ring_group_block
+
+
+def test_sequential_ring_group_dials_members_one_at_a_time():
+    """
+    Grupo em sequência (backlog #18) precisa de um Dial() separado por
+    membro (prioridades diferentes), não um Dial() só com '&' -
+    senão vira o mesmo comportamento do grupo simultâneo.
+    """
+    blocks = blocks_as_dict(load_ext_blocks())
+    text = blocks["t1-internal"].replace(" ", "")
+    ring_group_start = text.index("exten=>901,1,")
+    remaining = text[ring_group_start + 1:]
+    next_exten_offset = remaining.find("exten=>")
+    ring_group_end = ring_group_start + 1 + next_exten_offset if next_exten_offset != -1 else len(text)
+    ring_group_block = text[ring_group_start:ring_group_end]
+    assert ring_group_block.count("Dial(PJSIP/") == 3
+    assert "&" not in ring_group_block
+
+
+def test_ring_groups_have_combined_hints():
+    blocks = blocks_as_dict(load_ext_blocks())
+    hints_text = blocks["t1-hints"].replace(" ", "")
+    assert "exten=>900,hint,PJSIP/t1-1001&PJSIP/t1-1002&PJSIP/t1-recepcao" in hints_text
+    assert "exten=>901,hint,PJSIP/t1-1001&PJSIP/t1-1002&PJSIP/t1-recepcao" in hints_text
+
+
 def test_every_hint_references_an_endpoint_that_exists_in_pjsip_conf():
     """
     Todo 'hint,PJSIP/xxx' em extensions.conf precisa ter um endpoint
