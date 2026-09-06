@@ -20,6 +20,7 @@ configurar, como testar manualmente, e limitações conhecidas.
 14. [Múltiplas telefonistas simultâneas](manual-14-multiplas-telefonistas.md)
 15. [PWA instalável com notificação nativa](manual-15-pwa-notificacao.md)
 16. [Painel de administração web](manual-16-painel-administracao.md)
+17. [Painel operacional consolidado](manual-17-painel-operacional.md)
 
 ## Regra de manutenção
 

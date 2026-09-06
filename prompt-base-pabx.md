@@ -145,8 +145,9 @@ click-to-call, multi-telefonista, transferência, multi-chamada, BLF,
 PWA) não estão listados aqui de novo — só o que falta ou está parcial.
 
 **Completar o que já existe (parcial)**
-11. Painel operacional em tempo real consolidado (hoje fila/presença/
-    métricas são painéis separados)
+11. ~~Painel operacional em tempo real consolidado~~ — IMPLEMENTADO
+    (fila + estado de ramais via AMI ExtensionStatus + métricas numa
+    tela só), ver docs/manual-17
 12. Relatórios por atendente, setor e período histórico (hoje só
     "hoje", sem separação por tenant/operadora - ver limitação do
     manual 13)

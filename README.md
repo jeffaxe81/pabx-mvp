@@ -210,6 +210,10 @@ segundo plano — ver `docs/manual-15-pwa-notificacao.md`.
 Asterisk recarrega sozinho via AMI. Login desligado por padrão até
 configurar uma senha de admin — ver `docs/manual-16-painel-administracao.md`.
 
+**E painel operacional consolidado** (`webphone/painel-operacional.html`):
+fila, estado dos ramais e métricas do dia numa tela só, pra supervisão —
+ver `docs/manual-17-painel-operacional.md`.
+
 Para ajustar quais ramais aparecem na lista de colegas, edite o array
 `COLLEAGUES` no início do `<script>` em `webphone/index.html`. Cada
 ramal monitorado precisa ter um `hint` correspondente em
@@ -234,7 +238,7 @@ cd ../queue-api
 python3 -m pytest tests/ -v
 ```
 
-199 testes estáticos no total, em 3 suítes (`tests/`, `queue-api/tests/`,
+211 testes estáticos no total, em 3 suítes (`tests/`, `queue-api/tests/`,
 `admin-api/tests/`) — nenhuma delas sobe o Asterisk de verdade.
 Detalhes em `tests/README.md`.
 

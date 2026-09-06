@@ -24,6 +24,7 @@ from notifiers import dispatch_notifications
 from click_to_call import build_originate_action, validate_click_to_call_request
 from metrics import DailyMetrics
 from pickup import validate_pickup_request
+from extension_states import ExtensionStateTracker
 
 AMI_HOST = os.environ.get("AMI_HOST", "127.0.0.1")
 AMI_PORT = int(os.environ.get("AMI_PORT", "5038"))
@@ -71,13 +72,15 @@ CLICK_TO_CALL_CONFIG = {
 state = QueueStateTracker()
 missed_calls_log = MissedCallsLog()
 daily_metrics = DailyMetrics()
+extension_states = ExtensionStateTracker()
 ami = None  # inicializado em main(), None durante os testes automatizados
 
 
 def handle_ami_event(event: dict):
-    """Callback único do AMI: alimenta fila, chamadas perdidas e métricas."""
+    """Callback único do AMI: alimenta fila, chamadas perdidas, métricas e estado dos ramais."""
     state.apply_event(event)
     daily_metrics.apply_cdr_event(event)
+    extension_states.apply_event(event)
 
     missed = parse_missed_call_event(event)
     if missed:
@@ -111,6 +114,8 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json(200, {"missed_calls": missed_calls_log.list()})
         elif self.path.startswith("/api/metrics/today"):
             self._send_json(200, daily_metrics.snapshot())
+        elif self.path.startswith("/api/extension-states"):
+            self._send_json(200, {"extensions": extension_states.snapshot()})
         elif self.path.startswith("/recordings/"):
             self._serve_recording_file()
         else:

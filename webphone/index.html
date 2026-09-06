@@ -430,6 +430,11 @@
       <div class="log-title">Métricas de hoje</div>
       <div id="metricsGrid"></div>
     </div>
+
+    <a id="opsPanelLink" href="#" target="_blank" rel="noopener"
+       style="display:none; margin-top:24px; font-size:12px; color:var(--text-muted); text-decoration:none; border:1px solid var(--border); border-radius:4px; padding:8px; text-align:center;">
+      Abrir painel operacional (supervisão) ↗
+    </a>
   </aside>
 
   <!-- CENTRO: discador / chamada ativa -->
@@ -898,6 +903,7 @@
     el('disconnectBtn').style.display = 'none';
     el('colleaguesPanel').style.display = 'none';
     el('metricsPanel').style.display = 'none';
+    el('opsPanelLink').style.display = 'none';
     showView(null);
   });
 
@@ -1024,6 +1030,9 @@
     el('metricsPanel').style.display = 'block';
     fetchMetrics(apiUrl);
     metricsPollInterval = setInterval(() => fetchMetrics(apiUrl), 15000);
+
+    el('opsPanelLink').href = `painel-operacional.html?api=${encodeURIComponent(apiUrl)}`;
+    el('opsPanelLink').style.display = 'block';
   }
 
   function stopMetricsPolling() {

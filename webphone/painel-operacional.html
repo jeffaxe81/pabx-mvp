@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Painel operacional — PABX</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #14181F; --panel: #1D2330; --panel-alt: #242B3A; --border: #2E3646;
+    --text: #E8EAED; --text-muted: #8B93A3;
+    --amber: #E3A038; --green: #3FAE7A; --red: #D14343; --grey: #4B5468;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font-family: 'Inter', sans-serif; padding: 28px; }
+  .mono { font-family: 'IBM Plex Mono', monospace; }
+
+  h1 { font-size: 18px; margin: 0 0 4px; }
+  .subtitle { color: var(--text-muted); font-size: 13px; margin: 0 0 28px; }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 16px;
+    margin-bottom: 28px;
+  }
+  .panel {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 18px;
+  }
+  .panel h2 { font-size: 13px; color: var(--text-muted); text-transform: uppercase; margin: 0 0 14px; }
+
+  .metrics-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
+  .metric-card { background: var(--panel-alt); border-radius: 6px; padding: 12px; text-align: center; }
+  .metric-value { font-size: 22px; font-weight: 600; }
+  .metric-label { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+
+  .item-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 9px 0; border-bottom: 1px solid var(--border); font-size: 13px;
+  }
+  .item-row:last-child { border-bottom: none; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--grey); flex-shrink: 0; margin-right: 8px; }
+  .dot.livre { background: var(--green); }
+  .dot.tocando, .dot.ocupado, .dot.em-uso { background: var(--amber); }
+  .dot.em-espera { background: var(--red); }
+  .empty { color: var(--text-muted); font-size: 13px; }
+  .wait-time { color: var(--amber); font-size: 12px; }
+</style>
+</head>
+<body>
+
+<h1>Painel operacional</h1>
+<p class="subtitle" id="lastUpdate">Atualizando...</p>
+
+<div class="panel" style="margin-bottom: 16px;">
+  <h2>Métricas de hoje</h2>
+  <div class="metrics-row" id="metricsRow"></div>
+</div>
+
+<div class="grid">
+  <div class="panel">
+    <h2>Ramais</h2>
+    <div id="extensionsList"><div class="empty">Carregando...</div></div>
+  </div>
+
+  <div class="panel">
+    <h2>Fila de espera</h2>
+    <div id="queueList"><div class="empty">Carregando...</div></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  const el = (id) => document.getElementById(id);
+
+  const params = new URLSearchParams(window.location.search);
+  const apiUrl = params.get('api') || 'http://pabx.local:8090';
+
+  function fetchAll() {
+    Promise.all([
+      fetch(`${apiUrl}/api/metrics/today`).then((r) => r.json()).catch(() => null),
+      fetch(`${apiUrl}/api/extension-states`).then((r) => r.json()).catch(() => null),
+      fetch(`${apiUrl}/api/queue`).then((r) => r.json()).catch(() => null),
+    ]).then(([metrics, extensions, queue]) => {
+      if (metrics) renderMetrics(metrics);
+      if (extensions) renderExtensions(extensions.extensions || []);
+      if (queue) renderQueue(queue.waiting || []);
+      el('lastUpdate').textContent = `Atualizado às ${new Date().toLocaleTimeString('pt-BR')}`;
+    });
+  }
+
+  function renderMetrics(m) {
+    const avgMin = Math.floor((m.average_talk_seconds || 0) / 60);
+    const avgSec = Math.round((m.average_talk_seconds || 0) % 60);
+    const avgLabel = `${String(avgMin).padStart(2, '0')}:${String(avgSec).padStart(2, '0')}`;
+
+    const cards = [
+      { label: 'Chamadas hoje', value: m.total_calls },
+      { label: 'Atendidas', value: m.answered_calls },
+      { label: 'Perdidas', value: m.missed_calls },
+      { label: 'TMA', value: avgLabel },
+      { label: '% perdidas', value: `${m.missed_rate_percent}%` },
+    ];
+    el('metricsRow').innerHTML = cards.map((c) => `
+      <div class="metric-card">
+        <div class="metric-value mono">${c.value}</div>
+        <div class="metric-label">${c.label}</div>
+      </div>`).join('');
+  }
+
+  function renderExtensions(extensions) {
+    if (extensions.length === 0) {
+      el('extensionsList').innerHTML = '<div class="empty">Nenhum ramal monitorado ainda.</div>';
+      return;
+    }
+    el('extensionsList').innerHTML = extensions.map((e) => {
+      const dotClass = e.status_label.replace(' ', '-');
+      return `<div class="item-row">
+        <span><span class="dot ${dotClass}"></span>Ramal ${e.exten}</span>
+        <span class="mono">${e.status_label}</span>
+      </div>`;
+    }).join('');
+  }
+
+  function renderQueue(waiting) {
+    if (waiting.length === 0) {
+      el('queueList').innerHTML = '<div class="empty">Nenhuma chamada esperando.</div>';
+      return;
+    }
+    el('queueList').innerHTML = waiting.map((call) => {
+      const minutes = String(Math.floor(call.waiting_seconds / 60)).padStart(2, '0');
+      const seconds = String(call.waiting_seconds % 60).padStart(2, '0');
+      const label = call.caller_id_name || call.caller_id_num || call.channel;
+      return `<div class="item-row">
+        <span>${label}</span>
+        <span class="wait-time mono">${minutes}:${seconds}</span>
+      </div>`;
+    }).join('');
+  }
+
+  fetchAll();
+  setInterval(fetchAll, 5000);
+})();
+</script>
+
+</body>
+</html>
