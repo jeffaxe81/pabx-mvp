@@ -54,6 +54,25 @@ def test_dial_next_contact_marks_calling_before_originating():
     assert mark_pos < originate_pos
 
 
+def test_callback_routes_reuse_same_api_key_protection():
+    source = load_source()
+    for fn_name in ("_handle_list_callbacks", "_handle_dial_next_callback"):
+        fn_start = source.index(f"def {fn_name}")
+        fn_end = source.index("\n    def ", fn_start + 10)
+        body = source[fn_start:fn_end]
+        assert "_require_campaign_api_key()" in body, f"{fn_name} sem checagem de chave"
+
+
+def test_callback_dial_marks_calling_before_originating():
+    source = load_source()
+    fn_start = source.index("def _handle_dial_next_callback")
+    fn_end = source.index("\n    def ", fn_start + 10)
+    body = source[fn_start:fn_end]
+    mark_pos = body.index("mark_callback_calling(")
+    originate_pos = body.index("ami.send_action(action)")
+    assert mark_pos < originate_pos
+
+
 def test_click_to_call_validates_before_touching_ami():
     """
     A validação (chave de API, ramal permitido, número sanitizado)

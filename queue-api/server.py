@@ -31,6 +31,10 @@ from campaigns import (
     mark_contact_calling, mark_contact_result, campaign_summary,
     extract_dialed_number,
 )
+from callbacks import (
+    parse_callback_request_event, add_callback_request, load_callbacks,
+    find_callback, next_pending_callback, mark_callback_calling, mark_callback_result,
+)
 from metrics import DailyMetrics
 from pickup import validate_pickup_request
 from extension_states import ExtensionStateTracker
@@ -110,6 +114,11 @@ CLICK_TO_CALL_CONFIG = {
 # via AMI) e o mesmo contexto de dialplan.
 CAMPAIGNS_PATH = os.environ.get("CAMPAIGNS_PATH", "/app/data/campaigns.json")
 
+# Chamada de retorno / callback (backlog #26) - mesma chave e contexto
+# de risco do click-to-call/campanhas (originar chamada via AMI).
+CALLBACKS_PATH = os.environ.get("CALLBACKS_PATH", "/app/data/callbacks.json")
+CALLBACK_CONNECT_CONTEXT = os.environ.get("CALLBACK_CONNECT_CONTEXT", "callback-connect")
+
 state = QueueStateTracker()
 missed_calls_log = MissedCallsLog()
 daily_metrics = DailyMetrics()
@@ -155,6 +164,27 @@ def handle_ami_event(event: dict):
         print(f"[AVISO] falha no screen-pop: {screen_pop_error}")
 
     apply_campaign_dial_result(event)
+    apply_callback_dial_result(event)
+
+    callback_request = parse_callback_request_event(event)
+    if callback_request:
+        add_callback_request(CALLBACKS_PATH, callback_request["caller_id_num"], callback_request["caller_id_name"])
+
+
+def apply_callback_dial_result(event: dict):
+    """Mesmo mecanismo de correlação de campanhas, aplicado aos callbacks 'discando'."""
+    if event.get("Event") != "DialEnd":
+        return
+
+    disposition = event.get("DialStatus")
+    number = extract_dialed_number(event)
+    if not disposition or not number:
+        return
+
+    for callback in load_callbacks(CALLBACKS_PATH):
+        if callback["caller_id_num"] == number and callback["status"] == "discando":
+            mark_callback_result(CALLBACKS_PATH, callback["id"], disposition)
+            break
 
 
 def apply_campaign_dial_result(event: dict):
@@ -251,6 +281,8 @@ class Handler(BaseHTTPRequestHandler):
             self._handle_get_campaign()
         elif self.path.startswith("/api/campaigns"):
             self._handle_list_campaigns()
+        elif self.path.startswith("/api/callbacks"):
+            self._handle_list_callbacks()
         elif self.path.startswith("/recordings/"):
             self._serve_recording_file()
         else:
@@ -312,6 +344,8 @@ class Handler(BaseHTTPRequestHandler):
             self._handle_create_campaign()
         elif self.path.startswith("/api/campaigns/") and self.path.endswith("/dial-next"):
             self._handle_dial_next_contact()
+        elif self.path == "/api/callbacks/dial-next":
+            self._handle_dial_next_callback()
         else:
             self._send_json(404, {"error": "not found"})
 
@@ -442,6 +476,48 @@ class Handler(BaseHTTPRequestHandler):
         response = ami.send_action(action)
         if response.get("Response") == "Success":
             self._send_json(200, {"ok": True, "dialing": contact["number"]})
+        else:
+            self._send_json(502, {"error": "falha ao originar chamada", "detail": response})
+
+    def _handle_list_callbacks(self):
+        if not self._require_campaign_api_key():
+            return
+        self._send_json(200, {"callbacks": load_callbacks(CALLBACKS_PATH)})
+
+    def _handle_dial_next_callback(self):
+        """
+        Diferente de campanhas: aqui o Originate disca DIRETO pro
+        número do cliente através do tronco (não pra um ramal interno
+        primeiro) - quando ele atender, o contexto callback-connect
+        conecta com o atendente. É o mesmo mecanismo do click-to-call,
+        só que na ordem inversa.
+        """
+        if not self._require_campaign_api_key():
+            return
+
+        callback = next_pending_callback(load_callbacks(CALLBACKS_PATH))
+        if not callback:
+            self._send_json(200, {"done": True, "message": "nenhum callback pendente"})
+            return
+
+        if ami is None:
+            self._send_json(503, {"error": "AMI nao conectado"})
+            return
+
+        mark_callback_calling(CALLBACKS_PATH, callback["id"])
+        action = {
+            "Action": "Originate",
+            "Channel": f"PJSIP/{callback['caller_id_num']}@gateway-tdm",
+            "Context": CALLBACK_CONNECT_CONTEXT,
+            "Exten": "s",
+            "Priority": "1",
+            "Async": "true",
+            "Timeout": "30000",
+            "CallerID": f'"Retorno de chamada" <{callback["caller_id_num"]}>',
+        }
+        response = ami.send_action(action)
+        if response.get("Response") == "Success":
+            self._send_json(200, {"ok": True, "dialing": callback["caller_id_num"]})
         else:
             self._send_json(502, {"error": "falha ao originar chamada", "detail": response})
 

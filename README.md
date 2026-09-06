@@ -273,6 +273,10 @@ completos** — resta a Fase 3 (recursos de IA/ML).
 tentativas, reaproveitando o mesmo mecanismo do click-to-call — ver
 `docs/manual-30-discador-campanhas.md`.
 
+**E chamada de retorno (callback)**: opção 9 na URA — o cliente deixa
+o número, e o sistema liga de volta (fila FIFO) quando um atendente
+está livre — ver `docs/manual-31-callback.md`.
+
 Para ajustar quais ramais aparecem na lista de colegas, edite o array
 `COLLEAGUES` no início do `<script>` em `webphone/index.html`. Cada
 ramal monitorado precisa ter um `hint` correspondente em
@@ -297,7 +301,7 @@ cd ../queue-api
 python3 -m pytest tests/ -v
 ```
 
-423 testes estáticos no total, em 5 suítes (`tests/`, `queue-api/tests/`,
+443 testes estáticos no total, em 5 suítes (`tests/`, `queue-api/tests/`,
 `admin-api/tests/`, `asterisk/scripts/tests/`, `backup/tests/`) —
 nenhuma delas sobe o Asterisk de verdade. Detalhes em `tests/README.md`.
 

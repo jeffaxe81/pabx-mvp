@@ -34,6 +34,7 @@ configurar, como testar manualmente, e limitações conhecidas.
 28. [Alta disponibilidade e backup](manual-28-backup-disponibilidade.md)
 29. [Monitoramento de qualidade de chamada](manual-29-monitoramento-qualidade.md)
 30. [Discador automático / campanhas](manual-30-discador-campanhas.md)
+31. [Chamada de retorno / callback](manual-31-callback.md)
 
 ## Regra de manutenção
 

@@ -9,6 +9,7 @@ REQUIRED_IDS = [
     "campaignApiKey", "campaignName", "campaignAgent", "campaignContacts",
     "createCampaignBtn", "createCampaignError",
     "campaignsList", "refreshCampaignsBtn",
+    "callbacksList", "refreshCallbacksBtn",
 ]
 
 
@@ -47,3 +48,23 @@ def test_contacts_textarea_parsed_one_number_per_line():
     fn_end = html.index("});", html.index("catch", fn_start))
     body = html[fn_start:fn_end]
     assert "split('\\n')" in body
+
+
+def test_callback_panel_excludes_finished_statuses():
+    """
+    A lista de retornos pendentes precisa filtrar os já concluídos/
+    esgotados/cancelados - senão a telefonista vê uma lista cheia de
+    coisa que já foi resolvida, sem saber o que ainda falta discar.
+    """
+    html = load_html()
+    fn_start = html.index("function renderCallbacks")
+    fn_end = html.index("}", html.index("dialNextCallbackBtn", fn_start))
+    body = html[fn_start:fn_end]
+    assert "'concluido'" in body
+    assert "'esgotado'" in body
+    assert "'cancelado'" in body
+
+
+def test_dial_next_callback_uses_correct_endpoint():
+    html = load_html()
+    assert "/api/callbacks/dial-next" in html

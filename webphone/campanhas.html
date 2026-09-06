@@ -66,6 +66,14 @@
   <div id="campaignsList" style="margin-top:14px;"><div class="empty">Carregando...</div></div>
 </div>
 
+<div class="panel">
+  <div style="display:flex; justify-content:space-between; align-items:center;">
+    <h2 style="margin:0;">Retornos de chamada pendentes</h2>
+    <button class="btn-ghost" id="refreshCallbacksBtn">Atualizar</button>
+  </div>
+  <div id="callbacksList" style="margin-top:14px;"><div class="empty">Carregando...</div></div>
+</div>
+
 <script>
 (function () {
   'use strict';
@@ -156,6 +164,50 @@
   });
 
   el('refreshCampaignsBtn').addEventListener('click', loadCampaigns);
+
+  const callbackStatusLabel = {
+    pendente: 'Pendente', discando: 'Discando', concluido: 'Concluído',
+    ocupado: 'Ocupado', sem_resposta: 'Sem resposta', cancelado: 'Cancelado', esgotado: 'Esgotado',
+  };
+
+  function loadCallbacks() {
+    apiFetch('/api/callbacks')
+      .then((data) => renderCallbacks(data.callbacks || []))
+      .catch((err) => { el('callbacksList').innerHTML = `<div class="error-msg">${err.message}</div>`; });
+  }
+
+  function renderCallbacks(callbacks) {
+    const pending = callbacks.filter((c) => c.status !== 'concluido' && c.status !== 'esgotado' && c.status !== 'cancelado');
+    if (pending.length === 0) {
+      el('callbacksList').innerHTML = '<div class="empty">Nenhum retorno pendente.</div>';
+      return;
+    }
+    el('callbacksList').innerHTML = pending.map((c) => `
+      <div class="campaign-card">
+        <div class="campaign-name">${c.caller_id_name || c.caller_id_num} <span class="mono" style="color:var(--text-muted); font-size:12px;">(${c.caller_id_num})</span></div>
+        <div class="status-row"><span class="status-chip">${callbackStatusLabel[c.status] || c.status}</span><span class="status-chip">tentativas: ${c.attempts}</span></div>
+      </div>`).join('') + `<button class="btn-ghost" id="dialNextCallbackBtn" style="margin-top:10px;">Discar próximo retorno</button>`;
+
+    const btn = el('dialNextCallbackBtn');
+    if (btn) btn.addEventListener('click', dialNextCallback);
+  }
+
+  function dialNextCallback() {
+    apiFetch('/api/callbacks/dial-next', { method: 'POST' })
+      .then((data) => {
+        if (data.done) {
+          alert('Nenhum retorno pendente.');
+        } else {
+          alert(`Ligando de volta pra ${data.dialing} - quando atender, vai conectar com o atendente.`);
+        }
+        loadCallbacks();
+      })
+      .catch((err) => alert(err.message));
+  }
+
+  el('refreshCallbacksBtn').addEventListener('click', loadCallbacks);
+
+  loadCallbacks();
 
   loadCampaigns();
 })();

@@ -64,6 +64,8 @@ services:
       RECORDINGS_RETENTION_DAYS: "0"
       CALL_LOG_PATH: "/app/data/call_log.jsonl"
       CAMPAIGNS_PATH: "/app/data/campaigns.json"
+      CALLBACKS_PATH: "/app/data/callbacks.json"
+      CALLBACK_CONNECT_CONTEXT: "callback-connect"
       # Screen-pop pro CRM (backlog #13) - vazio = desabilitado. Quando
       # uma chamada começa a tocar, o queue-api faz um POST nessa URL
       # com o número/nome de quem está ligando, pro CRM abrir o

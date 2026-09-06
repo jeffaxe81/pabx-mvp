@@ -188,7 +188,8 @@ PWA) não estão listados aqui de novo — só o que falta ou está parcial.
 25. ~~Discador automático (campanhas)~~ — IMPLEMENTADO (reaproveita
     contexto do click-to-call, retry ate 3 tentativas), ver
     docs/manual-30
-26. Chamada de retorno (callback) sem permanecer na fila
+26. ~~Chamada de retorno (callback)~~ — IMPLEMENTADO (opção 9 na
+    URA, fila FIFO, Originate direto pro cliente), ver docs/manual-31
 27. Pesquisa de satisfação pós-atendimento
 28. Transferência inteligente por regra (horário/cliente/assunto)
 29. Presença corporativa avançada (ausente/reunião/férias) com

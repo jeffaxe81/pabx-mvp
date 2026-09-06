@@ -8,7 +8,7 @@ from pathlib import Path
 
 SOUNDS_DIR = Path(__file__).parent.parent / "asterisk" / "sounds" / "custom"
 
-EXPECTED_FILES = ["menu-principal.wav", "menu-fora-horario.wav", "menu-feriado.wav"]
+EXPECTED_FILES = ["menu-principal.wav", "menu-fora-horario.wav", "menu-feriado.wav", "menu-callback.wav"]
 
 
 def test_all_expected_placeholder_files_exist():

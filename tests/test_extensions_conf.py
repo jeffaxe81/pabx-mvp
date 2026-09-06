@@ -30,7 +30,7 @@ def test_expected_contexts_present():
     expected = {
         "t1-internal", "t2-internal", "t1-hints", "t2-hints",
         "from-tdm-gateway", "pickup-target", "click-to-call",
-        "qualidade-chamada",
+        "qualidade-chamada", "solicitar-callback", "callback-connect",
     }
     missing = expected - contexts
     assert not missing, f"Contextos esperados ausentes: {missing}"
@@ -131,6 +131,25 @@ def test_quality_context_reads_rtcp_and_sends_user_event():
     assert "CHANNEL(rtcp,rxploss)" in text
     assert "CHANNEL(rtcp,rtt)" in text
     assert "Return()" in text
+
+
+def test_ura_offers_callback_option():
+    blocks = blocks_as_dict(load_ext_blocks())
+    text = blocks["horario-comercial"].replace(" ", "")
+    assert "exten=>9,1,Goto(solicitar-callback,s,1)" in text
+
+
+def test_callback_request_context_sends_user_event_with_caller_id():
+    blocks = blocks_as_dict(load_ext_blocks())
+    text = blocks["solicitar-callback"].replace(" ", "")
+    assert "UserEvent(CallbackRequest" in text
+    assert "CallerIDNum=${CALLERID(num)}" in text
+
+
+def test_callback_connect_context_dials_receptionist():
+    blocks = blocks_as_dict(load_ext_blocks())
+    text = blocks["callback-connect"].replace(" ", "")
+    assert "Dial(PJSIP/t1-recepcao" in text
 
 
 def test_click_to_call_context_dials_via_tdm_gateway():
