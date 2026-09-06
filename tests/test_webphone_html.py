@@ -25,6 +25,8 @@ REQUIRED_IDS = [
     "callLog", "colleaguesPanel", "colleaguesList",
     "remoteAudio", "queueApiUrl", "queueList",
     "recordingsList", "refreshRecordingsBtn",
+    "lineSwitcher", "linePill0", "linePill1",
+    "secondLineBanner", "secondLinePeer", "answerSecondLineBtn", "declineSecondLineBtn",
 ]
 
 
@@ -90,15 +92,15 @@ def test_consult_call_does_not_get_rejected_as_second_call():
     """
     A ligação de consulta é uma segunda sessão SIP de propósito -
     handleNewSession precisa reconhecer isso via expectingConsultCall
-    ANTES de cair na regra geral que rejeita uma segunda chamada.
+    ANTES de cair na regra geral que rejeita uma terceira chamada.
     """
     html = load_html()
     handler_start = html.index("function handleNewSession")
-    reject_rule_pos = html.index("já em chamada", handler_start)
+    reject_rule_pos = html.index("duas linhas já estão ocupadas", handler_start)
     consult_check_pos = html.index("expectingConsultCall && session.direction", handler_start)
     assert consult_check_pos < reject_rule_pos, (
         "A checagem de chamada de consulta precisa vir antes da regra "
-        "que rejeita a segunda chamada"
+        "que rejeita a terceira chamada"
     )
 
 
@@ -125,3 +127,56 @@ def test_recordings_panel_uses_embedded_audio_player():
     handler_body = html[render_start:render_end]
     assert "<audio controls" in handler_body
     assert "/recordings/" in handler_body
+
+
+def test_answering_second_line_holds_the_first():
+    """
+    O ponto central do multi-chamada: atender a linha 2 precisa
+    colocar a linha 1 em espera antes - senão as duas ficam com áudio
+    aberto ao mesmo tempo, o que não faz sentido numa chamada só.
+    """
+    html = load_html()
+    fn_start = html.index("function answerLine")
+    fn_end = html.index("function handleLineEnded")
+    body = html[fn_start:fn_end]
+    hold_pos = body.index("current.session.hold()")
+    answer_pos = body.index("line.session.answer(")
+    assert hold_pos < answer_pos, (
+        "answerLine precisa colocar a linha atual em espera ANTES de "
+        "atender a nova linha"
+    )
+
+
+def test_line_ended_falls_back_to_other_line_automatically():
+    """
+    Se a linha ativa cai (chamador desligou, etc.) e existe uma
+    segunda linha em espera, a interface precisa voltar pra ela
+    automaticamente (tirando da espera) em vez de deixar a telefonista
+    "perdida" sem call ativa visível.
+    """
+    html = load_html()
+    fn_start = html.index("function handleLineEnded")
+    fn_end = html.index("function resetCallUI")
+    body = html[fn_start:fn_end]
+    assert "otherLine.session.unhold()" in body
+
+
+def test_third_simultaneous_call_is_rejected():
+    """
+    O limite é 2 linhas - uma terceira chamada simultânea (ambas as
+    linhas já ocupadas) precisa ser recusada automaticamente.
+    """
+    html = load_html()
+    fn_start = html.index("function handleNewSession")
+    fn_end = html.index("function wireSessionEvents")
+    body = html[fn_start:fn_end]
+    assert "freeIndex === -1" in body
+    assert "session.terminate()" in body
+
+
+def test_line_switcher_prevents_switching_to_unanswered_line():
+    html = load_html()
+    fn_start = html.index("function switchToLine")
+    fn_end = html.index("el('linePill0')")
+    body = html[fn_start:fn_end]
+    assert "line.session.isEstablished()" in body

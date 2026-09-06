@@ -176,6 +176,11 @@ interface (painel "Gravações") — ver `docs/manual-09-gravacao-chamadas.md`,
 inclusive um aviso importante sobre indicação legal de gravação pro
 cliente.
 
+**E multi-chamada (2 linhas simultâneas)**: uma segunda chamada
+chegando não é mais recusada — a telefonista pode atendê-la (a
+primeira vai pra espera automaticamente) e alternar entre as duas —
+ver `docs/manual-10-multi-chamada.md`.
+
 Para ajustar quais ramais aparecem na lista de colegas, edite o array
 `COLLEAGUES` no início do `<script>` em `webphone/index.html`. Cada
 ramal monitorado precisa ter um `hint` correspondente em
@@ -200,7 +205,7 @@ cd ../queue-api
 python3 -m pytest tests/ -v
 ```
 
-65 testes estáticos no total — nenhum deles sobe o Asterisk de
+69 testes estáticos no total — nenhum deles sobe o Asterisk de
 verdade. Detalhes em `tests/README.md`.
 
 ## Documentação

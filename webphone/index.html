@@ -343,6 +343,25 @@
     margin-left: 8px;
     font-size: 12px;
   }
+
+  /* Multi-chamada (linha 1 / linha 2) */
+  .line-switcher {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+    margin-bottom: 16px;
+  }
+  .line-pill {
+    padding: 6px 12px;
+    font-size: 12px;
+    border-radius: 20px;
+    background: var(--panel-alt);
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+  }
+  .line-pill.active-line { border-color: var(--green); color: var(--green); }
+  .line-pill.on-hold { border-color: var(--amber); color: var(--amber); }
+  .line-pill:disabled { opacity: 0.3; cursor: default; }
 </style>
 </head>
 <body>
@@ -421,6 +440,10 @@
 
     <!-- Chamada em andamento -->
     <div id="activeView" class="call-card" style="display:none;">
+      <div class="line-switcher" id="lineSwitcher" style="display:none;">
+        <button class="line-pill" id="linePill0" data-line="0"></button>
+        <button class="line-pill" id="linePill1" data-line="1"></button>
+      </div>
       <div class="call-state" id="activeState">Chamando…</div>
       <div class="call-peer" id="activePeer">—</div>
       <div class="call-timer mono" id="callTimer">00:00</div>
@@ -437,6 +460,17 @@
         <button class="btn-ghost" id="consultBtn" style="width:100%;">
           Consultar antes de transferir
         </button>
+      </div>
+    </div>
+
+    <!-- Segunda linha chegando enquanto já se está em chamada - não
+         troca de tela, só avisa; a chamada atual continua normalmente -->
+    <div id="secondLineBanner" class="call-card incoming" style="display:none; margin-top:16px;">
+      <div class="call-state">Chamada na linha 2</div>
+      <div class="call-peer" id="secondLinePeer">—</div>
+      <div class="incoming-actions">
+        <button class="btn-primary" id="answerSecondLineBtn" style="margin:0;">Atender</button>
+        <button class="btn-danger" id="declineSecondLineBtn">Recusar</button>
       </div>
     </div>
 
@@ -494,11 +528,13 @@
   'use strict';
 
   let ua = null;
-  let currentSession = null;
+  // Multi-chamada: até 2 linhas simultâneas. Cada posição é null ou
+  // {session, peer, direction, state, startTime}. state: 'ringing' |
+  // 'active' | 'held'.
+  let lines = [null, null];
+  let activeLineIndex = null; // 0, 1, ou null (nenhuma linha em foco)
   let dialBuffer = '';
   let isMuted = false;
-  let isOnHold = false;
-  let callStartTime = null;
   let timerInterval = null;
   const callLogEntries = [];
 
@@ -507,6 +543,7 @@
   let primarySession = null;   // chamada original, colocada em espera
   let consultSession = null;   // chamada de consulta com o colega
   let consultExt = null;
+  let consultLineIndex = null; // qual linha (0/1) estava em consulta
 
   // Fila de espera (queue-api)
   let queuePollInterval = null;
@@ -541,6 +578,116 @@
     el('statusText').textContent = text;
   }
 
+  // ---------- Linhas (multi-chamada) ----------
+  function activeLine() {
+    return activeLineIndex === null ? null : lines[activeLineIndex];
+  }
+
+  function activeSession() {
+    const line = activeLine();
+    return line ? line.session : null;
+  }
+
+  function findFreeLineIndex() {
+    if (lines[0] === null) return 0;
+    if (lines[1] === null) return 1;
+    return -1;
+  }
+
+  function otherLineIndex(index) {
+    return index === 0 ? 1 : 0;
+  }
+
+  function renderLineSwitcher() {
+    const bothOccupied = lines[0] && lines[1];
+    el('lineSwitcher').style.display = bothOccupied ? 'flex' : 'none';
+    if (!bothOccupied) return;
+
+    [0, 1].forEach((i) => {
+      const btn = el(`linePill${i}`);
+      const line = lines[i];
+      const stateLabel = line.state === 'held' ? 'Espera' : (line.state === 'ringing' ? 'Tocando' : 'Ativa');
+      btn.textContent = `${line.peer} · ${stateLabel}`;
+      btn.className = 'line-pill'
+        + (i === activeLineIndex ? ' active-line' : '')
+        + (line.state === 'held' ? ' on-hold' : '');
+    });
+  }
+
+  function switchToLine(index) {
+    const line = lines[index];
+    if (!line || index === activeLineIndex || !line.session.isEstablished()) return;
+
+    const current = activeLine();
+    if (current && current.session.isEstablished()) {
+      current.session.hold();
+      current.state = 'held';
+    }
+
+    line.session.unhold();
+    line.state = 'active';
+    activeLineIndex = index;
+    el('activePeer').textContent = line.peer;
+    el('activeState').textContent = 'Em chamada';
+    showView('activeView');
+    renderLineSwitcher();
+  }
+
+  el('linePill0').addEventListener('click', () => switchToLine(0));
+  el('linePill1').addEventListener('click', () => switchToLine(1));
+
+  function answerLine(index) {
+    const line = lines[index];
+    if (!line) return;
+
+    // Se já existe outra linha ativa, coloca ela em espera primeiro -
+    // é isso que torna isso "multi-chamada" e não só "trocar de chamada".
+    if (activeLineIndex !== null && activeLineIndex !== index) {
+      const current = lines[activeLineIndex];
+      if (current && current.session.isEstablished()) {
+        current.session.hold();
+        current.state = 'held';
+      }
+    }
+
+    el('secondLineBanner').style.display = 'none';
+    line.session.answer({ mediaConstraints: { audio: true, video: false } });
+    activeLineIndex = index;
+    el('activePeer').textContent = line.peer;
+    el('activeState').textContent = 'Em chamada';
+    showView('activeView');
+    renderLineSwitcher();
+  }
+
+  function handleLineEnded(index, outcome) {
+    const line = lines[index];
+    if (!line) return; // já foi limpa manualmente (ex: fim de transferência)
+
+    logCall(line.peer, line.direction === 'incoming' ? 'in' : 'out', outcome);
+    lines[index] = null;
+    el('secondLineBanner').style.display = 'none';
+
+    if (activeLineIndex === index) {
+      const other = otherLineIndex(index);
+      if (lines[other]) {
+        // volta pra outra linha, tirando ela da espera automaticamente
+        activeLineIndex = other;
+        const otherLine = lines[other];
+        if (otherLine.session.isEstablished()) {
+          otherLine.session.unhold();
+          otherLine.state = 'active';
+        }
+        el('activePeer').textContent = otherLine.peer;
+        el('activeState').textContent = 'Em chamada';
+        showView('activeView');
+      } else {
+        activeLineIndex = null;
+        resetCallUI();
+      }
+    }
+    renderLineSwitcher();
+  }
+
   // ---------- Discador ----------
   function renderDial() {
     el('dialInput').textContent = dialBuffer || '\u00A0';
@@ -550,8 +697,8 @@
     btn.addEventListener('click', () => {
       dialBuffer += btn.dataset.key;
       renderDial();
-      if (currentSession && currentSession.isEstablished()) {
-        currentSession.sendDTMF(btn.dataset.key);
+      if (activeSession() && activeSession().isEstablished()) {
+        activeSession().sendDTMF(btn.dataset.key);
       }
     });
   });
@@ -580,19 +727,16 @@
   }
 
   // ---------- Timer de chamada ----------
-  function startTimer() {
-    callStartTime = Date.now();
-    timerInterval = setInterval(() => {
-      const elapsedSec = Math.floor((Date.now() - callStartTime) / 1000);
-      const mm = String(Math.floor(elapsedSec / 60)).padStart(2, '0');
-      const ss = String(elapsedSec % 60).padStart(2, '0');
-      el('callTimer').textContent = `${mm}:${ss}`;
-    }, 1000);
-  }
-
-  function stopTimer() {
-    clearInterval(timerInterval);
-    el('callTimer').textContent = '00:00';
+  function tickTimerDisplay() {
+    const line = activeLine();
+    if (!line || !line.startTime) {
+      el('callTimer').textContent = '00:00';
+      return;
+    }
+    const elapsedSec = Math.floor((Date.now() - line.startTime) / 1000);
+    const mm = String(Math.floor(elapsedSec / 60)).padStart(2, '0');
+    const ss = String(elapsedSec % 60).padStart(2, '0');
+    el('callTimer').textContent = `${mm}:${ss}`;
   }
 
   // ---------- Conexão SIP ----------
@@ -629,6 +773,7 @@
       startPresenceMonitoring(domain);
       startQueuePolling();
       fetchRecordings();
+      timerInterval = setInterval(tickTimerDisplay, 1000);
     });
     ua.on('registrationFailed', (e) => {
       setStatus('error', 'Falha ao registrar: ' + (e.cause || 'verifique usuário/senha'));
@@ -642,6 +787,7 @@
   el('disconnectBtn').addEventListener('click', () => {
     Object.values(colleagueSubscribers).forEach((sub) => sub.terminate());
     stopQueuePolling();
+    clearInterval(timerInterval);
     if (ua) ua.stop();
     setStatus('', 'Desconectado');
     el('connectForm').style.display = 'block';
@@ -826,14 +972,15 @@
 
   function onColleagueClick(ext) {
     const domain = el('wssUrl').value.replace('wss://', '').replace('ws://', '').split(/[:/]/)[0];
+    const session = activeSession();
 
-    if (currentSession && currentSession.isEstablished()) {
+    if (session && session.isEstablished()) {
       // Em chamada -> transfere direto para o colega clicado
-      currentSession.refer(`sip:${ext}@${domain}`);
+      session.refer(`sip:${ext}@${domain}`);
       return;
     }
 
-    if (!currentSession) {
+    if (!session) {
       // Ocioso -> liga direto para o colega (discagem rápida)
       dialBuffer = ext;
       renderDial();
@@ -846,8 +993,7 @@
     const session = data.session;
 
     // Chamada de consulta que NÓS mesmos iniciamos (transferência
-    // assistida) - tratamento separado, não passa pelo fluxo normal
-    // de "uma chamada por vez".
+    // assistida) - tratamento separado, não entra no esquema de linhas.
     if (expectingConsultCall && session.direction === 'outgoing') {
       expectingConsultCall = false;
       consultSession = session;
@@ -869,72 +1015,81 @@
       return;
     }
 
-    if (currentSession) {
-      // já em chamada — recusa automaticamente a segunda (fora do escopo do MVP)
+    const freeIndex = findFreeLineIndex();
+    if (freeIndex === -1) {
+      // as duas linhas já estão ocupadas - limite do MVP, recusa a terceira
       session.terminate();
       return;
     }
 
-    currentSession = session;
     const peer = session.remote_identity.uri.user || 'desconhecido';
+    const line = { session, peer, direction: session.direction, state: 'ringing', startTime: null };
+    lines[freeIndex] = line;
+    wireSessionEvents(session, freeIndex);
 
     if (session.direction === 'incoming') {
-      el('incomingPeer').textContent = peer;
-      showView('incomingView');
-      setStatus('ringing', 'Chamada recebida');
-
-      el('answerBtn').onclick = () => {
-        session.answer({ mediaConstraints: { audio: true, video: false } });
-      };
-      el('declineBtn').onclick = () => {
-        session.terminate();
-      };
+      if (freeIndex === 0) {
+        // primeira chamada - tela normal de chamada recebida
+        el('incomingPeer').textContent = peer;
+        showView('incomingView');
+        setStatus('ringing', 'Chamada recebida');
+        el('answerBtn').onclick = () => answerLine(freeIndex);
+        el('declineBtn').onclick = () => { session.terminate(); };
+      } else {
+        // segunda linha tocando enquanto já se está em outra chamada -
+        // mostra um aviso, sem tirar a chamada atual da tela
+        el('secondLinePeer').textContent = peer;
+        el('secondLineBanner').style.display = 'block';
+        el('answerSecondLineBtn').onclick = () => answerLine(freeIndex);
+        el('declineSecondLineBtn').onclick = () => { session.terminate(); };
+      }
     } else {
+      // chamada de saída (discada por nós) sempre vira a linha em foco
+      activeLineIndex = freeIndex;
       el('activePeer').textContent = peer;
       el('activeState').textContent = 'Chamando…';
       showView('activeView');
+      renderLineSwitcher();
     }
+  }
 
+  function wireSessionEvents(session, index) {
     session.on('progress', () => {
-      if (session.direction === 'outgoing') el('activeState').textContent = 'Chamando…';
+      if (session.direction === 'outgoing' && activeLineIndex === index) {
+        el('activeState').textContent = 'Chamando…';
+      }
     });
 
     session.on('accepted', () => {
-      el('activeState').textContent = 'Em chamada';
-      el('activePeer').textContent = peer;
-      showView('activeView');
-      setStatus('online', 'Em chamada');
-      startTimer();
+      const line = lines[index];
+      if (!line) return;
+      line.state = 'active';
+      line.startTime = Date.now();
+      if (activeLineIndex === index) {
+        el('activeState').textContent = 'Em chamada';
+        el('activePeer').textContent = line.peer;
+        showView('activeView');
+        setStatus('online', 'Em chamada');
+      }
+      renderLineSwitcher();
     });
 
     session.on('confirmed', () => {
-      const remoteStream = session.connection.getRemoteStreams
-        ? session.connection.getRemoteStreams()[0]
-        : null;
-      // Compatibilidade com browsers modernos (ontrack)
       session.connection.addEventListener('track', (ev) => {
-        remoteAudio.srcObject = ev.streams[0];
+        if (activeLineIndex === index) remoteAudio.srcObject = ev.streams[0];
       });
-      if (remoteStream) remoteAudio.srcObject = remoteStream;
     });
 
-    session.on('ended', (e) => {
-      logCall(peer, session.direction === 'incoming' ? 'in' : 'out', 'concluída');
-      resetCallUI();
-    });
-
-    session.on('failed', (e) => {
-      const outcome = session.direction === 'incoming' ? 'perdida' : 'não atendida';
-      logCall(peer, session.direction === 'incoming' ? 'in' : 'out', outcome);
-      resetCallUI();
+    session.on('ended', () => handleLineEnded(index, 'concluída'));
+    session.on('failed', () => {
+      const line = lines[index];
+      const outcome = line && line.direction === 'incoming' ? 'perdida' : 'não atendida';
+      handleLineEnded(index, outcome);
     });
   }
 
   function resetCallUI() {
-    currentSession = null;
     isMuted = false;
-    isOnHold = false;
-    stopTimer();
     el('muteBtn').classList.remove('toggle-active');
     el('holdBtn').classList.remove('toggle-active');
     setStatus('online', 'Conectado');
@@ -946,6 +1101,10 @@
   // ---------- Ações de chamada ----------
   el('callBtn').addEventListener('click', () => {
     if (!ua || !dialBuffer) return;
+    if (findFreeLineIndex() === -1) {
+      alert('As duas linhas já estão em uso.');
+      return;
+    }
     const domain = el('wssUrl').value.replace('wss://', '').replace('ws://', '').split(/[:/]/)[0];
     const target = `sip:${dialBuffer}@${domain}`;
     ua.call(target, {
@@ -954,40 +1113,57 @@
   });
 
   el('hangupBtn').addEventListener('click', () => {
-    if (currentSession) currentSession.terminate();
+    const session = activeSession();
+    if (session) session.terminate();
   });
 
   el('muteBtn').addEventListener('click', () => {
-    if (!currentSession) return;
+    const session = activeSession();
+    if (!session) return;
     isMuted = !isMuted;
-    if (isMuted) currentSession.mute({ audio: true });
-    else currentSession.unmute({ audio: true });
+    if (isMuted) session.mute({ audio: true });
+    else session.unmute({ audio: true });
     el('muteBtn').classList.toggle('toggle-active', isMuted);
   });
 
   el('holdBtn').addEventListener('click', () => {
-    if (!currentSession) return;
-    isOnHold = !isOnHold;
-    if (isOnHold) currentSession.hold();
-    else currentSession.unhold();
-    el('holdBtn').classList.toggle('toggle-active', isOnHold);
+    const line = activeLine();
+    if (!line) return;
+    const willHold = line.state !== 'held';
+    if (willHold) {
+      line.session.hold();
+      line.state = 'held';
+    } else {
+      line.session.unhold();
+      line.state = 'active';
+    }
+    el('holdBtn').classList.toggle('toggle-active', willHold);
+    renderLineSwitcher();
   });
 
   el('transferBtn').addEventListener('click', () => {
     const target = el('transferTarget').value.trim();
-    if (!currentSession || !target) return;
+    const session = activeSession();
+    if (!session || !target) return;
     const domain = el('wssUrl').value.replace('wss://', '').replace('ws://', '').split(/[:/]/)[0];
-    currentSession.refer(`sip:${target}@${domain}`);
+    session.refer(`sip:${target}@${domain}`);
     el('transferTarget').value = '';
   });
 
   // ---------- Transferência assistida (consulta) ----------
   el('consultBtn').addEventListener('click', () => {
     const target = el('transferTarget').value.trim();
-    if (!currentSession || !currentSession.isEstablished() || !target) return;
+    const line = activeLine();
+    if (!line || !line.session.isEstablished() || !target) return;
+    if (findFreeLineIndex() === -1) {
+      alert('As duas linhas já estão em uso - não há espaço para a chamada de consulta.');
+      return;
+    }
 
-    primarySession = currentSession;
-    el('consultHeldPeer').textContent = el('activePeer').textContent;
+    consultLineIndex = activeLineIndex;
+    primarySession = line.session;
+    line.state = 'held';
+    el('consultHeldPeer').textContent = line.peer;
     primarySession.hold();
 
     consultExt = target;
@@ -1016,25 +1192,34 @@
     primarySession.refer(`sip:${consultExt}@${domain}`);
     logCall(consultExt, 'out', 'transferida com consulta');
 
+    const idx = consultLineIndex;
     const peerToClean = consultSession;
     const primaryToClean = primarySession;
     resetConsultState();
+    if (idx !== null) lines[idx] = null;
     primaryToClean.terminate();
     peerToClean.terminate();
+    activeLineIndex = null;
     resetCallUI();
+    renderLineSwitcher();
   });
 
   function handleConsultEnded() {
     // A consulta caiu (colega recusou/desligou) ou foi cancelada -
     // volta pra chamada original, tirando ela da espera.
-    if (primarySession && primarySession.isEstablished()) {
+    const idx = consultLineIndex;
+    if (idx !== null && lines[idx] && primarySession && primarySession.isEstablished()) {
       primarySession.unhold();
-      currentSession = primarySession;
-      el('activePeer').textContent = el('consultHeldPeer').textContent;
+      lines[idx].state = 'active';
+      activeLineIndex = idx;
+      el('activePeer').textContent = lines[idx].peer;
+      el('activeState').textContent = 'Em chamada';
       showView('activeView');
     } else {
+      activeLineIndex = null;
       showView('idleView');
     }
+    renderLineSwitcher();
     resetConsultState();
   }
 
@@ -1043,6 +1228,7 @@
     primarySession = null;
     consultSession = null;
     consultExt = null;
+    consultLineIndex = null;
   }
 
   renderDial();

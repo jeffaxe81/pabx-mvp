@@ -41,6 +41,12 @@ https://github.com/jeffaxe81/pabx-mvp
 - Sem teste de integração real (precisa de Asterisk rodando) - só a
   lógica de parsing/estado é testada automaticamente
 
+**Multi-chamada**
+- Até 2 linhas simultâneas; atender a linha 2 põe a linha 1 em
+  espera automaticamente; barra de troca de linha; volta sozinho
+  pra outra linha se a ativa cair
+- 3ª chamada simultânea continua sendo recusada (limite do MVP)
+
 **Gravação de chamadas**
 - Automática via monitor-type=mixmonitor na fila, e MixMonitor()
   explícito nos pontos fora da fila (ramal 1000 direto, pickup)
@@ -73,8 +79,7 @@ https://github.com/jeffaxe81/pabx-mvp
 1. ~~Transferência assistida~~ — IMPLEMENTADO, ver docs/manual-07
 2. ~~Fila de atendimento~~ — IMPLEMENTADO (pickup dirigido via AMI), ver docs/manual-08
 3. ~~Gravação de chamadas~~ — IMPLEMENTADO (MixMonitor + monitor da fila), ver docs/manual-09
-4. Multi-chamada (segunda linha) — hoje a 2ª chamada é recusada
-   automaticamente
+4. ~~Multi-chamada~~ — IMPLEMENTADO (2 linhas, hold automático ao atender/trocar), ver docs/manual-10
 5. Notificação de chamada perdida por e-mail/WhatsApp
 6. Discagem por clique a partir do CRM (click-to-call)
 7. Dashboard de métricas do dia (volume, TMA, taxa de perdidas) por
