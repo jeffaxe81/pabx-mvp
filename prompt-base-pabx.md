@@ -151,9 +151,9 @@ PWA) não estão listados aqui de novo — só o que falta ou está parcial.
 12. ~~Relatórios por atendente/tenant/período~~ — IMPLEMENTADO
     (call_log.jsonl persistente, extraído do CDR, agrupável por
     operador/tenant/dia), ver docs/manual-18
-13. Integração CRM na direção PABX→CRM: identificar cliente pelo
-    número e abrir cadastro automaticamente (screen-pop) - hoje só
-    temos CRM→PABX (click-to-call, manual 12)
+13. ~~Integração CRM PABX→CRM (screen-pop)~~ — IMPLEMENTADO (link
+    clicável configurável + webhook opcional via DialBegin), ver
+    docs/manual-19
 14. Regras de discagem externa: bloqueio de números/DDIs, prefixos
     por rota, múltiplos troncos por operadora (hoje é 1 tronco fixo)
 15. Busca de gravações por atendente/número e política de retenção

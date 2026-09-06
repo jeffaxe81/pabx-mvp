@@ -150,3 +150,14 @@ def test_queue_api_has_persistent_volume_for_call_log():
     volumes = compose["services"]["queue-api"].get("volumes", [])
     assert any("queue_api_data" in v or "/app/data" in v for v in volumes)
     assert "queue_api_data" in compose.get("volumes", {})
+
+
+def test_crm_webhook_disabled_by_default():
+    """
+    Screen-pop pro CRM (backlog #13) não pode sair fazendo POST pra
+    lugar nenhum sem alguém configurar a URL de propósito.
+    """
+    compose = load_compose()
+    env = compose["services"]["queue-api"].get("environment", {})
+    assert "CRM_WEBHOOK_URL" in env
+    assert env["CRM_WEBHOOK_URL"] == ""

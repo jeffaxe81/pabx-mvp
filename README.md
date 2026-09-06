@@ -218,6 +218,10 @@ ver `docs/manual-17-painel-operacional.md`.
 período — diferente das métricas do dia (que zeram à meia-noite), fica
 persistido em disco — ver `docs/manual-18-relatorios.md`.
 
+**E screen-pop pro CRM** (PABX→CRM): link clicável na interface + webhook
+opcional do servidor, avisando quem está ligando assim que a chamada
+começa a tocar — ver `docs/manual-19-crm-screen-pop.md`.
+
 Para ajustar quais ramais aparecem na lista de colegas, edite o array
 `COLLEAGUES` no início do `<script>` em `webphone/index.html`. Cada
 ramal monitorado precisa ter um `hint` correspondente em
@@ -242,7 +246,7 @@ cd ../queue-api
 python3 -m pytest tests/ -v
 ```
 
-237 testes estáticos no total, em 3 suítes (`tests/`, `queue-api/tests/`,
+248 testes estáticos no total, em 3 suítes (`tests/`, `queue-api/tests/`,
 `admin-api/tests/`) — nenhuma delas sobe o Asterisk de verdade.
 Detalhes em `tests/README.md`.
 

@@ -22,6 +22,7 @@ configurar, como testar manualmente, e limitações conhecidas.
 16. [Painel de administração web](manual-16-painel-administracao.md)
 17. [Painel operacional consolidado](manual-17-painel-operacional.md)
 18. [Relatórios por atendente, tenant e período](manual-18-relatorios.md)
+19. [Integração CRM: screen-pop PABX→CRM](manual-19-crm-screen-pop.md)
 
 ## Regra de manutenção
 

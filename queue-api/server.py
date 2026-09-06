@@ -27,6 +27,7 @@ from metrics import DailyMetrics
 from pickup import validate_pickup_request
 from extension_states import ExtensionStateTracker
 from reports import parse_cdr_for_report, CallLogStore, aggregate, group_by
+from screen_pop import dispatch_screen_pop
 
 AMI_HOST = os.environ.get("AMI_HOST", "127.0.0.1")
 AMI_PORT = int(os.environ.get("AMI_PORT", "5038"))
@@ -39,6 +40,10 @@ PICKUP_ALLOWED_EXTENSIONS = [
 HTTP_PORT = int(os.environ.get("HTTP_PORT", "8090"))
 RECORDINGS_DIR = os.environ.get("RECORDINGS_DIR", "/app/recordings")
 CALL_LOG_PATH = os.environ.get("CALL_LOG_PATH", "/app/data/call_log.jsonl")
+
+# Screen-pop pro CRM (PABX -> CRM) - vazio = desabilitado, mesmo
+# padrão de segurança/opt-in das outras integrações.
+CRM_WEBHOOK_URL = os.environ.get("CRM_WEBHOOK_URL", "")
 
 # Notificação de chamada perdida - canais habilitados via variável de
 # ambiente (ex: "email,whatsapp"). Vazio = notificação desabilitada,
@@ -89,6 +94,10 @@ def handle_ami_event(event: dict):
     report_record = parse_cdr_for_report(event)
     if report_record:
         call_log_store.append(report_record)
+
+    screen_pop_error = dispatch_screen_pop(event, CRM_WEBHOOK_URL)
+    if screen_pop_error:
+        print(f"[AVISO] falha no screen-pop: {screen_pop_error}")
 
     missed = parse_missed_call_event(event)
     if missed:

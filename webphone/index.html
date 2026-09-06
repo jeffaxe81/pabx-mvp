@@ -414,6 +414,9 @@
       <label for="queueApiUrl">API da fila (opcional)</label>
       <input id="queueApiUrl" placeholder="http://pabx.local:8090" value="http://pabx.local:8090">
 
+      <label for="crmScreenPopUrl">URL de screen-pop do CRM (opcional)</label>
+      <input id="crmScreenPopUrl" placeholder="https://seu-crm.com/contatos?telefone={numero}">
+
       <button class="btn-primary" id="connectBtn">Conectar</button>
     </div>
 
@@ -465,6 +468,10 @@
     <div id="incomingView" class="call-card incoming" style="display:none;">
       <div class="call-state">Chamada recebida</div>
       <div class="call-peer" id="incomingPeer">—</div>
+      <a id="screenPopLink" href="#" target="_blank" rel="noopener"
+         style="display:none; font-size:12px; color:var(--amber); text-decoration:none; margin-bottom:10px;">
+        Abrir cadastro do cliente no CRM ↗
+      </a>
       <div class="incoming-actions">
         <button class="btn-primary" id="answerBtn" style="margin:0;">Atender</button>
         <button class="btn-danger" id="declineBtn">Recusar</button>
@@ -501,6 +508,10 @@
     <div id="secondLineBanner" class="call-card incoming" style="display:none; margin-top:16px;">
       <div class="call-state">Chamada na linha 2</div>
       <div class="call-peer" id="secondLinePeer">—</div>
+      <a id="secondLineScreenPopLink" href="#" target="_blank" rel="noopener"
+         style="display:none; font-size:12px; color:var(--amber); text-decoration:none; margin-bottom:10px;">
+        Abrir cadastro do cliente no CRM ↗
+      </a>
       <div class="incoming-actions">
         <button class="btn-primary" id="answerSecondLineBtn" style="margin:0;">Atender</button>
         <button class="btn-danger" id="declineSecondLineBtn">Recusar</button>
@@ -567,6 +578,7 @@
 
   let ua = null;
   let myExtension = null; // ramal com o qual esta sessão está registrada
+  let crmScreenPopUrl = null; // template com {numero}, ex: https://crm.com/c?tel={numero}
   // Multi-chamada: até 2 linhas simultâneas. Cada posição é null ou
   // {session, peer, direction, state, startTime}. state: 'ringing' |
   // 'active' | 'held'.
@@ -869,6 +881,7 @@
     ua.on('disconnected', () => setStatus('error', 'Conexão perdida'));
     ua.on('registered', () => {
       myExtension = extension;
+      crmScreenPopUrl = el('crmScreenPopUrl').value.trim() || null;
       requestNotificationPermission();
       setStatus('online', `Conectado como ${extension}`);
       el('connectForm').style.display = 'none';
@@ -1242,6 +1255,7 @@
       if (freeIndex === 0) {
         // primeira chamada - tela normal de chamada recebida
         el('incomingPeer').textContent = peer;
+        setScreenPopLink('screenPopLink', peer);
         showView('incomingView');
         setStatus('ringing', 'Chamada recebida');
         el('answerBtn').onclick = () => answerLine(freeIndex);
@@ -1250,6 +1264,7 @@
         // segunda linha tocando enquanto já se está em outra chamada -
         // mostra um aviso, sem tirar a chamada atual da tela
         el('secondLinePeer').textContent = peer;
+        setScreenPopLink('secondLineScreenPopLink', peer);
         el('secondLineBanner').style.display = 'block';
         el('answerSecondLineBtn').onclick = () => answerLine(freeIndex);
         el('declineSecondLineBtn').onclick = () => { stopRingtone(); session.terminate(); };
@@ -1297,6 +1312,17 @@
       const outcome = line && line.direction === 'incoming' ? 'perdida' : 'não atendida';
       handleLineEnded(index, outcome);
     });
+  }
+
+  // ---------- Screen-pop do CRM (PABX -> CRM) ----------
+  function setScreenPopLink(elementId, peerNumber) {
+    const link = el(elementId);
+    if (!crmScreenPopUrl || !peerNumber) {
+      link.style.display = 'none';
+      return;
+    }
+    link.href = crmScreenPopUrl.replace('{numero}', encodeURIComponent(peerNumber));
+    link.style.display = 'inline-block';
   }
 
   function resetCallUI() {

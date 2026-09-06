@@ -197,6 +197,29 @@ def test_metrics_polling_starts_and_stops_with_connection():
     assert "/api/metrics/today" in html
 
 
+def test_screen_pop_link_built_from_configurable_template():
+    """
+    Screen-pop (backlog #13) é implementado como link clicável, não
+    window.open() automático - abrir sem gesto do usuário é bloqueado
+    por popup blocker na grande maioria dos navegadores.
+    """
+    html = load_html()
+    fn_start = html.index("function setScreenPopLink")
+    fn_end = html.index("function resetCallUI")
+    body = html[fn_start:fn_end]
+    assert "crmScreenPopUrl.replace('{numero}'" in body
+    assert "window.open" not in html  # em nenhum lugar do arquivo
+
+
+def test_incoming_call_views_set_screen_pop_link():
+    html = load_html()
+    fn_start = html.index("function handleNewSession")
+    fn_end = html.index("function wireSessionEvents")
+    body = html[fn_start:fn_end]
+    assert "setScreenPopLink('screenPopLink', peer)" in body
+    assert "setScreenPopLink('secondLineScreenPopLink', peer)" in body
+
+
 def test_pickup_sends_own_extension_along_with_channel():
     """
     Com múltiplas telefonistas, o pickup precisa dizer ao queue-api
