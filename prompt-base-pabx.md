@@ -198,8 +198,9 @@ PWA) não estão listados aqui de novo — só o que falta ou está parcial.
 32. ~~Detecção de fraude~~ — IMPLEMENTADO (volume anormal via
     DialBegin, bloqueio automático reaproveitando AstDB do manual
     20, limite de gasto), ver docs/manual-27
-33. Alta disponibilidade e backup automático (hoje é container único,
-    sem failover)
+33. ~~Backup automático~~ — IMPLEMENTADO (empacota config+dados
+    diariamente, restauração documentada); NÃO é alta disponibilidade
+    de verdade (sem failover) - ver docs/manual-28 pro aviso honesto
 34. Monitoramento de qualidade de chamada (jitter/latência/perda de
     pacotes)
 

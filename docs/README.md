@@ -31,6 +31,7 @@ configurar, como testar manualmente, e limitações conhecidas.
 25. [Permissões e perfis](manual-25-permissoes-perfis.md)
 26. [Autenticação em dois fatores (2FA)](manual-26-2fa.md)
 27. [Detecção de fraude](manual-27-deteccao-fraude.md)
+28. [Alta disponibilidade e backup](manual-28-backup-disponibilidade.md)
 
 ## Regra de manutenção
 

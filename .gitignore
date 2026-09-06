@@ -14,3 +14,7 @@ recordings/*
 # painel de administracao - dados gerados contêm senhas SIP em texto
 # plano; os arquivos versionados são só os placeholders vazios
 admin-api/data/
+
+# backups contem dados reais (ramais, gravacoes, historico) - nunca versionar
+backups/*
+!backups/.gitkeep

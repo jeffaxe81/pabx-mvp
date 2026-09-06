@@ -257,6 +257,11 @@ externas, bloqueio automático de destino suspeito (reaproveitando a
 lista de bloqueio existente) e limite de gasto diário por ramal — ver
 `docs/manual-27-deteccao-fraude.md`.
 
+**E backup automático** (não é alta disponibilidade de verdade — ver
+o aviso honesto logo no início do manual): empacota configuração e
+dados de negócio diariamente, com procedimento de restauração
+documentado — ver `docs/manual-28-backup-disponibilidade.md`.
+
 Para ajustar quais ramais aparecem na lista de colegas, edite o array
 `COLLEAGUES` no início do `<script>` em `webphone/index.html`. Cada
 ramal monitorado precisa ter um `hint` correspondente em
@@ -281,9 +286,9 @@ cd ../queue-api
 python3 -m pytest tests/ -v
 ```
 
-364 testes estáticos no total, em 4 suítes (`tests/`, `queue-api/tests/`,
-`admin-api/tests/`, `asterisk/scripts/tests/`) — nenhuma delas sobe o
-Asterisk de verdade. Detalhes em `tests/README.md`.
+379 testes estáticos no total, em 5 suítes (`tests/`, `queue-api/tests/`,
+`admin-api/tests/`, `asterisk/scripts/tests/`, `backup/tests/`) —
+nenhuma delas sobe o Asterisk de verdade. Detalhes em `tests/README.md`.
 
 ## Documentação
 

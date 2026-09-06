@@ -155,6 +155,36 @@ services:
       # interface (backlog #19, ver manual 25)
     command: python3 server.py
 
+  # Backup automático (backlog #33) - empacota configs + dados de
+  # negócio uma vez por dia. NÃO é alta disponibilidade/failover de
+  # verdade (isso exigiria uma segunda instância de Asterisk) - é
+  # backup + procedimento de restauração documentado, ver manual 28.
+  # De propósito, este container NÃO tem acesso ao socket do Docker
+  # (evita dar acesso root-equivalente a um container só pra backup) -
+  # por isso os volumes nomeados são montados diretamente aqui, e a
+  # restauração deles é um passo manual documentado (backup/restore.sh).
+  backup:
+    image: python:3.12-slim
+    container_name: pabx-backup
+    restart: unless-stopped
+    volumes:
+      - ./asterisk:/pabx/asterisk:ro
+      - ./admin:/pabx/admin:ro
+      - ./webphone:/pabx/webphone:ro
+      - ./provisioning:/pabx/provisioning:ro
+      - ./recordings:/pabx/recordings:ro
+      - ./docker-compose.yml:/pabx/docker-compose.yml:ro
+      - ./prompt-base-pabx.md:/pabx/prompt-base-pabx.md:ro
+      - admin_data:/pabx/admin_data:ro
+      - queue_api_data:/pabx/queue_api_data:ro
+      - ./backup:/pabx-scripts:ro
+      - ./backups:/backups
+    environment:
+      # 0 = nunca apaga backup antigo sozinho (opt-in, mesmo padrão do
+      # resto do projeto). Defina em dias (ex: "30") pra ativar.
+      BACKUP_RETENTION_DAYS: "0"
+    command: sh -c "while true; do sh /pabx-scripts/backup.sh; sleep 86400; done"
+
 volumes:
   asterisk_data:
   admin_data:

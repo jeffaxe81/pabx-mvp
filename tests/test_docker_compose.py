@@ -219,3 +219,29 @@ def test_fraud_auto_block_and_spending_limit_disabled_by_default():
     env = compose["services"]["queue-api"].get("environment", {})
     assert env.get("FRAUD_AUTO_BLOCK") == "false"
     assert env.get("FRAUD_DAILY_COST_LIMIT") == "0"
+
+
+def test_backup_service_present_and_does_not_mount_docker_socket():
+    """
+    Backup automático (backlog #33) precisa existir, e de propósito
+    NÃO deve montar o socket do Docker - isso equivaleria a dar acesso
+    root ao host pro container de backup, um risco desproporcional ao
+    benefício (ver manual 28).
+    """
+    compose = load_compose()
+    assert "backup" in compose["services"]
+    volumes = compose["services"]["backup"].get("volumes", [])
+    assert not any("docker.sock" in v for v in volumes)
+
+
+def test_backup_service_mounts_both_named_volumes_readonly():
+    compose = load_compose()
+    volumes = compose["services"]["backup"].get("volumes", [])
+    assert any(v.startswith("admin_data:") and v.endswith(":ro") for v in volumes)
+    assert any(v.startswith("queue_api_data:") and v.endswith(":ro") for v in volumes)
+
+
+def test_backup_retention_disabled_by_default():
+    compose = load_compose()
+    env = compose["services"]["backup"].get("environment", {})
+    assert env.get("BACKUP_RETENTION_DAYS") == "0"
