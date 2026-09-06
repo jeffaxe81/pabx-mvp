@@ -104,6 +104,10 @@ class Handler(BaseHTTPRequestHandler):
             if not self._require_auth():
                 return
             self._handle_list_blocklist()
+        elif self.path.startswith("/api/config/modo-feriado"):
+            if not self._require_auth():
+                return
+            self._handle_get_holiday_mode()
         elif self.path in ("/", "/index.html"):
             self._serve_static("index.html", "text/html")
         else:
@@ -115,6 +119,17 @@ class Handler(BaseHTTPRequestHandler):
             client.connect_and_login()
             numbers = client.list_blocked_numbers()
             self._send_json(200, {"numbers": numbers})
+        except Exception as exc:  # noqa: BLE001
+            self._send_json(502, {"error": f"falha ao consultar AMI: {exc}"})
+        finally:
+            client.close()
+
+    def _handle_get_holiday_mode(self):
+        client = AMIClient(AMI_HOST, AMI_PORT, AMI_USERNAME, AMI_SECRET)
+        try:
+            client.connect_and_login()
+            enabled = client.get_holiday_mode()
+            self._send_json(200, {"enabled": enabled})
         except Exception as exc:  # noqa: BLE001
             self._send_json(502, {"error": f"falha ao consultar AMI: {exc}"})
         finally:
@@ -142,8 +157,28 @@ class Handler(BaseHTTPRequestHandler):
             self._handle_create_extension()
         elif self.path == "/api/blocklist":
             self._handle_add_to_blocklist()
+        elif self.path == "/api/config/modo-feriado":
+            self._handle_set_holiday_mode()
         else:
             self._send_json(404, {"error": "not found"})
+
+    def _handle_set_holiday_mode(self):
+        if not self._require_auth():
+            return
+        data = self._read_json_body()
+        if data is None or "enabled" not in data:
+            self._send_json(400, {"error": "campo 'enabled' obrigatório"})
+            return
+
+        client = AMIClient(AMI_HOST, AMI_PORT, AMI_USERNAME, AMI_SECRET)
+        try:
+            client.connect_and_login()
+            client.set_holiday_mode(bool(data["enabled"]))
+            self._send_json(200, {"enabled": bool(data["enabled"])})
+        except Exception as exc:  # noqa: BLE001
+            self._send_json(502, {"error": f"falha ao consultar AMI: {exc}"})
+        finally:
+            client.close()
 
     def _handle_add_to_blocklist(self):
         if not self._require_auth():

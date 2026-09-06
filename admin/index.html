@@ -123,6 +123,15 @@
   </div>
 
   <div class="form-card" style="margin-top:24px;">
+    <h2>Modo feriado (URA)</h2>
+    <p style="font-size:13px; color:var(--text-muted); margin:0 0 12px;">
+      Quando ligado, a URA toca a mensagem de feriado pra qualquer
+      chamada, independente do horário comercial configurado.
+    </p>
+    <button class="btn-ghost" id="holidayModeBtn">Carregando...</button>
+  </div>
+
+  <div class="form-card" style="margin-top:24px;">
     <h2>Números bloqueados (discagem de saída)</h2>
     <table>
       <thead><tr><th>Número</th><th></th></tr></thead>
@@ -175,6 +184,7 @@
         el('appScreen').style.display = 'block';
         loadExtensions();
         loadBlocklist();
+        loadHolidayMode();
       })
       .catch((err) => { el('loginError').textContent = err.message; });
   });
@@ -298,6 +308,32 @@
       .then(loadBlocklist)
       .catch((err) => alert(err.message));
   }
+
+  // ---------- Modo feriado (URA) ----------
+  let holidayModeEnabled = false;
+
+  function loadHolidayMode() {
+    apiFetch('/api/config/modo-feriado').then((data) => {
+      holidayModeEnabled = !!data.enabled;
+      renderHolidayModeBtn();
+    });
+  }
+
+  function renderHolidayModeBtn() {
+    const btn = el('holidayModeBtn');
+    btn.textContent = holidayModeEnabled ? 'Desligar modo feriado' : 'Ligar modo feriado';
+    btn.className = holidayModeEnabled ? 'btn-danger' : 'btn-ghost';
+  }
+
+  el('holidayModeBtn').addEventListener('click', () => {
+    apiFetch('/api/config/modo-feriado', {
+      method: 'POST',
+      body: JSON.stringify({ enabled: !holidayModeEnabled }),
+    }).then((data) => {
+      holidayModeEnabled = data.enabled;
+      renderHolidayModeBtn();
+    }).catch((err) => alert(err.message));
+  });
 })();
 </script>
 

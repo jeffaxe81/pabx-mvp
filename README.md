@@ -234,6 +234,10 @@ automático configurável (desligado por padrão) — ver
 áudio anexado, via um pequeno script relay (o Asterisk não tem MTA
 próprio) — ver `docs/manual-22-email-correio-voz.md`.
 
+**E URA (menu de voz)**: modo feriado com prioridade sobre horário
+comercial, roteamento por dígito — com áudio placeholder (beep) até
+você trocar por gravação real — ver `docs/manual-23-ura.md`.
+
 Para ajustar quais ramais aparecem na lista de colegas, edite o array
 `COLLEAGUES` no início do `<script>` em `webphone/index.html`. Cada
 ramal monitorado precisa ter um `hint` correspondente em
@@ -258,7 +262,7 @@ cd ../queue-api
 python3 -m pytest tests/ -v
 ```
 
-287 testes estáticos no total, em 4 suítes (`tests/`, `queue-api/tests/`,
+296 testes estáticos no total, em 4 suítes (`tests/`, `queue-api/tests/`,
 `admin-api/tests/`, `asterisk/scripts/tests/`) — nenhuma delas sobe o
 Asterisk de verdade. Detalhes em `tests/README.md`.
 

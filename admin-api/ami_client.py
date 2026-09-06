@@ -57,7 +57,21 @@ class AMIClient:
             "Action": "DBDel", "Family": "blocklist", "Key": number,
         })
 
-    def list_blocked_numbers(self):
+    def set_holiday_mode(self, enabled: bool):
+        """Liga/desliga o modo feriado da URA (AstDB família 'config')."""
+        if enabled:
+            return self._send_action({
+                "Action": "DBPut", "Family": "config", "Key": "modo-feriado", "Val": "1",
+            })
+        return self._send_action({
+            "Action": "DBDel", "Family": "config", "Key": "modo-feriado",
+        })
+
+    def get_holiday_mode(self) -> bool:
+        response = self._send_action({
+            "Action": "DBGet", "Family": "config", "Key": "modo-feriado",
+        })
+        return response.get("Response") == "Success"    def list_blocked_numbers(self):
         """
         DBGetTree retorna uma Action ID com múltiplos eventos
         DBGetTreeEntry - simplificado aqui: lê tudo que vier do socket

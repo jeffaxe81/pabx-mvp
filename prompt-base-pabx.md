@@ -166,8 +166,9 @@ PWA) não estão listados aqui de novo — só o que falta ou está parcial.
     repassa pro SMTP, desligado por padrão), ver docs/manual-22
 
 **Fase 2 — Gestão (novo)**
-17. URA (menus de voz: "digite 1 para vendas...", horários e
-    mensagens por feriado)
+17. ~~URA (menus de voz)~~ — IMPLEMENTADO (modo feriado via AstDB
+    com prioridade sobre horário comercial, roteamento por dígito,
+    áudio placeholder), ver docs/manual-23
 18. Grupos de toque (vários ramais tocando ao mesmo tempo ou em
     sequência - diferente de fila, é hunt group simples)
 19. Controle de permissões e perfis (admin/supervisor/atendente) -

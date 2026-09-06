@@ -62,3 +62,10 @@ def test_blocklist_uses_bearer_token_like_extensions():
     html = load_html()
     assert "/api/blocklist" in html
     assert "loadBlocklist()" in html
+
+
+def test_holiday_mode_toggle_present():
+    html = load_html()
+    assert 'id="holidayModeBtn"' in html
+    assert "/api/config/modo-feriado" in html
+    assert "loadHolidayMode()" in html

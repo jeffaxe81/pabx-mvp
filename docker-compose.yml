@@ -22,6 +22,7 @@ services:
       - ./asterisk/cdr_manager.conf:/etc/asterisk/cdr_manager.conf
       - ./asterisk/certs:/etc/asterisk/certs:ro
       - ./asterisk/scripts:/var/lib/asterisk/scripts:ro
+      - ./asterisk/sounds/custom:/var/lib/asterisk/sounds/custom:ro
       - ./recordings:/var/spool/asterisk/monitor
       - asterisk_data:/var/spool/asterisk
     environment:

@@ -46,16 +46,16 @@ def test_receptionist_extension_1000_routes_to_web_endpoint():
     assert "exten=>1000,1,Queue(fila-t1)" in text
 
 
-def test_unmatched_incoming_calls_go_into_the_queue():
+def test_unmatched_incoming_calls_go_into_the_ura():
     """
-    Chamadas do gateway TDM sem DID mapeado entram na fila de
-    atendimento (toca a telefonista se livre, espera se ocupada) -
-    documentado no prompt master e no manual 08.
+    Chamadas do gateway TDM sem DID mapeado entram na URA (backlog
+    #17) - a URA decide, por horário/feriado, se toca a fila direto
+    ou uma mensagem de fora de expediente.
     """
     blocks = blocks_as_dict(load_ext_blocks())
     fallback_block = blocks["from-tdm-gateway"]
     assert "_X." in fallback_block
-    assert "Queue(fila-t1)" in fallback_block.replace(" ", "")
+    assert "Goto(ura-principal,s,1)" in fallback_block.replace(" ", "")
 
 
 def test_pickup_target_context_dials_receptionist():
@@ -155,6 +155,40 @@ def test_alternate_route_uses_second_trunk():
     alt_block = text[alt_start:alt_end].replace(" ", "")
     assert "@gateway-tdm-2," in alt_block
     assert "@gateway-tdm," not in alt_block
+
+
+def test_ura_checks_holiday_mode_before_business_hours():
+    """
+    O modo feriado (ligado manualmente pelo painel) precisa ter
+    prioridade sobre o horário comercial normal - senão "feriado numa
+    segunda de manhã" tocaria o menu de horário comercial mesmo assim.
+    """
+    blocks = blocks_as_dict(load_ext_blocks())
+    text = blocks["ura-principal"].replace(" ", "")
+    holiday_check_pos = text.index("DB(config/modo-feriado")
+    time_check_pos = text.index("GotoIfTime(")
+    assert holiday_check_pos < time_check_pos
+
+
+def test_ura_routes_digit_1_and_2_differently():
+    blocks = blocks_as_dict(load_ext_blocks())
+    text = blocks["horario-comercial"].replace(" ", "")
+    assert "exten=>1,1,Goto(t1-internal,1000,1)" in text
+    assert "exten=>2,1,Goto(t1-internal,1010,1)" in text
+
+
+def test_after_hours_and_holiday_contexts_go_to_voicemail():
+    blocks = blocks_as_dict(load_ext_blocks())
+    for context_name in ("fora-horario", "feriado"):
+        text = blocks[context_name].replace(" ", "")
+        assert "VoiceMail(" in text
+        assert "Background(custom/" in text
+
+
+def test_ura_test_extension_exists_for_internal_testing():
+    blocks = blocks_as_dict(load_ext_blocks())
+    text = blocks["t1-internal"].replace(" ", "")
+    assert "exten=>700,1,Goto(ura-principal,s,1)" in text
 
 
 def test_every_hint_references_an_endpoint_that_exists_in_pjsip_conf():

@@ -35,6 +35,7 @@ def test_all_extension_mutating_routes_require_auth_before_touching_store():
         ("_handle_delete_extension", "def _handle_remove_from_blocklist"),
         ("_handle_remove_from_blocklist", "def main"),
         ("_handle_add_to_blocklist", "def _handle_login"),
+        ("_handle_set_holiday_mode", "def _handle_add_to_blocklist"),
     ]
 
     for fn_name, next_marker in checks:
@@ -46,7 +47,7 @@ def test_all_extension_mutating_routes_require_auth_before_touching_store():
         mutation_candidates = [
             body.index(m) for m in (
                 "add_extension(", "update_extension(", "delete_extension(",
-                "block_number(", "unblock_number(",
+                "block_number(", "unblock_number(", "set_holiday_mode(",
             )
             if m in body
         ]
@@ -70,3 +71,12 @@ def test_get_blocklist_requires_auth():
     body = source[fn_start:fn_end]
     blocklist_branch = body[body.index("/api/blocklist"):]
     assert "_require_auth()" in blocklist_branch
+
+
+def test_get_holiday_mode_requires_auth():
+    source = load_source()
+    fn_start = source.index("def do_GET")
+    fn_end = source.index("def _handle_list_blocklist")
+    body = source[fn_start:fn_end]
+    holiday_branch = body[body.index("/api/config/modo-feriado"):]
+    assert "_require_auth()" in holiday_branch

@@ -116,6 +116,17 @@ def test_voicemail_mail_relay_script_mounted_and_disabled_by_default():
     assert env.get("SMTP_HOST") == ""
 
 
+def test_ura_sounds_mounted_into_asterisk_container():
+    """
+    Sem esse volume, o Background(custom/menu-principal) do dialplan
+    nunca encontraria o arquivo de áudio - a URA "funcionaria"
+    silenciosamente sem tocar nada.
+    """
+    compose = load_compose()
+    asterisk_volumes = compose["services"]["asterisk"].get("volumes", [])
+    assert any("sounds/custom" in v for v in asterisk_volumes)
+
+
 def test_notify_channels_env_present_and_disabled_by_default():
     """
     Notificação de chamada perdida deve vir DESLIGADA por padrão (o
