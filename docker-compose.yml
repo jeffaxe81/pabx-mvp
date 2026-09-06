@@ -48,6 +48,13 @@ services:
       WHATSAPP_PHONE_NUMBER_ID: ""
       WHATSAPP_ACCESS_TOKEN: ""
       WHATSAPP_TO_NUMBER: ""
+      # Click-to-call (CRM externo disparando ligação) - vazio =
+      # desabilitado. Preencha CLICK_TO_CALL_API_KEY com uma chave
+      # forte pra ativar; o CRM precisa enviá-la no header
+      # X-Click-To-Call-Key em toda requisição.
+      CLICK_TO_CALL_API_KEY: ""
+      CLICK_TO_CALL_ALLOWED_EXTENSIONS: "t1-recepcao"
+      CLICK_TO_CALL_CONTEXT: "click-to-call"
     command: python3 server.py
     depends_on:
       - asterisk

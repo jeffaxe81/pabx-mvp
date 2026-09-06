@@ -29,7 +29,7 @@ def test_expected_contexts_present():
     contexts = {b["name"] for b in load_ext_blocks()}
     expected = {
         "t1-internal", "t2-internal", "t1-hints", "t2-hints",
-        "from-tdm-gateway", "pickup-target",
+        "from-tdm-gateway", "pickup-target", "click-to-call",
     }
     missing = expected - contexts
     assert not missing, f"Contextos esperados ausentes: {missing}"
@@ -75,6 +75,17 @@ def test_receptionist_calls_are_recorded():
     blocks = blocks_as_dict(load_ext_blocks())
     assert "MixMonitor(" in blocks["t1-internal"]
     assert "MixMonitor(" in blocks["pickup-target"]
+
+
+def test_click_to_call_context_dials_via_tdm_gateway():
+    """
+    O contexto usado pelo click-to-call (Originate via AMI, disparado
+    pelo CRM) precisa realmente discar pro número do cliente através
+    do tronco - senão o CRM "liga" e nada acontece do lado de fora.
+    """
+    blocks = blocks_as_dict(load_ext_blocks())
+    click_block = blocks["click-to-call"]
+    assert "Dial(PJSIP/${EXTEN}@gateway-tdm" in click_block
 
 
 def test_every_hint_references_an_endpoint_that_exists_in_pjsip_conf():

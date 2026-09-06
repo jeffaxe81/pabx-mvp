@@ -21,6 +21,7 @@ from queue_state import QueueStateTracker
 from recordings import list_recordings, safe_recording_path
 from missed_calls import parse_missed_call_event, MissedCallsLog
 from notifiers import dispatch_notifications
+from click_to_call import build_originate_action, validate_click_to_call_request
 
 AMI_HOST = os.environ.get("AMI_HOST", "127.0.0.1")
 AMI_PORT = int(os.environ.get("AMI_PORT", "5038"))
@@ -50,6 +51,16 @@ NOTIFY_CONFIG = {
         "access_token": os.environ.get("WHATSAPP_ACCESS_TOKEN", ""),
         "to_number": os.environ.get("WHATSAPP_TO_NUMBER", ""),
     },
+}
+
+# Click-to-call (CRM externo disparando ligação) - desligado por
+# padrão (api_key vazia) até ser configurado explicitamente.
+CLICK_TO_CALL_CONTEXT = os.environ.get("CLICK_TO_CALL_CONTEXT", "click-to-call")
+CLICK_TO_CALL_CONFIG = {
+    "api_key": os.environ.get("CLICK_TO_CALL_API_KEY", ""),
+    "allowed_extensions": [
+        e.strip() for e in os.environ.get("CLICK_TO_CALL_ALLOWED_EXTENSIONS", "t1-recepcao").split(",") if e.strip()
+    ],
 }
 
 state = QueueStateTracker()
@@ -114,30 +125,62 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         if self.path == "/api/queue/pickup":
-            length = int(self.headers.get("Content-Length", 0))
-            try:
-                data = json.loads(self.rfile.read(length) or b"{}")
-            except json.JSONDecodeError:
-                self._send_json(400, {"error": "JSON invalido"})
-                return
-
-            channel = data.get("channel")
-            if not channel:
-                self._send_json(400, {"error": "campo 'channel' obrigatorio"})
-                return
-
-            if ami is None:
-                self._send_json(503, {"error": "AMI nao conectado"})
-                return
-
-            response = ami.redirect_channel(channel, PICKUP_CONTEXT)
-            if response.get("Response") == "Success":
-                state.remove(channel)
-                self._send_json(200, {"ok": True})
-            else:
-                self._send_json(502, {"error": "falha no redirect", "detail": response})
+            self._handle_pickup()
+        elif self.path == "/api/click-to-call":
+            self._handle_click_to_call()
         else:
             self._send_json(404, {"error": "not found"})
+
+    def _handle_pickup(self):
+        length = int(self.headers.get("Content-Length", 0))
+        try:
+            data = json.loads(self.rfile.read(length) or b"{}")
+        except json.JSONDecodeError:
+            self._send_json(400, {"error": "JSON invalido"})
+            return
+
+        channel = data.get("channel")
+        if not channel:
+            self._send_json(400, {"error": "campo 'channel' obrigatorio"})
+            return
+
+        if ami is None:
+            self._send_json(503, {"error": "AMI nao conectado"})
+            return
+
+        response = ami.redirect_channel(channel, PICKUP_CONTEXT)
+        if response.get("Response") == "Success":
+            state.remove(channel)
+            self._send_json(200, {"ok": True})
+        else:
+            self._send_json(502, {"error": "falha no redirect", "detail": response})
+
+    def _handle_click_to_call(self):
+        length = int(self.headers.get("Content-Length", 0))
+        try:
+            data = json.loads(self.rfile.read(length) or b"{}")
+        except json.JSONDecodeError:
+            self._send_json(400, {"error": "JSON invalido"})
+            return
+
+        api_key = self.headers.get("X-Click-To-Call-Key", "")
+        ok, error, extension, number = validate_click_to_call_request(data, api_key, CLICK_TO_CALL_CONFIG)
+
+        if not ok:
+            status = 403 if ("chave" in error or "autorizado" in error or "configurado" in error) else 400
+            self._send_json(status, {"error": error})
+            return
+
+        if ami is None:
+            self._send_json(503, {"error": "AMI nao conectado"})
+            return
+
+        action = build_originate_action(f"PJSIP/{extension}", number, CLICK_TO_CALL_CONTEXT)
+        response = ami.send_action(action)
+        if response.get("Response") == "Success":
+            self._send_json(200, {"ok": True})
+        else:
+            self._send_json(502, {"error": "falha ao originar chamada", "detail": response})
 
     def log_message(self, format, *args):
         pass  # log padrão do BaseHTTPRequestHandler é barulhento demais

@@ -185,6 +185,11 @@ ver `docs/manual-10-multi-chamada.md`.
 padrão até você configurar credenciais reais) — ver
 `docs/manual-11-notificacao-chamada-perdida.md`.
 
+**E discagem por clique a partir do CRM**: um sistema externo chama
+uma API pra disparar ligação (liga primeiro pra telefonista, depois
+completa pro cliente) — protegida por chave de API, desligada por
+padrão — ver `docs/manual-12-click-to-call.md`.
+
 Para ajustar quais ramais aparecem na lista de colegas, edite o array
 `COLLEAGUES` no início do `<script>` em `webphone/index.html`. Cada
 ramal monitorado precisa ter um `hint` correspondente em
@@ -209,7 +214,7 @@ cd ../queue-api
 python3 -m pytest tests/ -v
 ```
 
-88 testes estáticos no total — nenhum deles sobe o Asterisk de
+108 testes estáticos no total — nenhum deles sobe o Asterisk de
 verdade. Detalhes em `tests/README.md`.
 
 ## Documentação

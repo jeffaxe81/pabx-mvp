@@ -94,3 +94,15 @@ def test_notify_channels_env_present_and_disabled_by_default():
     env = compose["services"]["queue-api"].get("environment", {})
     assert "NOTIFY_CHANNELS" in env
     assert env["NOTIFY_CHANNELS"] == ""
+
+
+def test_click_to_call_api_key_disabled_by_default():
+    """
+    Mesma lógica da notificação: a API que origina chamadas não pode
+    vir habilitada por padrão sem uma chave configurada de propósito.
+    """
+    compose = load_compose()
+    env = compose["services"]["queue-api"].get("environment", {})
+    assert "CLICK_TO_CALL_API_KEY" in env
+    assert env["CLICK_TO_CALL_API_KEY"] == ""
+    assert "CLICK_TO_CALL_ALLOWED_EXTENSIONS" in env

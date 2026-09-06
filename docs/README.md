@@ -15,6 +15,7 @@ configurar, como testar manualmente, e limitações conhecidas.
 9. [Gravação de chamadas](manual-09-gravacao-chamadas.md)
 10. [Multi-chamada (segunda linha)](manual-10-multi-chamada.md)
 11. [Notificação de chamada perdida](manual-11-notificacao-chamada-perdida.md)
+12. [Discagem por clique a partir do CRM](manual-12-click-to-call.md)
 
 ## Regra de manutenção
 

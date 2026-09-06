@@ -48,6 +48,12 @@ https://github.com/jeffaxe81/pabx-mvp
 - Histórico visível no webphone (painel "Chamadas perdidas")
   independente de notificação estar ligada
 
+**Discagem por clique a partir do CRM (click-to-call)**
+- API HTTP protegida por chave (CLICK_TO_CALL_API_KEY, vazia por
+  padrão = desligado) + allowlist de ramais
+- Originate via AMI: liga pro ramal da telefonista, ela atende,
+  Asterisk completa pro número do cliente
+
 **Multi-chamada**
 - Até 2 linhas simultâneas; atender a linha 2 põe a linha 1 em
   espera automaticamente; barra de troca de linha; volta sozinho
@@ -88,7 +94,7 @@ https://github.com/jeffaxe81/pabx-mvp
 3. ~~Gravação de chamadas~~ — IMPLEMENTADO (MixMonitor + monitor da fila), ver docs/manual-09
 4. ~~Multi-chamada~~ — IMPLEMENTADO (2 linhas, hold automático ao atender/trocar), ver docs/manual-10
 5. ~~Notificação de chamada perdida~~ — IMPLEMENTADO (email/WhatsApp via AMI DialEnd/QueueCallerAbandon), ver docs/manual-11
-6. Discagem por clique a partir do CRM (click-to-call)
+6. ~~Discagem por clique a partir do CRM~~ — IMPLEMENTADO (API com chave, Originate via AMI), ver docs/manual-12
 7. Dashboard de métricas do dia (volume, TMA, taxa de perdidas) por
    tenant
 8. Múltiplas telefonistas simultâneas com roteamento round-robin das
