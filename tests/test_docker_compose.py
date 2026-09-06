@@ -67,3 +67,17 @@ def test_queue_api_env_matches_manager_conf_credentials():
     manager_conf = (PROJECT_ROOT / "asterisk" / "manager.conf").read_text(encoding="utf-8")
     assert env.get("AMI_USERNAME") and f"[{env['AMI_USERNAME']}]" in manager_conf
     assert env.get("AMI_SECRET") and f"secret = {env['AMI_SECRET']}" in manager_conf
+
+
+def test_recordings_volume_shared_between_asterisk_and_queue_api():
+    """
+    Asterisk escreve as gravações, queue-api precisa conseguir ler os
+    mesmos arquivos - os dois precisam apontar pro mesmo caminho no
+    host (./recordings).
+    """
+    compose = load_compose()
+    asterisk_volumes = compose["services"]["asterisk"].get("volumes", [])
+    queue_api_volumes = compose["services"]["queue-api"].get("volumes", [])
+
+    assert any(v.startswith("./recordings:") for v in asterisk_volumes)
+    assert any(v.startswith("./recordings:") for v in queue_api_volumes)

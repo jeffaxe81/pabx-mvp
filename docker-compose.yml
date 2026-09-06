@@ -15,6 +15,7 @@ services:
       - ./asterisk/manager.conf:/etc/asterisk/manager.conf
       - ./asterisk/queues.conf:/etc/asterisk/queues.conf
       - ./asterisk/certs:/etc/asterisk/certs:ro
+      - ./recordings:/var/spool/asterisk/monitor
       - asterisk_data:/var/spool/asterisk
 
   # Backend que fala AMI com o Asterisk e expõe a fila de atendimento
@@ -27,12 +28,14 @@ services:
     working_dir: /app
     volumes:
       - ./queue-api:/app:ro
+      - ./recordings:/app/recordings:ro
     environment:
       AMI_HOST: "127.0.0.1"
       AMI_PORT: "5038"
       AMI_USERNAME: "queue-api"
       AMI_SECRET: "troque_esta_senha_ami"   # deve bater com manager.conf
       HTTP_PORT: "8090"
+      RECORDINGS_DIR: "/app/recordings"
     command: python3 server.py
     depends_on:
       - asterisk

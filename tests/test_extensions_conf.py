@@ -37,7 +37,9 @@ def test_expected_contexts_present():
 
 def test_receptionist_extension_1000_routes_to_web_endpoint():
     blocks = blocks_as_dict(load_ext_blocks())
-    assert "1000,1,Dial(PJSIP/t1-recepcao" in blocks["t1-internal"].replace(" ", "")
+    text = blocks["t1-internal"].replace(" ", "")
+    assert "exten=>1000,1,MixMonitor(" in text
+    assert "Dial(PJSIP/t1-recepcao" in text
 
 
 def test_unmatched_incoming_calls_go_into_the_queue():
@@ -61,6 +63,18 @@ def test_pickup_target_context_dials_receptionist():
     blocks = blocks_as_dict(load_ext_blocks())
     pickup_block = blocks["pickup-target"]
     assert "Dial(PJSIP/t1-recepcao" in pickup_block.replace(" ", "")
+
+
+def test_receptionist_calls_are_recorded():
+    """
+    Os dois pontos onde a telefonista fala diretamente com alguém
+    fora do fluxo de fila (dial direto no 1000, e a chamada puxada da
+    fila) precisam gravar via MixMonitor - a fila em si já grava
+    sozinha via monitor-type no queues.conf.
+    """
+    blocks = blocks_as_dict(load_ext_blocks())
+    assert "MixMonitor(" in blocks["t1-internal"]
+    assert "MixMonitor(" in blocks["pickup-target"]
 
 
 def test_every_hint_references_an_endpoint_that_exists_in_pjsip_conf():

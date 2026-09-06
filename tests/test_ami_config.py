@@ -21,6 +21,12 @@ def test_queue_has_sane_ringall_timeout():
     assert timeout and int(timeout) > 0
 
 
+def test_queue_records_calls_automatically():
+    blocks = {b["name"]: b["text"] for b in parse_blocks(QUEUES_CONF)}
+    assert get_key(blocks["general"], "monitor-format") == "wav"
+    assert get_key(blocks["fila-t1"], "monitor-type") == "mixmonitor"
+
+
 def test_manager_ami_enabled_on_standard_port():
     blocks = {b["name"]: b["text"] for b in parse_blocks(MANAGER_CONF)}
     assert get_key(blocks["general"], "enabled") == "yes"

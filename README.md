@@ -171,6 +171,11 @@ de espera" da interface — a telefonista escolhe qual chamada atender
 (não só a mais antiga). Requer o serviço `queue-api` (fala AMI com o
 Asterisk) — ver `docs/manual-08-fila-atendimento.md`.
 
+**E gravação automática de chamadas** com player embutido na
+interface (painel "Gravações") — ver `docs/manual-09-gravacao-chamadas.md`,
+inclusive um aviso importante sobre indicação legal de gravação pro
+cliente.
+
 Para ajustar quais ramais aparecem na lista de colegas, edite o array
 `COLLEAGUES` no início do `<script>` em `webphone/index.html`. Cada
 ramal monitorado precisa ter um `hint` correspondente em
@@ -195,7 +200,7 @@ cd ../queue-api
 python3 -m pytest tests/ -v
 ```
 
-51 testes estáticos no total — nenhum deles sobe o Asterisk de
+65 testes estáticos no total — nenhum deles sobe o Asterisk de
 verdade. Detalhes em `tests/README.md`.
 
 ## Documentação

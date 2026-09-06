@@ -41,6 +41,14 @@ https://github.com/jeffaxe81/pabx-mvp
 - Sem teste de integração real (precisa de Asterisk rodando) - só a
   lógica de parsing/estado é testada automaticamente
 
+**Gravação de chamadas**
+- Automática via monitor-type=mixmonitor na fila, e MixMonitor()
+  explícito nos pontos fora da fila (ramal 1000 direto, pickup)
+- Player embutido no webphone (painel "Gravações"), servido pelo
+  queue-api (GET /api/recordings, GET /recordings/<nome>)
+- Sem retenção/expurgo automático, sem autenticação no endpoint -
+  ver limitações no docs/manual-09
+
 **Telefonista web (WebRTC)**
 - Interface em `webphone/index.html` (JsSIP): discador, atender,
   recusar, mudo, espera, transferência cega, histórico de chamadas da
@@ -64,7 +72,7 @@ https://github.com/jeffaxe81/pabx-mvp
 ## Ideias futuras (backlog, ainda não implementadas)
 1. ~~Transferência assistida~~ — IMPLEMENTADO, ver docs/manual-07
 2. ~~Fila de atendimento~~ — IMPLEMENTADO (pickup dirigido via AMI), ver docs/manual-08
-3. Gravação de chamadas com player embutido na interface
+3. ~~Gravação de chamadas~~ — IMPLEMENTADO (MixMonitor + monitor da fila), ver docs/manual-09
 4. Multi-chamada (segunda linha) — hoje a 2ª chamada é recusada
    automaticamente
 5. Notificação de chamada perdida por e-mail/WhatsApp

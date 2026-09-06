@@ -24,6 +24,7 @@ REQUIRED_IDS = [
     "cancelConsultBtn", "completeConsultBtn",
     "callLog", "colleaguesPanel", "colleaguesList",
     "remoteAudio", "queueApiUrl", "queueList",
+    "recordingsList", "refreshRecordingsBtn",
 ]
 
 
@@ -115,3 +116,12 @@ def test_queue_polling_starts_on_registration_and_stops_on_disconnect():
     html = load_html()
     assert "startQueuePolling()" in html
     assert "stopQueuePolling()" in html
+
+
+def test_recordings_panel_uses_embedded_audio_player():
+    html = load_html()
+    render_start = html.index("function renderRecordings")
+    render_end = html.index("el('refreshRecordingsBtn')", render_start)
+    handler_body = html[render_start:render_end]
+    assert "<audio controls" in handler_body
+    assert "/recordings/" in handler_body

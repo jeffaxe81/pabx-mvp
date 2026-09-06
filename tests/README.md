@@ -22,11 +22,11 @@ python3 -m pytest -v
 | `test_docker_compose.py` | YAML válido; serviços `asterisk`/`provisioning`/`webphone` existem; volumes montados apontam pra arquivos que existem de verdade; portas expostas |
 | `test_provisioning.py` | `devices.json` real é válido; gerador não deixa `{{placeholder}}` sobrando; fabricante desconhecido não quebra o script |
 | `test_webphone_html.py` | IDs usados pelo JavaScript continuam no HTML; biblioteca JsSIP carregada; array `COLLEAGUES` (presença); transferência assistida usa hold antes de consultar e limpa as duas pernas ao completar; pickup da fila chama o endpoint certo |
-| `test_ami_config.py` | `manager.conf` (AMI habilitado, usuário com senha real, restrito por IP) e `queues.conf` (fila com membro e timeout válidos) |
+| `test_ami_config.py` | `manager.conf` (AMI habilitado, usuário com senha real, restrito por IP) e `queues.conf` (fila com membro, timeout e gravação automática válidos) |
 
-Suíte separada em `queue-api/tests/` (parsing do protocolo AMI e
-lógica de estado da fila, sem depender de rede) — rodar com
-`cd queue-api && python3 -m pytest tests/ -v`.
+Suíte separada em `queue-api/tests/` (parsing do protocolo AMI, lógica
+de estado da fila, e listagem/segurança de gravações - tudo sem
+depender de rede) — rodar com `cd queue-api && python3 -m pytest tests/ -v`.
 
 ## O que esses testes **não** cobrem (ainda)
 

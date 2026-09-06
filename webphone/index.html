@@ -283,6 +283,22 @@
   .queue-item .wait { color: var(--amber); font-size: 12px; }
   .queue-item button { flex-shrink: 0; padding: 6px 10px; font-size: 12px; }
 
+  .recording-item {
+    border-bottom: 1px solid var(--border);
+    padding: 10px 0;
+    font-size: 12px;
+  }
+  .recording-item .meta {
+    display: flex;
+    justify-content: space-between;
+    color: var(--text-muted);
+    margin-bottom: 6px;
+  }
+  .recording-item audio {
+    width: 100%;
+    height: 32px;
+  }
+
   .toggle-active { background: var(--panel-alt); border-color: var(--green); color: var(--green); }
 
   /* Presença de colegas (BLF) */
@@ -457,6 +473,16 @@
     <div id="callLog">
       <div class="log-empty">Nenhuma chamada ainda nesta sessão.</div>
     </div>
+
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-top:24px;">
+      <div class="log-title" style="margin:0;">Gravações</div>
+      <button class="btn-ghost" id="refreshRecordingsBtn" style="padding:4px 8px; font-size:11px;">
+        Atualizar
+      </button>
+    </div>
+    <div id="recordingsList">
+      <div class="log-empty">Nenhuma gravação encontrada.</div>
+    </div>
   </aside>
 
 </div>
@@ -602,6 +628,7 @@
       showView('idleView');
       startPresenceMonitoring(domain);
       startQueuePolling();
+      fetchRecordings();
     });
     ua.on('registrationFailed', (e) => {
       setStatus('error', 'Falha ao registrar: ' + (e.cause || 'verifique usuário/senha'));
@@ -687,6 +714,40 @@
       })
       .catch(() => alert('API da fila indisponível.'));
   }
+
+  // ---------- Gravações (player embutido) ----------
+  function fetchRecordings() {
+    const apiUrl = el('queueApiUrl').value.trim();
+    if (!apiUrl) return;
+
+    fetch(`${apiUrl}/api/recordings`)
+      .then((res) => res.json())
+      .then((data) => renderRecordings(apiUrl, data.recordings || []))
+      .catch(() => {
+        el('recordingsList').innerHTML = '<div class="log-empty">API de gravações indisponível.</div>';
+      });
+  }
+
+  function renderRecordings(apiUrl, recordings) {
+    if (recordings.length === 0) {
+      el('recordingsList').innerHTML = '<div class="log-empty">Nenhuma gravação encontrada.</div>';
+      return;
+    }
+
+    el('recordingsList').innerHTML = recordings.map((rec) => {
+      const sizeKb = Math.round(rec.size_bytes / 1024);
+      const when = new Date(rec.modified_at).toLocaleString('pt-BR');
+      return `<div class="recording-item">
+        <div class="meta">
+          <span>${when}</span>
+          <span>${sizeKb} KB</span>
+        </div>
+        <audio controls preload="none" src="${apiUrl}/recordings/${encodeURIComponent(rec.filename)}"></audio>
+      </div>`;
+    }).join('');
+  }
+
+  el('refreshRecordingsBtn').addEventListener('click', fetchRecordings);
 
   // ---------- Presença dos colegas (BLF via SUBSCRIBE) ----------
   function startPresenceMonitoring(domain) {

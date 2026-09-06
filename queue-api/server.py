@@ -18,6 +18,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from ami_client import AMIClient
 from queue_state import QueueStateTracker
+from recordings import list_recordings, safe_recording_path
 
 AMI_HOST = os.environ.get("AMI_HOST", "127.0.0.1")
 AMI_PORT = int(os.environ.get("AMI_PORT", "5038"))
@@ -25,6 +26,7 @@ AMI_USERNAME = os.environ.get("AMI_USERNAME", "queue-api")
 AMI_SECRET = os.environ.get("AMI_SECRET", "troque_esta_senha_ami")
 PICKUP_CONTEXT = os.environ.get("PICKUP_CONTEXT", "pickup-target")
 HTTP_PORT = int(os.environ.get("HTTP_PORT", "8090"))
+RECORDINGS_DIR = os.environ.get("RECORDINGS_DIR", "/app/recordings")
 
 state = QueueStateTracker()
 ami = None  # inicializado em main(), None durante os testes automatizados
@@ -48,8 +50,28 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path.startswith("/api/queue"):
             self._send_json(200, {"waiting": state.waiting_list()})
+        elif self.path.startswith("/api/recordings"):
+            self._send_json(200, {"recordings": list_recordings(RECORDINGS_DIR)})
+        elif self.path.startswith("/recordings/"):
+            self._serve_recording_file()
         else:
             self._send_json(404, {"error": "not found"})
+
+    def _serve_recording_file(self):
+        filename = self.path[len("/recordings/"):]
+        resolved = safe_recording_path(RECORDINGS_DIR, filename)
+        if resolved is None:
+            self._send_json(404, {"error": "gravacao nao encontrada"})
+            return
+
+        content_type = "audio/wav" if resolved.suffix.lower() == ".wav" else "application/octet-stream"
+        data = resolved.read_bytes()
+        self.send_response(200)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
 
     def do_POST(self):
         if self.path == "/api/queue/pickup":

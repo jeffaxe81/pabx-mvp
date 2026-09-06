@@ -6,3 +6,7 @@ asterisk/certs/*.key
 __pycache__/
 *.pyc
 .pytest_cache/
+
+# gravações de chamadas reais - nunca versionar
+recordings/*
+!recordings/.gitkeep
