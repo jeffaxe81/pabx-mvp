@@ -1,2 +1,8 @@
+# senhas de ramal em texto plano - não versionar
 provisioning/files/*.cfg
 asterisk/certs/*.key
+
+# lixo de execução dos testes
+__pycache__/
+*.pyc
+.pytest_cache/

@@ -1,0 +1,759 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Telefonista — Console Web</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/jssip@3.10.1/dist/jssip.min.js"></script>
+<style>
+  :root {
+    --bg: #14181F;
+    --panel: #1D2330;
+    --panel-alt: #242B3A;
+    --border: #2E3646;
+    --text: #E8EAED;
+    --text-muted: #8B93A3;
+    --amber: #E3A038;
+    --green: #3FAE7A;
+    --red: #D14343;
+    --grey: #4B5468;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', -apple-system, sans-serif;
+    font-size: 15px;
+    line-height: 1.5;
+  }
+
+  .mono {
+    font-family: 'IBM Plex Mono', monospace;
+  }
+
+  .app {
+    display: grid;
+    grid-template-columns: 260px 1fr 300px;
+    min-height: 100vh;
+  }
+
+  @media (max-width: 900px) {
+    .app { grid-template-columns: 1fr; }
+    .sidebar, .log-panel { border: none; border-bottom: 1px solid var(--border); }
+  }
+
+  .sidebar, .log-panel {
+    background: var(--panel);
+    border-right: 1px solid var(--border);
+    padding: 20px;
+  }
+
+  .log-panel { border-right: none; border-left: 1px solid var(--border); }
+
+  .brand {
+    font-weight: 700;
+    font-size: 16px;
+    margin-bottom: 4px;
+  }
+  .brand-sub {
+    color: var(--text-muted);
+    font-size: 13px;
+    margin-bottom: 24px;
+  }
+
+  .status-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 18px;
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+  .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--grey);
+    flex-shrink: 0;
+  }
+  .dot.online { background: var(--green); }
+  .dot.ringing { background: var(--amber); animation: pulse 1s infinite; }
+  .dot.error { background: var(--red); }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  label {
+    display: block;
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-bottom: 5px;
+    margin-top: 14px;
+  }
+  label:first-child { margin-top: 0; }
+
+  input {
+    width: 100%;
+    background: var(--panel-alt);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 9px 10px;
+    border-radius: 4px;
+    font-family: 'Inter', sans-serif;
+    font-size: 14px;
+  }
+  input:focus {
+    outline: 2px solid var(--green);
+    outline-offset: -1px;
+  }
+
+  button {
+    font-family: 'Inter', sans-serif;
+    font-weight: 600;
+    font-size: 14px;
+    border: none;
+    border-radius: 4px;
+    padding: 10px 14px;
+    cursor: pointer;
+    transition: filter 0.1s ease;
+  }
+  button:hover { filter: brightness(1.12); }
+  button:active { filter: brightness(0.92); }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .btn-primary { background: var(--green); color: #0C1712; width: 100%; margin-top: 16px; }
+  .btn-danger { background: var(--red); color: #fff; }
+  .btn-ghost {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text);
+  }
+
+  main {
+    padding: 32px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .idle-hint {
+    color: var(--text-muted);
+    text-align: center;
+    max-width: 320px;
+    margin-bottom: 28px;
+    font-size: 14px;
+  }
+
+  .dialpad-display {
+    width: 280px;
+    text-align: center;
+    font-size: 26px;
+    padding: 10px 0 22px;
+    letter-spacing: 1px;
+    min-height: 34px;
+    color: var(--text);
+  }
+
+  .dialpad {
+    display: grid;
+    grid-template-columns: repeat(3, 64px);
+    gap: 12px;
+    margin-bottom: 22px;
+  }
+
+  .key {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    color: var(--text);
+    height: 56px;
+    border-radius: 6px;
+    font-size: 19px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .key:hover { background: var(--panel-alt); }
+
+  .call-btn {
+    width: 280px;
+    background: var(--green);
+    color: #0C1712;
+    height: 46px;
+    font-size: 15px;
+  }
+
+  /* Card de chamada ativa / tocando */
+  .call-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    width: 340px;
+    padding: 28px 24px;
+    text-align: center;
+  }
+  .call-card.incoming { border-color: var(--amber); }
+
+  .call-peer {
+    font-size: 19px;
+    font-weight: 600;
+    margin-bottom: 4px;
+  }
+  .call-state {
+    color: var(--text-muted);
+    font-size: 13px;
+    margin-bottom: 4px;
+  }
+  .call-timer {
+    font-size: 28px;
+    color: var(--green);
+    margin: 14px 0 20px;
+  }
+
+  .call-controls {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+  .call-controls button {
+    flex: 1;
+    min-width: 90px;
+  }
+
+  .incoming-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    margin-top: 6px;
+  }
+  .incoming-actions button { width: 130px; }
+
+  .transfer-row {
+    display: flex;
+    gap: 8px;
+    margin-top: 14px;
+  }
+  .transfer-row input { font-size: 13px; }
+  .transfer-row button { white-space: nowrap; }
+
+  .log-title {
+    font-weight: 600;
+    font-size: 13px;
+    color: var(--text-muted);
+    margin-bottom: 14px;
+  }
+
+  .log-empty {
+    color: var(--text-muted);
+    font-size: 13px;
+  }
+
+  .log-item {
+    border-bottom: 1px solid var(--border);
+    padding: 10px 0;
+    font-size: 13px;
+  }
+  .log-item .peer { font-weight: 600; }
+  .log-item .meta {
+    color: var(--text-muted);
+    font-size: 12px;
+    margin-top: 2px;
+  }
+  .log-item .meta.missed { color: var(--red); }
+
+  .toggle-active { background: var(--panel-alt); border-color: var(--green); color: var(--green); }
+
+  /* Presença de colegas (BLF) */
+  .colleague-row {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 9px 8px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 13px;
+  }
+  .colleague-row:hover { background: var(--panel-alt); }
+  .colleague-ext {
+    color: var(--text-muted);
+    margin-left: auto;
+  }
+  .colleague-state {
+    font-size: 11px;
+    color: var(--text-muted);
+    display: block;
+  }
+</style>
+</head>
+<body>
+
+<div class="app">
+
+  <!-- SIDEBAR: conexão e status -->
+  <aside class="sidebar">
+    <div class="brand">Telefonista</div>
+    <div class="brand-sub">Console web · Ramal via WebRTC</div>
+
+    <div class="status-row">
+      <span class="dot" id="statusDot"></span>
+      <span id="statusText">Desconectado</span>
+    </div>
+
+    <div id="connectForm">
+      <label for="wssUrl">Servidor (WSS)</label>
+      <input id="wssUrl" placeholder="wss://pabx.exemplo.com:8089/ws" value="wss://pabx.local:8089/ws">
+
+      <label for="extNumber">Ramal</label>
+      <input id="extNumber" placeholder="t1-recepcao" value="t1-recepcao">
+
+      <label for="extPassword">Senha</label>
+      <input id="extPassword" type="password" placeholder="senha do ramal">
+
+      <button class="btn-primary" id="connectBtn">Conectar</button>
+    </div>
+
+    <button class="btn-ghost" id="disconnectBtn" style="width:100%; margin-top:16px; display:none;">
+      Desconectar
+    </button>
+
+    <div id="colleaguesPanel" style="display:none; margin-top:28px;">
+      <div class="log-title">Colegas</div>
+      <div id="colleaguesList"></div>
+    </div>
+  </aside>
+
+  <!-- CENTRO: discador / chamada ativa -->
+  <main>
+
+    <!-- Estado ocioso: discador -->
+    <div id="idleView" style="display:none; flex-direction:column; align-items:center;">
+      <p class="idle-hint">Digite um ramal ou número e ligue. Chamadas recebidas aparecem aqui automaticamente.</p>
+      <div class="dialpad-display mono" id="dialInput">&nbsp;</div>
+      <div class="dialpad">
+        <button class="key mono" data-key="1">1</button>
+        <button class="key mono" data-key="2">2</button>
+        <button class="key mono" data-key="3">3</button>
+        <button class="key mono" data-key="4">4</button>
+        <button class="key mono" data-key="5">5</button>
+        <button class="key mono" data-key="6">6</button>
+        <button class="key mono" data-key="7">7</button>
+        <button class="key mono" data-key="8">8</button>
+        <button class="key mono" data-key="9">9</button>
+        <button class="key mono" data-key="*">*</button>
+        <button class="key mono" data-key="0">0</button>
+        <button class="key mono" data-key="#">#</button>
+      </div>
+      <button class="call-btn" id="callBtn">Ligar</button>
+    </div>
+
+    <!-- Chamada tocando (recebida) -->
+    <div id="incomingView" class="call-card incoming" style="display:none;">
+      <div class="call-state">Chamada recebida</div>
+      <div class="call-peer" id="incomingPeer">—</div>
+      <div class="incoming-actions">
+        <button class="btn-primary" id="answerBtn" style="margin:0;">Atender</button>
+        <button class="btn-danger" id="declineBtn">Recusar</button>
+      </div>
+    </div>
+
+    <!-- Chamada em andamento -->
+    <div id="activeView" class="call-card" style="display:none;">
+      <div class="call-state" id="activeState">Chamando…</div>
+      <div class="call-peer" id="activePeer">—</div>
+      <div class="call-timer mono" id="callTimer">00:00</div>
+      <div class="call-controls">
+        <button class="btn-ghost" id="muteBtn">Mudo</button>
+        <button class="btn-ghost" id="holdBtn">Espera</button>
+        <button class="btn-danger" id="hangupBtn">Desligar</button>
+      </div>
+      <div class="transfer-row">
+        <input id="transferTarget" placeholder="Ramal para transferir">
+        <button class="btn-ghost" id="transferBtn">Transferir</button>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- HISTÓRICO -->
+  <aside class="log-panel">
+    <div class="log-title">Histórico de chamadas</div>
+    <div id="callLog">
+      <div class="log-empty">Nenhuma chamada ainda nesta sessão.</div>
+    </div>
+  </aside>
+
+</div>
+
+<audio id="remoteAudio" autoplay></audio>
+
+<script>
+(function () {
+  'use strict';
+
+  let ua = null;
+  let currentSession = null;
+  let dialBuffer = '';
+  let isMuted = false;
+  let isOnHold = false;
+  let callStartTime = null;
+  let timerInterval = null;
+  const callLogEntries = [];
+
+  // Ramais colegas a monitorar (BLF). Ajuste esta lista conforme os
+  // ramais reais do seu tenant/hints em extensions.conf. O próprio
+  // ramal conectado deve ficar de fora da lista.
+  const COLLEAGUES = [
+    { ext: '1000', label: 'Recepção (web)' },
+    { ext: '1001', label: 'Ramal 1001' },
+    { ext: '1002', label: 'Ramal 1002' },
+  ];
+  const colleagueSubscribers = {};
+  const colleagueState = {}; // ext -> 'livre' | 'chamando' | 'ocupado' | 'indisponivel'
+
+  const el = (id) => document.getElementById(id);
+  const remoteAudio = el('remoteAudio');
+
+  // ---------- UI: troca de telas ----------
+  function showView(view) {
+    ['idleView', 'incomingView', 'activeView'].forEach((v) => {
+      el(v).style.display = 'none';
+    });
+    if (view) {
+      el(view).style.display = view === 'idleView' ? 'flex' : 'block';
+    }
+  }
+
+  function setStatus(state, text) {
+    const dot = el('statusDot');
+    dot.className = 'dot' + (state ? ' ' + state : '');
+    el('statusText').textContent = text;
+  }
+
+  // ---------- Discador ----------
+  function renderDial() {
+    el('dialInput').textContent = dialBuffer || '\u00A0';
+  }
+
+  document.querySelectorAll('.key').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      dialBuffer += btn.dataset.key;
+      renderDial();
+      if (currentSession && currentSession.isEstablished()) {
+        currentSession.sendDTMF(btn.dataset.key);
+      }
+    });
+  });
+
+  // ---------- Log de chamadas ----------
+  function logCall(peer, direction, outcome) {
+    const time = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    callLogEntries.unshift({ peer, direction, outcome, time });
+    renderLog();
+  }
+
+  function renderLog() {
+    const container = el('callLog');
+    if (callLogEntries.length === 0) {
+      container.innerHTML = '<div class="log-empty">Nenhuma chamada ainda nesta sessão.</div>';
+      return;
+    }
+    container.innerHTML = callLogEntries.map((entry) => {
+      const arrow = entry.direction === 'in' ? 'Recebida de' : 'Chamada para';
+      const missed = entry.outcome === 'perdida';
+      return `<div class="log-item">
+        <div class="peer">${entry.peer}</div>
+        <div class="meta${missed ? ' missed' : ''}">${arrow} · ${entry.outcome} · ${entry.time}</div>
+      </div>`;
+    }).join('');
+  }
+
+  // ---------- Timer de chamada ----------
+  function startTimer() {
+    callStartTime = Date.now();
+    timerInterval = setInterval(() => {
+      const elapsedSec = Math.floor((Date.now() - callStartTime) / 1000);
+      const mm = String(Math.floor(elapsedSec / 60)).padStart(2, '0');
+      const ss = String(elapsedSec % 60).padStart(2, '0');
+      el('callTimer').textContent = `${mm}:${ss}`;
+    }, 1000);
+  }
+
+  function stopTimer() {
+    clearInterval(timerInterval);
+    el('callTimer').textContent = '00:00';
+  }
+
+  // ---------- Conexão SIP ----------
+  el('connectBtn').addEventListener('click', () => {
+    const wssUrl = el('wssUrl').value.trim();
+    const extension = el('extNumber').value.trim();
+    const password = el('extPassword').value;
+
+    if (!wssUrl || !extension || !password) {
+      setStatus('error', 'Preencha servidor, ramal e senha');
+      return;
+    }
+
+    const socket = new JsSIP.WebSocketInterface(wssUrl);
+    const domain = wssUrl.replace('wss://', '').replace('ws://', '').split(/[:/]/)[0];
+
+    const configuration = {
+      sockets: [socket],
+      uri: `sip:${extension}@${domain}`,
+      password: password,
+      register: true,
+      session_timers: false,
+    };
+
+    ua = new JsSIP.UA(configuration);
+
+    ua.on('connecting', () => setStatus('', 'Conectando…'));
+    ua.on('disconnected', () => setStatus('error', 'Conexão perdida'));
+    ua.on('registered', () => {
+      setStatus('online', `Conectado como ${extension}`);
+      el('connectForm').style.display = 'none';
+      el('disconnectBtn').style.display = 'block';
+      showView('idleView');
+      startPresenceMonitoring(domain);
+    });
+    ua.on('registrationFailed', (e) => {
+      setStatus('error', 'Falha ao registrar: ' + (e.cause || 'verifique usuário/senha'));
+    });
+
+    ua.on('newRTCSession', handleNewSession);
+
+    ua.start();
+  });
+
+  el('disconnectBtn').addEventListener('click', () => {
+    Object.values(colleagueSubscribers).forEach((sub) => sub.terminate());
+    if (ua) ua.stop();
+    setStatus('', 'Desconectado');
+    el('connectForm').style.display = 'block';
+    el('disconnectBtn').style.display = 'none';
+    el('colleaguesPanel').style.display = 'none';
+    showView(null);
+  });
+
+  // ---------- Presença dos colegas (BLF via SUBSCRIBE) ----------
+  function startPresenceMonitoring(domain) {
+    el('colleaguesPanel').style.display = 'block';
+    COLLEAGUES.forEach((colleague) => {
+      colleagueState[colleague.ext] = 'indisponivel';
+      subscribeToPresence(colleague.ext, domain);
+    });
+    renderColleagues();
+  }
+
+  function subscribeToPresence(ext, domain) {
+    const target = `sip:${ext}@${domain}`;
+    const subscriber = new JsSIP.Subscriber(ua, target, {
+      expires: 3600,
+      contentType: 'application/dialog-info+xml',
+      eventName: 'dialog',
+    });
+
+    subscriber.on('notify', (data) => {
+      colleagueState[ext] = parseDialogState(data.request.body);
+      renderColleagues();
+    });
+
+    subscriber.on('terminated', () => {
+      colleagueState[ext] = 'indisponivel';
+      renderColleagues();
+    });
+
+    subscriber.subscribe();
+    colleagueSubscribers[ext] = subscriber;
+  }
+
+  function parseDialogState(xmlBody) {
+    if (!xmlBody) return 'livre';
+    // dialog-info+xml: procura o <state> dentro do <dialog>
+    const match = xmlBody.match(/<state>([a-z-]+)<\/state>/i)
+      || xmlBody.match(/state="([a-z-]+)"/i);
+    const state = match ? match[1].toLowerCase() : '';
+    if (state === 'confirmed') return 'ocupado';
+    if (state === 'early' || state === 'proceeding' || state === 'trying') return 'chamando';
+    if (state === 'terminated' || state === '') return 'livre';
+    return 'livre';
+  }
+
+  function renderColleagues() {
+    const stateLabel = {
+      livre: 'Livre',
+      chamando: 'Tocando',
+      ocupado: 'Em chamada',
+      indisponivel: 'Verificando…',
+    };
+    const dotClass = {
+      livre: 'online',
+      chamando: 'ringing',
+      ocupado: 'error',
+      indisponivel: '',
+    };
+
+    el('colleaguesList').innerHTML = COLLEAGUES.map((c) => {
+      const state = colleagueState[c.ext] || 'indisponivel';
+      return `<div class="colleague-row" data-ext="${c.ext}">
+        <span class="dot ${dotClass[state]}"></span>
+        <span>
+          ${c.label}
+          <span class="colleague-state">${stateLabel[state]}</span>
+        </span>
+        <span class="colleague-ext mono">${c.ext}</span>
+      </div>`;
+    }).join('');
+
+    document.querySelectorAll('.colleague-row').forEach((row) => {
+      row.addEventListener('click', () => onColleagueClick(row.dataset.ext));
+    });
+  }
+
+  function onColleagueClick(ext) {
+    const domain = el('wssUrl').value.replace('wss://', '').replace('ws://', '').split(/[:/]/)[0];
+
+    if (currentSession && currentSession.isEstablished()) {
+      // Em chamada -> transfere direto para o colega clicado
+      currentSession.refer(`sip:${ext}@${domain}`);
+      return;
+    }
+
+    if (!currentSession) {
+      // Ocioso -> liga direto para o colega (discagem rápida)
+      dialBuffer = ext;
+      renderDial();
+      ua.call(`sip:${ext}@${domain}`, { mediaConstraints: { audio: true, video: false } });
+    }
+  }
+
+  // ---------- Sessão de chamada (recebida ou feita) ----------
+  function handleNewSession(data) {
+    const session = data.session;
+
+    if (currentSession) {
+      // já em chamada — recusa automaticamente a segunda (fora do escopo do MVP)
+      session.terminate();
+      return;
+    }
+
+    currentSession = session;
+    const peer = session.remote_identity.uri.user || 'desconhecido';
+
+    if (session.direction === 'incoming') {
+      el('incomingPeer').textContent = peer;
+      showView('incomingView');
+      setStatus('ringing', 'Chamada recebida');
+
+      el('answerBtn').onclick = () => {
+        session.answer({ mediaConstraints: { audio: true, video: false } });
+      };
+      el('declineBtn').onclick = () => {
+        session.terminate();
+      };
+    } else {
+      el('activePeer').textContent = peer;
+      el('activeState').textContent = 'Chamando…';
+      showView('activeView');
+    }
+
+    session.on('progress', () => {
+      if (session.direction === 'outgoing') el('activeState').textContent = 'Chamando…';
+    });
+
+    session.on('accepted', () => {
+      el('activeState').textContent = 'Em chamada';
+      el('activePeer').textContent = peer;
+      showView('activeView');
+      setStatus('online', 'Em chamada');
+      startTimer();
+    });
+
+    session.on('confirmed', () => {
+      const remoteStream = session.connection.getRemoteStreams
+        ? session.connection.getRemoteStreams()[0]
+        : null;
+      // Compatibilidade com browsers modernos (ontrack)
+      session.connection.addEventListener('track', (ev) => {
+        remoteAudio.srcObject = ev.streams[0];
+      });
+      if (remoteStream) remoteAudio.srcObject = remoteStream;
+    });
+
+    session.on('ended', (e) => {
+      logCall(peer, session.direction === 'incoming' ? 'in' : 'out', 'concluída');
+      resetCallUI();
+    });
+
+    session.on('failed', (e) => {
+      const outcome = session.direction === 'incoming' ? 'perdida' : 'não atendida';
+      logCall(peer, session.direction === 'incoming' ? 'in' : 'out', outcome);
+      resetCallUI();
+    });
+  }
+
+  function resetCallUI() {
+    currentSession = null;
+    isMuted = false;
+    isOnHold = false;
+    stopTimer();
+    el('muteBtn').classList.remove('toggle-active');
+    el('holdBtn').classList.remove('toggle-active');
+    setStatus('online', 'Conectado');
+    showView('idleView');
+    dialBuffer = '';
+    renderDial();
+  }
+
+  // ---------- Ações de chamada ----------
+  el('callBtn').addEventListener('click', () => {
+    if (!ua || !dialBuffer) return;
+    const domain = el('wssUrl').value.replace('wss://', '').replace('ws://', '').split(/[:/]/)[0];
+    const target = `sip:${dialBuffer}@${domain}`;
+    ua.call(target, {
+      mediaConstraints: { audio: true, video: false },
+    });
+  });
+
+  el('hangupBtn').addEventListener('click', () => {
+    if (currentSession) currentSession.terminate();
+  });
+
+  el('muteBtn').addEventListener('click', () => {
+    if (!currentSession) return;
+    isMuted = !isMuted;
+    if (isMuted) currentSession.mute({ audio: true });
+    else currentSession.unmute({ audio: true });
+    el('muteBtn').classList.toggle('toggle-active', isMuted);
+  });
+
+  el('holdBtn').addEventListener('click', () => {
+    if (!currentSession) return;
+    isOnHold = !isOnHold;
+    if (isOnHold) currentSession.hold();
+    else currentSession.unhold();
+    el('holdBtn').classList.toggle('toggle-active', isOnHold);
+  });
+
+  el('transferBtn').addEventListener('click', () => {
+    const target = el('transferTarget').value.trim();
+    if (!currentSession || !target) return;
+    const domain = el('wssUrl').value.replace('wss://', '').replace('ws://', '').split(/[:/]/)[0];
+    currentSession.refer(`sip:${target}@${domain}`);
+    el('transferTarget').value = '';
+  });
+
+  renderDial();
+})();
+</script>
+
+</body>
+</html>

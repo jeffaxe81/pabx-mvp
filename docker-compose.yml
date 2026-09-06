@@ -11,8 +11,21 @@ services:
       - ./asterisk/extensions.conf:/etc/asterisk/extensions.conf
       - ./asterisk/voicemail.conf:/etc/asterisk/voicemail.conf
       - ./asterisk/rtp.conf:/etc/asterisk/rtp.conf
+      - ./asterisk/http.conf:/etc/asterisk/http.conf
       - ./asterisk/certs:/etc/asterisk/certs:ro
       - asterisk_data:/var/spool/asterisk
+
+  # Interface web do telefonista (webphone/index.html), servida como
+  # site estático simples. Em produção, sirva com HTTPS de verdade
+  # (getUserMedia exige contexto seguro fora de localhost).
+  webphone:
+    image: nginx:alpine
+    container_name: pabx-webphone
+    restart: unless-stopped
+    ports:
+      - "8082:80"
+    volumes:
+      - ./webphone:/usr/share/nginx/html:ro
 
   # Servidor HTTP simples que entrega os arquivos de auto-provisionamento.
   # Os telefones apontam para http://<ip-servidor>:8080/<MAC>.cfg

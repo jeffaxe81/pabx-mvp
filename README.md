@@ -125,6 +125,70 @@ pjsip show endpoints
 pjsip show transports    # confirma que a porta 5061/TLS está ativa
 ```
 
+## 5. Telefonista direto no navegador (WebRTC)
+
+Interface web em `webphone/index.html` — a recepcionista atende e faz
+chamadas sem instalar nada, direto do Chrome/Firefox.
+
+Como funciona:
+- Ramal dedicado `t1-recepcao` (número `1000`), configurado com
+  `webrtc=yes` no PJSIP (DTLS-SRTP + ICE)
+- O Asterisk expõe um WebSocket seguro (WSS) na porta `8089`,
+  habilitado em `asterisk/http.conf`
+- A página conecta nesse WSS usando a biblioteca **JsSIP**
+
+Rodando:
+```bash
+docker compose up -d
+```
+Acesse `http://<ip-do-servidor>:8082` e conecte com:
+- **Servidor**: `wss://<ip-do-servidor>:8089/ws`
+- **Ramal**: `t1-recepcao`
+- **Senha**: a definida em `pjsip.conf` (troque o valor padrão!)
+
+> **Atenção**: o certificado é self-signed. O navegador vai bloquear a
+> conexão WSS até você abrir `https://<ip-do-servidor>:8089` uma vez e
+> aceitar manualmente o aviso de certificado inválido — assim ele passa
+> a confiar na mesma origem para o WebSocket. Em produção, use um
+> certificado válido (Let's Encrypt) e esse passo manual some.
+>
+> Ligações que chegam sem ramal identificado (`from-tdm-gateway`) agora
+> caem direto no ramal 1000 — a telefonista faz o papel de recepção.
+
+O que a interface já faz: discar, atender, recusar, mudo, espera,
+transferência cega e histórico de chamadas da sessão. **Também mostra em
+tempo real quais colegas estão livres, tocando ou em chamada** (BLF via
+SIP SUBSCRIBE aos hints do Asterisk) — clique num colega da lista para
+ligar direto pra ele, ou para transferir a chamada atual na hora.
+
+Para ajustar quais ramais aparecem na lista de colegas, edite o array
+`COLLEAGUES` no início do `<script>` em `webphone/index.html`. Cada
+ramal monitorado precisa ter um `hint` correspondente em
+`extensions.conf` (contexto `t1-hints` / `t2-hints`).
+
+O que **não** faz (de propósito, é MVP): múltiplas chamadas
+simultâneas, gravação, transferência assistida com consulta — ver
+ideias abaixo.
+
+## Testes automatizados
+
+```bash
+cd tests
+pip install -r requirements.txt --break-system-packages
+python3 -m pytest -v
+```
+
+25 testes estáticos validam a consistência de `pjsip.conf`,
+`extensions.conf`, `docker-compose.yml`, o gerador de provisionamento
+e o `webphone/index.html` — sem precisar subir o Asterisk. Detalhes em
+`tests/README.md`.
+
+## Documentação
+
+Um manual por funcionalidade em `docs/` (o que é, como configurar,
+como testar manualmente, limitações conhecidas). Índice completo em
+`docs/README.md`.
+
 ## Próximos passos
 
 - TLS com certificado válido (não self-signed) em produção
