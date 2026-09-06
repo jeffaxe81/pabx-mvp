@@ -41,6 +41,13 @@ https://github.com/jeffaxe81/pabx-mvp
 - Sem teste de integração real (precisa de Asterisk rodando) - só a
   lógica de parsing/estado é testada automaticamente
 
+**Notificação de chamada perdida**
+- Detecção via AMI (DialEnd sem ANSWER, QueueCallerAbandon)
+- Email (SMTP) e/ou WhatsApp (Meta Cloud API), desligado por
+  padrão até configurar credenciais reais em docker-compose.yml
+- Histórico visível no webphone (painel "Chamadas perdidas")
+  independente de notificação estar ligada
+
 **Multi-chamada**
 - Até 2 linhas simultâneas; atender a linha 2 põe a linha 1 em
   espera automaticamente; barra de troca de linha; volta sozinho
@@ -80,7 +87,7 @@ https://github.com/jeffaxe81/pabx-mvp
 2. ~~Fila de atendimento~~ — IMPLEMENTADO (pickup dirigido via AMI), ver docs/manual-08
 3. ~~Gravação de chamadas~~ — IMPLEMENTADO (MixMonitor + monitor da fila), ver docs/manual-09
 4. ~~Multi-chamada~~ — IMPLEMENTADO (2 linhas, hold automático ao atender/trocar), ver docs/manual-10
-5. Notificação de chamada perdida por e-mail/WhatsApp
+5. ~~Notificação de chamada perdida~~ — IMPLEMENTADO (email/WhatsApp via AMI DialEnd/QueueCallerAbandon), ver docs/manual-11
 6. Discagem por clique a partir do CRM (click-to-call)
 7. Dashboard de métricas do dia (volume, TMA, taxa de perdidas) por
    tenant

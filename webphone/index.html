@@ -508,6 +508,11 @@
       <div class="log-empty">Nenhuma chamada ainda nesta sessão.</div>
     </div>
 
+    <div class="log-title" style="margin-top:24px;">Chamadas perdidas</div>
+    <div id="missedCallsList">
+      <div class="log-empty">Nenhuma chamada perdida registrada.</div>
+    </div>
+
     <div style="display:flex; align-items:center; justify-content:space-between; margin-top:24px;">
       <div class="log-title" style="margin:0;">Gravações</div>
       <button class="btn-ghost" id="refreshRecordingsBtn" style="padding:4px 8px; font-size:11px;">
@@ -772,6 +777,7 @@
       showView('idleView');
       startPresenceMonitoring(domain);
       startQueuePolling();
+      startMissedCallsPolling();
       fetchRecordings();
       timerInterval = setInterval(tickTimerDisplay, 1000);
     });
@@ -787,6 +793,7 @@
   el('disconnectBtn').addEventListener('click', () => {
     Object.values(colleagueSubscribers).forEach((sub) => sub.terminate());
     stopQueuePolling();
+    stopMissedCallsPolling();
     clearInterval(timerInterval);
     if (ua) ua.stop();
     setStatus('', 'Desconectado');
@@ -859,6 +866,55 @@
         // chamada recebida).
       })
       .catch(() => alert('API da fila indisponível.'));
+  }
+
+  // ---------- Chamadas perdidas (histórico) ----------
+  let missedCallsPollInterval = null;
+
+  function startMissedCallsPolling() {
+    const apiUrl = el('queueApiUrl').value.trim();
+    if (!apiUrl) return;
+
+    fetchMissedCalls(apiUrl);
+    missedCallsPollInterval = setInterval(() => fetchMissedCalls(apiUrl), 10000);
+  }
+
+  function stopMissedCallsPolling() {
+    clearInterval(missedCallsPollInterval);
+    missedCallsPollInterval = null;
+  }
+
+  function fetchMissedCalls(apiUrl) {
+    fetch(`${apiUrl}/api/missed-calls`)
+      .then((res) => res.json())
+      .then((data) => renderMissedCalls(data.missed_calls || []))
+      .catch(() => {
+        el('missedCallsList').innerHTML = '<div class="log-empty">API indisponível.</div>';
+      });
+  }
+
+  function renderMissedCalls(missedCalls) {
+    if (missedCalls.length === 0) {
+      el('missedCallsList').innerHTML = '<div class="log-empty">Nenhuma chamada perdida registrada.</div>';
+      return;
+    }
+
+    const reasonLabel = {
+      NOANSWER: 'não atendida',
+      BUSY: 'ocupado',
+      CANCEL: 'cancelada pelo cliente',
+      CONGESTION: 'congestionamento',
+      ABANDONED: 'desistiu na fila',
+    };
+
+    el('missedCallsList').innerHTML = missedCalls.map((m) => {
+      const label = m.caller_id_name || m.caller_id_num;
+      const when = new Date(m.timestamp * 1000).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+      return `<div class="log-item">
+        <div class="peer">${label}</div>
+        <div class="meta missed">${reasonLabel[m.reason] || m.reason} · ${when}</div>
+      </div>`;
+    }).join('');
   }
 
   // ---------- Gravações (player embutido) ----------

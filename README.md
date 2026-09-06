@@ -181,6 +181,10 @@ chegando não é mais recusada — a telefonista pode atendê-la (a
 primeira vai pra espera automaticamente) e alternar entre as duas —
 ver `docs/manual-10-multi-chamada.md`.
 
+**E notificação de chamada perdida** (e-mail/WhatsApp, desligado por
+padrão até você configurar credenciais reais) — ver
+`docs/manual-11-notificacao-chamada-perdida.md`.
+
 Para ajustar quais ramais aparecem na lista de colegas, edite o array
 `COLLEAGUES` no início do `<script>` em `webphone/index.html`. Cada
 ramal monitorado precisa ter um `hint` correspondente em
@@ -205,7 +209,7 @@ cd ../queue-api
 python3 -m pytest tests/ -v
 ```
 
-69 testes estáticos no total — nenhum deles sobe o Asterisk de
+88 testes estáticos no total — nenhum deles sobe o Asterisk de
 verdade. Detalhes em `tests/README.md`.
 
 ## Documentação

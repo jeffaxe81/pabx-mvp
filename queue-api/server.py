@@ -19,6 +19,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from ami_client import AMIClient
 from queue_state import QueueStateTracker
 from recordings import list_recordings, safe_recording_path
+from missed_calls import parse_missed_call_event, MissedCallsLog
+from notifiers import dispatch_notifications
 
 AMI_HOST = os.environ.get("AMI_HOST", "127.0.0.1")
 AMI_PORT = int(os.environ.get("AMI_PORT", "5038"))
@@ -28,8 +30,43 @@ PICKUP_CONTEXT = os.environ.get("PICKUP_CONTEXT", "pickup-target")
 HTTP_PORT = int(os.environ.get("HTTP_PORT", "8090"))
 RECORDINGS_DIR = os.environ.get("RECORDINGS_DIR", "/app/recordings")
 
+# Notificação de chamada perdida - canais habilitados via variável de
+# ambiente (ex: "email,whatsapp"). Vazio = notificação desabilitada,
+# mas o histórico de chamadas perdidas continua funcionando.
+NOTIFY_CHANNELS = [c.strip() for c in os.environ.get("NOTIFY_CHANNELS", "").split(",") if c.strip()]
+NOTIFY_CONFIG = {
+    "channels": NOTIFY_CHANNELS,
+    "smtp": {
+        "host": os.environ.get("SMTP_HOST", ""),
+        "port": os.environ.get("SMTP_PORT", "587"),
+        "username": os.environ.get("SMTP_USERNAME", ""),
+        "password": os.environ.get("SMTP_PASSWORD", ""),
+        "from_addr": os.environ.get("SMTP_FROM", ""),
+        "to_addr": os.environ.get("SMTP_TO", ""),
+        "use_tls": os.environ.get("SMTP_USE_TLS", "true").lower() == "true",
+    },
+    "whatsapp": {
+        "phone_number_id": os.environ.get("WHATSAPP_PHONE_NUMBER_ID", ""),
+        "access_token": os.environ.get("WHATSAPP_ACCESS_TOKEN", ""),
+        "to_number": os.environ.get("WHATSAPP_TO_NUMBER", ""),
+    },
+}
+
 state = QueueStateTracker()
+missed_calls_log = MissedCallsLog()
 ami = None  # inicializado em main(), None durante os testes automatizados
+
+
+def handle_ami_event(event: dict):
+    """Callback único do AMI: alimenta o estado da fila E verifica chamadas perdidas."""
+    state.apply_event(event)
+
+    missed = parse_missed_call_event(event)
+    if missed:
+        missed_calls_log.append(missed)
+        errors = dispatch_notifications(missed, NOTIFY_CONFIG)
+        for error in errors:
+            print(f"[AVISO] falha ao notificar chamada perdida: {error}")
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -52,6 +89,8 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json(200, {"waiting": state.waiting_list()})
         elif self.path.startswith("/api/recordings"):
             self._send_json(200, {"recordings": list_recordings(RECORDINGS_DIR)})
+        elif self.path.startswith("/api/missed-calls"):
+            self._send_json(200, {"missed_calls": missed_calls_log.list()})
         elif self.path.startswith("/recordings/"):
             self._serve_recording_file()
         else:
@@ -106,7 +145,7 @@ class Handler(BaseHTTPRequestHandler):
 
 def main():
     global ami
-    ami = AMIClient(AMI_HOST, AMI_PORT, AMI_USERNAME, AMI_SECRET, on_event=state.apply_event)
+    ami = AMIClient(AMI_HOST, AMI_PORT, AMI_USERNAME, AMI_SECRET, on_event=handle_ami_event)
     ami.connect_and_login()
     ami.start_event_loop()
 

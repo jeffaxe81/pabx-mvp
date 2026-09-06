@@ -36,6 +36,18 @@ services:
       AMI_SECRET: "troque_esta_senha_ami"   # deve bater com manager.conf
       HTTP_PORT: "8090"
       RECORDINGS_DIR: "/app/recordings"
+      # Notificação de chamada perdida - vazio = desabilitado.
+      # Preencha com "email", "whatsapp" ou "email,whatsapp" pra ativar.
+      NOTIFY_CHANNELS: ""
+      SMTP_HOST: ""
+      SMTP_PORT: "587"
+      SMTP_USERNAME: ""
+      SMTP_PASSWORD: ""
+      SMTP_FROM: ""
+      SMTP_TO: ""
+      WHATSAPP_PHONE_NUMBER_ID: ""
+      WHATSAPP_ACCESS_TOKEN: ""
+      WHATSAPP_TO_NUMBER: ""
     command: python3 server.py
     depends_on:
       - asterisk

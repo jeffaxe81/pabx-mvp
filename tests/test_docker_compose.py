@@ -81,3 +81,16 @@ def test_recordings_volume_shared_between_asterisk_and_queue_api():
 
     assert any(v.startswith("./recordings:") for v in asterisk_volumes)
     assert any(v.startswith("./recordings:") for v in queue_api_volumes)
+
+
+def test_notify_channels_env_present_and_disabled_by_default():
+    """
+    Notificação de chamada perdida deve vir DESLIGADA por padrão (o
+    projeto não pode sair enviando email/whatsapp sem credenciais
+    reais configuradas) - mas a variável precisa existir pra ficar
+    óbvio onde habilitar.
+    """
+    compose = load_compose()
+    env = compose["services"]["queue-api"].get("environment", {})
+    assert "NOTIFY_CHANNELS" in env
+    assert env["NOTIFY_CHANNELS"] == ""

@@ -14,6 +14,7 @@ configurar, como testar manualmente, e limitações conhecidas.
 8. [Fila de atendimento (pickup dirigido)](manual-08-fila-atendimento.md)
 9. [Gravação de chamadas](manual-09-gravacao-chamadas.md)
 10. [Multi-chamada (segunda linha)](manual-10-multi-chamada.md)
+11. [Notificação de chamada perdida](manual-11-notificacao-chamada-perdida.md)
 
 ## Regra de manutenção
 

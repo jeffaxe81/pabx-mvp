@@ -27,6 +27,7 @@ REQUIRED_IDS = [
     "recordingsList", "refreshRecordingsBtn",
     "lineSwitcher", "linePill0", "linePill1",
     "secondLineBanner", "secondLinePeer", "answerSecondLineBtn", "declineSecondLineBtn",
+    "missedCallsList",
 ]
 
 
@@ -180,3 +181,10 @@ def test_line_switcher_prevents_switching_to_unanswered_line():
     fn_end = html.index("el('linePill0')")
     body = html[fn_start:fn_end]
     assert "line.session.isEstablished()" in body
+
+
+def test_missed_calls_polling_starts_and_stops_with_connection():
+    html = load_html()
+    assert "startMissedCallsPolling()" in html
+    assert "stopMissedCallsPolling()" in html
+    assert "/api/missed-calls" in html

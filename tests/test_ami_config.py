@@ -48,3 +48,15 @@ def test_manager_restricts_queue_api_user_by_ip():
     blocks = {b["name"]: b["text"] for b in parse_blocks(MANAGER_CONF)}
     text = blocks["queue-api"]
     assert "permit" in text, "Usuario AMI sem nenhuma restrição de IP (permit)"
+
+
+def test_manager_queue_api_user_can_receive_dialend_events():
+    """
+    A notificação de chamada perdida depende do evento DialEnd (classe
+    'dialplan') - sem essa permissão de leitura, o queue-api nunca
+    recebe o evento e a notificação simplesmente não dispara, em
+    silêncio.
+    """
+    blocks = {b["name"]: b["text"] for b in parse_blocks(MANAGER_CONF)}
+    read_classes = get_key(blocks["queue-api"], "read") or ""
+    assert "dialplan" in read_classes.split(",")
