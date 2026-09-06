@@ -15,6 +15,7 @@ servido por um container nginx diferente (porta 8082) do desta API.
 import json
 import os
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import urlparse, parse_qs
 
 from ami_client import AMIClient
 from queue_state import QueueStateTracker
@@ -25,6 +26,7 @@ from click_to_call import build_originate_action, validate_click_to_call_request
 from metrics import DailyMetrics
 from pickup import validate_pickup_request
 from extension_states import ExtensionStateTracker
+from reports import parse_cdr_for_report, CallLogStore, aggregate, group_by
 
 AMI_HOST = os.environ.get("AMI_HOST", "127.0.0.1")
 AMI_PORT = int(os.environ.get("AMI_PORT", "5038"))
@@ -36,6 +38,7 @@ PICKUP_ALLOWED_EXTENSIONS = [
 ]
 HTTP_PORT = int(os.environ.get("HTTP_PORT", "8090"))
 RECORDINGS_DIR = os.environ.get("RECORDINGS_DIR", "/app/recordings")
+CALL_LOG_PATH = os.environ.get("CALL_LOG_PATH", "/app/data/call_log.jsonl")
 
 # Notificação de chamada perdida - canais habilitados via variável de
 # ambiente (ex: "email,whatsapp"). Vazio = notificação desabilitada,
@@ -73,14 +76,19 @@ state = QueueStateTracker()
 missed_calls_log = MissedCallsLog()
 daily_metrics = DailyMetrics()
 extension_states = ExtensionStateTracker()
+call_log_store = CallLogStore(CALL_LOG_PATH)
 ami = None  # inicializado em main(), None durante os testes automatizados
 
 
 def handle_ami_event(event: dict):
-    """Callback único do AMI: alimenta fila, chamadas perdidas, métricas e estado dos ramais."""
+    """Callback único do AMI: alimenta fila, chamadas perdidas, métricas, estado dos ramais e relatórios."""
     state.apply_event(event)
     daily_metrics.apply_cdr_event(event)
     extension_states.apply_event(event)
+
+    report_record = parse_cdr_for_report(event)
+    if report_record:
+        call_log_store.append(report_record)
 
     missed = parse_missed_call_event(event)
     if missed:
@@ -116,10 +124,27 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json(200, daily_metrics.snapshot())
         elif self.path.startswith("/api/extension-states"):
             self._send_json(200, {"extensions": extension_states.snapshot()})
+        elif self.path.startswith("/api/reports"):
+            self._handle_reports()
         elif self.path.startswith("/recordings/"):
             self._serve_recording_file()
         else:
             self._send_json(404, {"error": "not found"})
+
+    def _handle_reports(self):
+        query = parse_qs(urlparse(self.path).query)
+        start = query.get("start", [None])[0]
+        end = query.get("end", [None])[0]
+        operator = query.get("operator", [None])[0]
+        tenant = query.get("tenant", [None])[0]
+        group_field = query.get("group_by", [None])[0]
+
+        records = call_log_store.query(start=start, end=end, operator=operator, tenant=tenant)
+
+        if group_field in ("operator", "tenant", "date"):
+            self._send_json(200, {"groups": group_by(records, group_field)})
+        else:
+            self._send_json(200, aggregate(records))
 
     def _serve_recording_file(self):
         filename = self.path[len("/recordings/"):]

@@ -214,6 +214,10 @@ configurar uma senha de admin — ver `docs/manual-16-painel-administracao.md`.
 fila, estado dos ramais e métricas do dia numa tela só, pra supervisão —
 ver `docs/manual-17-painel-operacional.md`.
 
+**E relatórios históricos** por atendente e tenant, com filtro de
+período — diferente das métricas do dia (que zeram à meia-noite), fica
+persistido em disco — ver `docs/manual-18-relatorios.md`.
+
 Para ajustar quais ramais aparecem na lista de colegas, edite o array
 `COLLEAGUES` no início do `<script>` em `webphone/index.html`. Cada
 ramal monitorado precisa ter um `hint` correspondente em
@@ -238,7 +242,7 @@ cd ../queue-api
 python3 -m pytest tests/ -v
 ```
 
-211 testes estáticos no total, em 3 suítes (`tests/`, `queue-api/tests/`,
+237 testes estáticos no total, em 3 suítes (`tests/`, `queue-api/tests/`,
 `admin-api/tests/`) — nenhuma delas sobe o Asterisk de verdade.
 Detalhes em `tests/README.md`.
 

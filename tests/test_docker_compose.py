@@ -138,3 +138,15 @@ def test_admin_api_ami_secret_matches_manager_conf():
     manager_conf = (PROJECT_ROOT / "asterisk" / "manager.conf").read_text(encoding="utf-8")
     assert env.get("AMI_USERNAME") and f"[{env['AMI_USERNAME']}]" in manager_conf
     assert env.get("AMI_SECRET") and f"secret = {env['AMI_SECRET']}" in manager_conf
+
+
+def test_queue_api_has_persistent_volume_for_call_log():
+    """
+    O histórico de relatórios (call_log.jsonl) precisa sobreviver a um
+    restart do container - senão "relatório por período" não faz
+    sentido nenhum (voltaria a zero toda hora).
+    """
+    compose = load_compose()
+    volumes = compose["services"]["queue-api"].get("volumes", [])
+    assert any("queue_api_data" in v or "/app/data" in v for v in volumes)
+    assert "queue_api_data" in compose.get("volumes", {})

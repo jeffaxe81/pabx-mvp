@@ -21,6 +21,7 @@ configurar, como testar manualmente, e limitações conhecidas.
 15. [PWA instalável com notificação nativa](manual-15-pwa-notificacao.md)
 16. [Painel de administração web](manual-16-painel-administracao.md)
 17. [Painel operacional consolidado](manual-17-painel-operacional.md)
+18. [Relatórios por atendente, tenant e período](manual-18-relatorios.md)
 
 ## Regra de manutenção
 

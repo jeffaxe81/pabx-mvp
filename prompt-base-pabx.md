@@ -148,9 +148,9 @@ PWA) não estão listados aqui de novo — só o que falta ou está parcial.
 11. ~~Painel operacional em tempo real consolidado~~ — IMPLEMENTADO
     (fila + estado de ramais via AMI ExtensionStatus + métricas numa
     tela só), ver docs/manual-17
-12. Relatórios por atendente, setor e período histórico (hoje só
-    "hoje", sem separação por tenant/operadora - ver limitação do
-    manual 13)
+12. ~~Relatórios por atendente/tenant/período~~ — IMPLEMENTADO
+    (call_log.jsonl persistente, extraído do CDR, agrupável por
+    operador/tenant/dia), ver docs/manual-18
 13. Integração CRM na direção PABX→CRM: identificar cliente pelo
     número e abrir cadastro automaticamente (screen-pop) - hoje só
     temos CRM→PABX (click-to-call, manual 12)

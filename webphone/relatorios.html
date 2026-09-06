@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Relatórios — PABX</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #14181F; --panel: #1D2330; --panel-alt: #242B3A; --border: #2E3646;
+    --text: #E8EAED; --text-muted: #8B93A3; --green: #3FAE7A; --amber: #E3A038;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font-family: 'Inter', sans-serif; padding: 28px; max-width: 900px; margin: 0 auto; }
+  .mono { font-family: 'IBM Plex Mono', monospace; }
+  h1 { font-size: 18px; margin: 0 0 20px; }
+
+  .filters {
+    display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap;
+    background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
+    padding: 16px; margin-bottom: 20px;
+  }
+  label { display: block; font-size: 12px; color: var(--text-muted); margin-bottom: 5px; }
+  input, select {
+    background: var(--panel-alt); border: 1px solid var(--border); color: var(--text);
+    padding: 8px 10px; border-radius: 4px; font-size: 13px; font-family: 'Inter', sans-serif;
+  }
+  button {
+    background: var(--green); color: #0C1712; border: none; border-radius: 4px;
+    padding: 9px 16px; font-weight: 600; font-size: 13px; cursor: pointer;
+  }
+
+  .summary-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-bottom: 24px; }
+  .metric-card { background: var(--panel-alt); border-radius: 6px; padding: 12px; text-align: center; }
+  .metric-value { font-size: 20px; font-weight: 600; }
+  .metric-label { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 9px 8px; border-bottom: 1px solid var(--border); font-size: 13px; }
+  th { color: var(--text-muted); font-weight: 600; font-size: 11px; text-transform: uppercase; }
+  .empty { color: var(--text-muted); font-size: 13px; }
+</style>
+</head>
+<body>
+
+<h1>Relatórios</h1>
+
+<div class="filters">
+  <div>
+    <label for="startDate">De</label>
+    <input type="date" id="startDate">
+  </div>
+  <div>
+    <label for="endDate">Até</label>
+    <input type="date" id="endDate">
+  </div>
+  <div>
+    <label for="groupBySelect">Agrupar por</label>
+    <select id="groupBySelect">
+      <option value="">Sem agrupamento (total geral)</option>
+      <option value="operator">Atendente</option>
+      <option value="tenant">Tenant</option>
+      <option value="date">Dia</option>
+    </select>
+  </div>
+  <button id="generateBtn">Gerar</button>
+</div>
+
+<div id="summaryContainer"></div>
+<div id="tableContainer"></div>
+
+<script>
+(function () {
+  'use strict';
+
+  const el = (id) => document.getElementById(id);
+  const params = new URLSearchParams(window.location.search);
+  const apiUrl = params.get('api') || 'http://pabx.local:8090';
+
+  function todayISO() {
+    return new Date().toISOString().slice(0, 10);
+  }
+
+  el('endDate').value = todayISO();
+  el('startDate').value = todayISO();
+
+  function renderMetricCards(container, data) {
+    const avgMin = Math.floor((data.average_talk_seconds || 0) / 60);
+    const avgSec = Math.round((data.average_talk_seconds || 0) % 60);
+    const avgLabel = `${String(avgMin).padStart(2, '0')}:${String(avgSec).padStart(2, '0')}`;
+    const cards = [
+      { label: 'Chamadas', value: data.total_calls },
+      { label: 'Atendidas', value: data.answered_calls },
+      { label: 'Perdidas', value: data.missed_calls },
+      { label: 'TMA', value: avgLabel },
+      { label: '% perdidas', value: `${data.missed_rate_percent}%` },
+    ];
+    container.innerHTML = `<div class="summary-grid">${cards.map((c) => `
+      <div class="metric-card">
+        <div class="metric-value mono">${c.value}</div>
+        <div class="metric-label">${c.label}</div>
+      </div>`).join('')}</div>`;
+  }
+
+  function generate() {
+    const start = el('startDate').value;
+    const end = el('endDate').value;
+    const groupBy = el('groupBySelect').value;
+
+    const query = new URLSearchParams({ start, end });
+    if (groupBy) query.set('group_by', groupBy);
+
+    fetch(`${apiUrl}/api/reports?${query.toString()}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.groups) {
+          renderGrouped(data.groups, groupBy);
+        } else {
+          renderMetricCards(el('summaryContainer'), data);
+          el('tableContainer').innerHTML = '';
+        }
+      })
+      .catch(() => {
+        el('summaryContainer').innerHTML = '<div class="empty">API indisponível.</div>';
+      });
+  }
+
+  function renderGrouped(groups, groupField) {
+    el('summaryContainer').innerHTML = '';
+    const keys = Object.keys(groups);
+    if (keys.length === 0) {
+      el('tableContainer').innerHTML = '<div class="empty">Nenhuma chamada no período.</div>';
+      return;
+    }
+
+    const columnLabel = { operator: 'Atendente', tenant: 'Tenant', date: 'Dia' }[groupField] || 'Grupo';
+
+    el('tableContainer').innerHTML = `
+      <table>
+        <thead>
+          <tr>
+            <th>${columnLabel}</th><th>Chamadas</th><th>Atendidas</th>
+            <th>Perdidas</th><th>TMA</th><th>% perdidas</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${keys.map((key) => {
+            const g = groups[key];
+            const avgMin = Math.floor((g.average_talk_seconds || 0) / 60);
+            const avgSec = Math.round((g.average_talk_seconds || 0) % 60);
+            const avgLabel = `${String(avgMin).padStart(2, '0')}:${String(avgSec).padStart(2, '0')}`;
+            return `<tr>
+              <td>${key}</td><td class="mono">${g.total_calls}</td><td class="mono">${g.answered_calls}</td>
+              <td class="mono">${g.missed_calls}</td><td class="mono">${avgLabel}</td><td class="mono">${g.missed_rate_percent}%</td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>`;
+  }
+
+  el('generateBtn').addEventListener('click', generate);
+  generate();
+})();
+</script>
+
+</body>
+</html>
