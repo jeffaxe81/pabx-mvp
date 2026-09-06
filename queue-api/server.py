@@ -22,6 +22,7 @@ from recordings import list_recordings, safe_recording_path
 from missed_calls import parse_missed_call_event, MissedCallsLog
 from notifiers import dispatch_notifications
 from click_to_call import build_originate_action, validate_click_to_call_request
+from metrics import DailyMetrics
 
 AMI_HOST = os.environ.get("AMI_HOST", "127.0.0.1")
 AMI_PORT = int(os.environ.get("AMI_PORT", "5038"))
@@ -65,12 +66,14 @@ CLICK_TO_CALL_CONFIG = {
 
 state = QueueStateTracker()
 missed_calls_log = MissedCallsLog()
+daily_metrics = DailyMetrics()
 ami = None  # inicializado em main(), None durante os testes automatizados
 
 
 def handle_ami_event(event: dict):
-    """Callback único do AMI: alimenta o estado da fila E verifica chamadas perdidas."""
+    """Callback único do AMI: alimenta fila, chamadas perdidas e métricas."""
     state.apply_event(event)
+    daily_metrics.apply_cdr_event(event)
 
     missed = parse_missed_call_event(event)
     if missed:
@@ -102,6 +105,8 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json(200, {"recordings": list_recordings(RECORDINGS_DIR)})
         elif self.path.startswith("/api/missed-calls"):
             self._send_json(200, {"missed_calls": missed_calls_log.list()})
+        elif self.path.startswith("/api/metrics/today"):
+            self._send_json(200, daily_metrics.snapshot())
         elif self.path.startswith("/recordings/"):
             self._serve_recording_file()
         else:

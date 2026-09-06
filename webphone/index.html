@@ -362,6 +362,26 @@
   .line-pill.active-line { border-color: var(--green); color: var(--green); }
   .line-pill.on-hold { border-color: var(--amber); color: var(--amber); }
   .line-pill:disabled { opacity: 0.3; cursor: default; }
+
+  /* Métricas do dia */
+  .metrics-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .metric-card {
+    background: var(--panel-alt);
+    border-radius: 6px;
+    padding: 10px;
+  }
+  .metric-value {
+    font-size: 20px;
+    font-weight: 600;
+  }
+  .metric-label {
+    font-size: 11px;
+    color: var(--text-muted);
+  }
 </style>
 </head>
 <body>
@@ -401,6 +421,11 @@
     <div id="colleaguesPanel" style="display:none; margin-top:28px;">
       <div class="log-title">Colegas</div>
       <div id="colleaguesList"></div>
+    </div>
+
+    <div id="metricsPanel" style="display:none; margin-top:28px;">
+      <div class="log-title">Métricas de hoje</div>
+      <div id="metricsGrid"></div>
     </div>
   </aside>
 
@@ -778,6 +803,7 @@
       startPresenceMonitoring(domain);
       startQueuePolling();
       startMissedCallsPolling();
+      startMetricsPolling();
       fetchRecordings();
       timerInterval = setInterval(tickTimerDisplay, 1000);
     });
@@ -794,12 +820,14 @@
     Object.values(colleagueSubscribers).forEach((sub) => sub.terminate());
     stopQueuePolling();
     stopMissedCallsPolling();
+    stopMetricsPolling();
     clearInterval(timerInterval);
     if (ua) ua.stop();
     setStatus('', 'Desconectado');
     el('connectForm').style.display = 'block';
     el('disconnectBtn').style.display = 'none';
     el('colleaguesPanel').style.display = 'none';
+    el('metricsPanel').style.display = 'none';
     showView(null);
   });
 
@@ -915,6 +943,51 @@
         <div class="meta missed">${reasonLabel[m.reason] || m.reason} · ${when}</div>
       </div>`;
     }).join('');
+  }
+
+  // ---------- Métricas do dia ----------
+  let metricsPollInterval = null;
+
+  function startMetricsPolling() {
+    const apiUrl = el('queueApiUrl').value.trim();
+    if (!apiUrl) return;
+    el('metricsPanel').style.display = 'block';
+    fetchMetrics(apiUrl);
+    metricsPollInterval = setInterval(() => fetchMetrics(apiUrl), 15000);
+  }
+
+  function stopMetricsPolling() {
+    clearInterval(metricsPollInterval);
+    metricsPollInterval = null;
+  }
+
+  function fetchMetrics(apiUrl) {
+    fetch(`${apiUrl}/api/metrics/today`)
+      .then((res) => res.json())
+      .then(renderMetrics)
+      .catch(() => {
+        el('metricsGrid').innerHTML = '<div class="log-empty">API indisponível.</div>';
+      });
+  }
+
+  function renderMetrics(m) {
+    const avgMin = Math.floor((m.average_talk_seconds || 0) / 60);
+    const avgSec = Math.round((m.average_talk_seconds || 0) % 60);
+    const avgLabel = `${String(avgMin).padStart(2, '0')}:${String(avgSec).padStart(2, '0')}`;
+
+    const cards = [
+      { label: 'Chamadas hoje', value: m.total_calls },
+      { label: 'Atendidas', value: m.answered_calls },
+      { label: 'Perdidas', value: m.missed_calls },
+      { label: 'TMA', value: avgLabel },
+      { label: '% perdidas', value: `${m.missed_rate_percent}%` },
+    ];
+
+    el('metricsGrid').innerHTML = `<div class="metrics-grid">${cards.map((c) => `
+      <div class="metric-card">
+        <div class="metric-value mono">${c.value}</div>
+        <div class="metric-label">${c.label}</div>
+      </div>`).join('')}</div>`;
   }
 
   // ---------- Gravações (player embutido) ----------

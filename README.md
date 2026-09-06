@@ -190,6 +190,11 @@ uma API pra disparar ligação (liga primeiro pra telefonista, depois
 completa pro cliente) — protegida por chave de API, desligada por
 padrão — ver `docs/manual-12-click-to-call.md`.
 
+**E dashboard de métricas do dia** (painel "Métricas de hoje" no
+webphone): chamadas totais, atendidas, perdidas, TMA e taxa de
+perdidas, calculados a partir do CDR do Asterisk — ver
+`docs/manual-13-dashboard-metricas.md`.
+
 Para ajustar quais ramais aparecem na lista de colegas, edite o array
 `COLLEAGUES` no início do `<script>` em `webphone/index.html`. Cada
 ramal monitorado precisa ter um `hint` correspondente em
@@ -214,7 +219,7 @@ cd ../queue-api
 python3 -m pytest tests/ -v
 ```
 
-108 testes estáticos no total — nenhum deles sobe o Asterisk de
+122 testes estáticos no total — nenhum deles sobe o Asterisk de
 verdade. Detalhes em `tests/README.md`.
 
 ## Documentação

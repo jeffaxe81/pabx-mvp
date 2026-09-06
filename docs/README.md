@@ -16,6 +16,7 @@ configurar, como testar manualmente, e limitações conhecidas.
 10. [Multi-chamada (segunda linha)](manual-10-multi-chamada.md)
 11. [Notificação de chamada perdida](manual-11-notificacao-chamada-perdida.md)
 12. [Discagem por clique a partir do CRM](manual-12-click-to-call.md)
+13. [Dashboard de métricas do dia](manual-13-dashboard-metricas.md)
 
 ## Regra de manutenção
 

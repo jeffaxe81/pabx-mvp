@@ -14,6 +14,8 @@ services:
       - ./asterisk/http.conf:/etc/asterisk/http.conf
       - ./asterisk/manager.conf:/etc/asterisk/manager.conf
       - ./asterisk/queues.conf:/etc/asterisk/queues.conf
+      - ./asterisk/cdr.conf:/etc/asterisk/cdr.conf
+      - ./asterisk/cdr_manager.conf:/etc/asterisk/cdr_manager.conf
       - ./asterisk/certs:/etc/asterisk/certs:ro
       - ./recordings:/var/spool/asterisk/monitor
       - asterisk_data:/var/spool/asterisk

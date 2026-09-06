@@ -27,7 +27,7 @@ REQUIRED_IDS = [
     "recordingsList", "refreshRecordingsBtn",
     "lineSwitcher", "linePill0", "linePill1",
     "secondLineBanner", "secondLinePeer", "answerSecondLineBtn", "declineSecondLineBtn",
-    "missedCallsList",
+    "missedCallsList", "metricsPanel", "metricsGrid",
 ]
 
 
@@ -188,3 +188,10 @@ def test_missed_calls_polling_starts_and_stops_with_connection():
     assert "startMissedCallsPolling()" in html
     assert "stopMissedCallsPolling()" in html
     assert "/api/missed-calls" in html
+
+
+def test_metrics_polling_starts_and_stops_with_connection():
+    html = load_html()
+    assert "startMetricsPolling()" in html
+    assert "stopMetricsPolling()" in html
+    assert "/api/metrics/today" in html

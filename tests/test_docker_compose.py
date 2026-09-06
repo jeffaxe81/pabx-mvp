@@ -106,3 +106,15 @@ def test_click_to_call_api_key_disabled_by_default():
     assert "CLICK_TO_CALL_API_KEY" in env
     assert env["CLICK_TO_CALL_API_KEY"] == ""
     assert "CLICK_TO_CALL_ALLOWED_EXTENSIONS" in env
+
+
+def test_cdr_config_files_mounted_for_metrics():
+    """
+    O dashboard de métricas depende dos eventos CDR - sem esses dois
+    arquivos montados, o Asterisk nunca gera os eventos e o painel
+    fica sempre zerado, silenciosamente.
+    """
+    compose = load_compose()
+    asterisk_volumes = compose["services"]["asterisk"].get("volumes", [])
+    assert any("cdr.conf" in v for v in asterisk_volumes)
+    assert any("cdr_manager.conf" in v for v in asterisk_volumes)

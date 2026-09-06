@@ -60,3 +60,24 @@ def test_manager_queue_api_user_can_receive_dialend_events():
     blocks = {b["name"]: b["text"] for b in parse_blocks(MANAGER_CONF)}
     read_classes = get_key(blocks["queue-api"], "read") or ""
     assert "dialplan" in read_classes.split(",")
+
+
+def test_cdr_enabled_including_unanswered_calls():
+    """
+    unanswered=yes é essencial - sem isso, o CDR só registra chamadas
+    atendidas, e o dashboard nunca veria uma chamada perdida.
+    """
+    cdr_conf = Path(__file__).parent.parent / "asterisk" / "cdr.conf"
+    blocks = {b["name"]: b["text"] for b in parse_blocks(cdr_conf)}
+    assert get_key(blocks["general"], "enable") == "yes"
+    assert get_key(blocks["general"], "unanswered") == "yes"
+
+
+def test_cdr_manager_enabled():
+    """
+    cdr_manager.conf é o que faz o Asterisk mandar o evento "Cdr" via
+    AMI - sem isso, o dashboard de métricas nunca recebe nada.
+    """
+    cdr_manager_conf = Path(__file__).parent.parent / "asterisk" / "cdr_manager.conf"
+    blocks = {b["name"]: b["text"] for b in parse_blocks(cdr_manager_conf)}
+    assert get_key(blocks["general"], "enabled") == "yes"

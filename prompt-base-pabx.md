@@ -54,6 +54,11 @@ https://github.com/jeffaxe81/pabx-mvp
 - Originate via AMI: liga pro ramal da telefonista, ela atende,
   Asterisk completa pro número do cliente
 
+**Dashboard de métricas do dia**
+- Painel no webphone: chamadas totais, atendidas, perdidas, TMA,
+  taxa de perdidas - via CDR do Asterisk (cdr.conf + cdr_manager.conf)
+- Em memória, zera à meia-noite, sem separação por tenant ainda
+
 **Multi-chamada**
 - Até 2 linhas simultâneas; atender a linha 2 põe a linha 1 em
   espera automaticamente; barra de troca de linha; volta sozinho
@@ -95,8 +100,7 @@ https://github.com/jeffaxe81/pabx-mvp
 4. ~~Multi-chamada~~ — IMPLEMENTADO (2 linhas, hold automático ao atender/trocar), ver docs/manual-10
 5. ~~Notificação de chamada perdida~~ — IMPLEMENTADO (email/WhatsApp via AMI DialEnd/QueueCallerAbandon), ver docs/manual-11
 6. ~~Discagem por clique a partir do CRM~~ — IMPLEMENTADO (API com chave, Originate via AMI), ver docs/manual-12
-7. Dashboard de métricas do dia (volume, TMA, taxa de perdidas) por
-   tenant
+7. ~~Dashboard de métricas do dia~~ — IMPLEMENTADO (via CDR do Asterisk; ainda sem separação por tenant), ver docs/manual-13
 8. Múltiplas telefonistas simultâneas com roteamento round-robin das
    chamadas de entrada
 9. PWA instalável com notificação nativa (tocar mesmo em segundo
