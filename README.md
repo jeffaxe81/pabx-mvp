@@ -165,6 +165,12 @@ completar) — ver `docs/manual-07-transferencia-assistida.md` para o
 fluxo completo e uma ressalva técnica importante sobre como a troca é
 percebida pelo cliente.
 
+**E fila de atendimento com pickup dirigido**: chamadas sem ramal
+específico esperam numa fila, visível em tempo real no painel "Fila
+de espera" da interface — a telefonista escolhe qual chamada atender
+(não só a mais antiga). Requer o serviço `queue-api` (fala AMI com o
+Asterisk) — ver `docs/manual-08-fila-atendimento.md`.
+
 Para ajustar quais ramais aparecem na lista de colegas, edite o array
 `COLLEAGUES` no início do `<script>` em `webphone/index.html`. Cada
 ramal monitorado precisa ter um `hint` correspondente em
@@ -176,16 +182,21 @@ ideias abaixo.
 
 ## Testes automatizados
 
+Duas suítes:
+
 ```bash
+# suíte principal (configs do Asterisk, docker-compose, webphone)
 cd tests
 pip install -r requirements.txt --break-system-packages
 python3 -m pytest -v
+
+# suíte do queue-api (parsing AMI e lógica de fila, sem rede)
+cd ../queue-api
+python3 -m pytest tests/ -v
 ```
 
-25 testes estáticos validam a consistência de `pjsip.conf`,
-`extensions.conf`, `docker-compose.yml`, o gerador de provisionamento
-e o `webphone/index.html` — sem precisar subir o Asterisk. Detalhes em
-`tests/README.md`.
+51 testes estáticos no total — nenhum deles sobe o Asterisk de
+verdade. Detalhes em `tests/README.md`.
 
 ## Documentação
 

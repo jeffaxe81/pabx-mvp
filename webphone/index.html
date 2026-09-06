@@ -269,6 +269,20 @@
   }
   .log-item .meta.missed { color: var(--red); }
 
+  .queue-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    border-bottom: 1px solid var(--border);
+    padding: 10px 0;
+    font-size: 13px;
+  }
+  .queue-item .info { min-width: 0; }
+  .queue-item .peer { font-weight: 600; }
+  .queue-item .wait { color: var(--amber); font-size: 12px; }
+  .queue-item button { flex-shrink: 0; padding: 6px 10px; font-size: 12px; }
+
   .toggle-active { background: var(--panel-alt); border-color: var(--green); color: var(--green); }
 
   /* Presença de colegas (BLF) */
@@ -338,6 +352,9 @@
 
       <label for="extPassword">Senha</label>
       <input id="extPassword" type="password" placeholder="senha do ramal">
+
+      <label for="queueApiUrl">API da fila (opcional)</label>
+      <input id="queueApiUrl" placeholder="http://pabx.local:8090" value="http://pabx.local:8090">
 
       <button class="btn-primary" id="connectBtn">Conectar</button>
     </div>
@@ -431,7 +448,12 @@
 
   <!-- HISTÓRICO -->
   <aside class="log-panel">
-    <div class="log-title">Histórico de chamadas</div>
+    <div class="log-title">Fila de espera</div>
+    <div id="queueList">
+      <div class="log-empty">Nenhuma chamada esperando.</div>
+    </div>
+
+    <div class="log-title" style="margin-top:24px;">Histórico de chamadas</div>
     <div id="callLog">
       <div class="log-empty">Nenhuma chamada ainda nesta sessão.</div>
     </div>
@@ -459,6 +481,9 @@
   let primarySession = null;   // chamada original, colocada em espera
   let consultSession = null;   // chamada de consulta com o colega
   let consultExt = null;
+
+  // Fila de espera (queue-api)
+  let queuePollInterval = null;
 
   // Ramais colegas a monitorar (BLF). Ajuste esta lista conforme os
   // ramais reais do seu tenant/hints em extensions.conf. O próprio
@@ -576,6 +601,7 @@
       el('disconnectBtn').style.display = 'block';
       showView('idleView');
       startPresenceMonitoring(domain);
+      startQueuePolling();
     });
     ua.on('registrationFailed', (e) => {
       setStatus('error', 'Falha ao registrar: ' + (e.cause || 'verifique usuário/senha'));
@@ -588,6 +614,7 @@
 
   el('disconnectBtn').addEventListener('click', () => {
     Object.values(colleagueSubscribers).forEach((sub) => sub.terminate());
+    stopQueuePolling();
     if (ua) ua.stop();
     setStatus('', 'Desconectado');
     el('connectForm').style.display = 'block';
@@ -595,6 +622,71 @@
     el('colleaguesPanel').style.display = 'none';
     showView(null);
   });
+
+  // ---------- Fila de espera (queue-api) ----------
+  function startQueuePolling() {
+    const apiUrl = el('queueApiUrl').value.trim();
+    if (!apiUrl) return;
+
+    fetchQueue(apiUrl);
+    queuePollInterval = setInterval(() => fetchQueue(apiUrl), 3000);
+  }
+
+  function stopQueuePolling() {
+    clearInterval(queuePollInterval);
+    queuePollInterval = null;
+  }
+
+  function fetchQueue(apiUrl) {
+    fetch(`${apiUrl}/api/queue`)
+      .then((res) => res.json())
+      .then((data) => renderQueue(apiUrl, data.waiting || []))
+      .catch(() => {
+        el('queueList').innerHTML = '<div class="log-empty">API da fila indisponível.</div>';
+      });
+  }
+
+  function renderQueue(apiUrl, waiting) {
+    if (waiting.length === 0) {
+      el('queueList').innerHTML = '<div class="log-empty">Nenhuma chamada esperando.</div>';
+      return;
+    }
+
+    el('queueList').innerHTML = waiting.map((call) => {
+      const minutes = String(Math.floor(call.waiting_seconds / 60)).padStart(2, '0');
+      const seconds = String(call.waiting_seconds % 60).padStart(2, '0');
+      const label = call.caller_id_name || call.caller_id_num || call.channel;
+      return `<div class="queue-item">
+        <div class="info">
+          <div class="peer">${label}</div>
+          <div class="wait mono">esperando ${minutes}:${seconds}</div>
+        </div>
+        <button class="btn-primary" data-channel="${call.channel}" style="margin:0;">Atender</button>
+      </div>`;
+    }).join('');
+
+    document.querySelectorAll('#queueList button[data-channel]').forEach((btn) => {
+      btn.addEventListener('click', () => pickupFromQueue(apiUrl, btn.dataset.channel));
+    });
+  }
+
+  function pickupFromQueue(apiUrl, channel) {
+    fetch(`${apiUrl}/api/queue/pickup`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ channel }),
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (!data.ok) {
+          alert('Não foi possível puxar essa chamada. Tente novamente.');
+        }
+        // A chamada puxada vai tocar no próprio ramal (t1-recepcao),
+        // então o "newRTCSession" de entrada cuida do resto (tela de
+        // chamada recebida).
+      })
+      .catch(() => alert('API da fila indisponível.'));
+  }
 
   // ---------- Presença dos colegas (BLF via SUBSCRIBE) ----------
   function startPresenceMonitoring(domain) {

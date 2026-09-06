@@ -32,6 +32,15 @@ https://github.com/jeffaxe81/pabx-mvp
   gerados via `provisioning/generate.py` a partir de `devices.json` e
   templates por fabricante (hoje só Yealink)
 
+**Fila de atendimento**
+- Fila `fila-t1` com a telefonista como membro; chamadas sem DID
+  esperam com pickup dirigido (a telefonista escolhe qual atender,
+  não só a mais antiga)
+- Serviço `queue-api` (Python, stdlib only) fala AMI com o Asterisk,
+  expõe a fila via HTTP; webphone faz polling a cada 3s
+- Sem teste de integração real (precisa de Asterisk rodando) - só a
+  lógica de parsing/estado é testada automaticamente
+
 **Telefonista web (WebRTC)**
 - Interface em `webphone/index.html` (JsSIP): discador, atender,
   recusar, mudo, espera, transferência cega, histórico de chamadas da
@@ -54,7 +63,7 @@ https://github.com/jeffaxe81/pabx-mvp
 
 ## Ideias futuras (backlog, ainda não implementadas)
 1. ~~Transferência assistida~~ — IMPLEMENTADO, ver docs/manual-07
-2. Fila de atendimento com painel de chamadas em espera (pickup)
+2. ~~Fila de atendimento~~ — IMPLEMENTADO (pickup dirigido via AMI), ver docs/manual-08
 3. Gravação de chamadas com player embutido na interface
 4. Multi-chamada (segunda linha) — hoje a 2ª chamada é recusada
    automaticamente

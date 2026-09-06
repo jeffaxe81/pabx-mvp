@@ -11,6 +11,7 @@ configurar, como testar manualmente, e limitações conhecidas.
 5. [Auto-provisionamento](manual-05-provisionamento.md)
 6. [Telefonista web (WebRTC + presença/BLF)](manual-06-telefonista-web.md)
 7. [Transferência assistida (com consulta)](manual-07-transferencia-assistida.md)
+8. [Fila de atendimento (pickup dirigido)](manual-08-fila-atendimento.md)
 
 ## Regra de manutenção
 

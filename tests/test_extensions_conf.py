@@ -27,7 +27,10 @@ def blocks_as_dict(blocks):
 
 def test_expected_contexts_present():
     contexts = {b["name"] for b in load_ext_blocks()}
-    expected = {"t1-internal", "t2-internal", "t1-hints", "t2-hints", "from-tdm-gateway"}
+    expected = {
+        "t1-internal", "t2-internal", "t1-hints", "t2-hints",
+        "from-tdm-gateway", "pickup-target",
+    }
     missing = expected - contexts
     assert not missing, f"Contextos esperados ausentes: {missing}"
 
@@ -37,16 +40,27 @@ def test_receptionist_extension_1000_routes_to_web_endpoint():
     assert "1000,1,Dial(PJSIP/t1-recepcao" in blocks["t1-internal"].replace(" ", "")
 
 
-def test_unmatched_incoming_calls_fallback_to_receptionist():
+def test_unmatched_incoming_calls_go_into_the_queue():
     """
-    Chamadas do gateway TDM sem DID mapeado devem cair na telefonista
-    (ramal 1000) - é o comportamento padrão de PABX documentado no
-    prompt master e no README.
+    Chamadas do gateway TDM sem DID mapeado entram na fila de
+    atendimento (toca a telefonista se livre, espera se ocupada) -
+    documentado no prompt master e no manual 08.
     """
     blocks = blocks_as_dict(load_ext_blocks())
     fallback_block = blocks["from-tdm-gateway"]
     assert "_X." in fallback_block
-    assert "Goto(t1-internal,1000,1)" in fallback_block.replace(" ", "")
+    assert "Queue(fila-t1)" in fallback_block.replace(" ", "")
+
+
+def test_pickup_target_context_dials_receptionist():
+    """
+    O contexto usado pelo pickup dirigido (Redirect via AMI) precisa
+    realmente discar pro ramal da telefonista - senão o queue-api
+    "puxa" a chamada da fila e ela cai no vazio.
+    """
+    blocks = blocks_as_dict(load_ext_blocks())
+    pickup_block = blocks["pickup-target"]
+    assert "Dial(PJSIP/t1-recepcao" in pickup_block.replace(" ", "")
 
 
 def test_every_hint_references_an_endpoint_that_exists_in_pjsip_conf():

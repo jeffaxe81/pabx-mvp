@@ -22,7 +22,7 @@ def test_compose_is_valid_yaml():
 def test_expected_services_present():
     compose = load_compose()
     services = compose["services"]
-    for expected in ("asterisk", "provisioning", "webphone"):
+    for expected in ("asterisk", "provisioning", "webphone", "queue-api"):
         assert expected in services, f"Serviço '{expected}' ausente no docker-compose.yml"
 
 
@@ -53,3 +53,17 @@ def test_provisioning_service_serves_files_directory():
     assert any("provisioning/files" in v for v in volumes), (
         "Serviço provisioning deveria servir a pasta provisioning/files"
     )
+
+
+def test_queue_api_env_matches_manager_conf_credentials():
+    """
+    A senha de AMI usada pelo queue-api no compose precisa bater com a
+    configurada em manager.conf - senão o serviço sobe e nunca
+    consegue logar (falha silenciosa em produção, chata de debugar).
+    """
+    compose = load_compose()
+    env = compose["services"]["queue-api"].get("environment", {})
+
+    manager_conf = (PROJECT_ROOT / "asterisk" / "manager.conf").read_text(encoding="utf-8")
+    assert env.get("AMI_USERNAME") and f"[{env['AMI_USERNAME']}]" in manager_conf
+    assert env.get("AMI_SECRET") and f"secret = {env['AMI_SECRET']}" in manager_conf

@@ -12,8 +12,30 @@ services:
       - ./asterisk/voicemail.conf:/etc/asterisk/voicemail.conf
       - ./asterisk/rtp.conf:/etc/asterisk/rtp.conf
       - ./asterisk/http.conf:/etc/asterisk/http.conf
+      - ./asterisk/manager.conf:/etc/asterisk/manager.conf
+      - ./asterisk/queues.conf:/etc/asterisk/queues.conf
       - ./asterisk/certs:/etc/asterisk/certs:ro
       - asterisk_data:/var/spool/asterisk
+
+  # Backend que fala AMI com o Asterisk e expõe a fila de atendimento
+  # (quem está esperando) como uma API HTTP simples pro webphone consumir.
+  queue-api:
+    image: python:3.12-slim
+    container_name: pabx-queue-api
+    restart: unless-stopped
+    network_mode: host   # precisa enxergar o Asterisk em 127.0.0.1:5038 (AMI)
+    working_dir: /app
+    volumes:
+      - ./queue-api:/app:ro
+    environment:
+      AMI_HOST: "127.0.0.1"
+      AMI_PORT: "5038"
+      AMI_USERNAME: "queue-api"
+      AMI_SECRET: "troque_esta_senha_ami"   # deve bater com manager.conf
+      HTTP_PORT: "8090"
+    command: python3 server.py
+    depends_on:
+      - asterisk
 
   # Interface web do telefonista (webphone/index.html), servida como
   # site estático simples. Em produção, sirva com HTTPS de verdade

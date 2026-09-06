@@ -23,7 +23,7 @@ REQUIRED_IDS = [
     "consultHeldPeer", "consultTargetPeer", "consultTargetState",
     "cancelConsultBtn", "completeConsultBtn",
     "callLog", "colleaguesPanel", "colleaguesList",
-    "remoteAudio",
+    "remoteAudio", "queueApiUrl", "queueList",
 ]
 
 
@@ -99,3 +99,19 @@ def test_consult_call_does_not_get_rejected_as_second_call():
         "A checagem de chamada de consulta precisa vir antes da regra "
         "que rejeita a segunda chamada"
     )
+
+
+def test_queue_pickup_sends_channel_to_correct_endpoint():
+    html = load_html()
+    pickup_start = html.index("function pickupFromQueue")
+    pickup_end = html.index("}", html.index("catch", pickup_start))
+    handler_body = html[pickup_start:pickup_end]
+    assert "/api/queue/pickup" in handler_body
+    assert "method: 'POST'" in handler_body
+    assert "channel" in handler_body
+
+
+def test_queue_polling_starts_on_registration_and_stops_on_disconnect():
+    html = load_html()
+    assert "startQueuePolling()" in html
+    assert "stopQueuePolling()" in html
