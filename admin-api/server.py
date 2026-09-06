@@ -23,15 +23,21 @@ from store import add_extension, update_extension, delete_extension, load_store
 from conf_generator import render_all
 from ami_client import AMIClient
 from blocklist import validate_blocklist_number
+from users import load_users, save_users, find_user, add_user, update_user, delete_user, public_user
 
 HTTP_PORT = int(os.environ.get("HTTP_PORT", "8091"))
 STORE_PATH = os.environ.get("STORE_PATH", "/app/data/extensions_store.json")
+USERS_PATH = os.environ.get("USERS_PATH", "/app/data/users.json")
 ASTERISK_CONF_DIR = os.environ.get("ASTERISK_CONF_DIR", "/app/asterisk-conf")
 STATIC_DIR = Path(os.environ.get("STATIC_DIR", "/app/static"))
 
+# Usuário admin inicial (backlog #19): usado só pra popular o primeiro
+# usuário caso ainda não exista nenhum em USERS_PATH - depois disso,
+# o gerenciamento de usuários é todo pelo painel (seção "Usuários").
+# Sem hash pré-configurado E sem usuários já cadastrados = login
+# sempre falha (desligado por padrão, mesmo padrão de segurança já
+# usado em notificações e click-to-call).
 ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "admin")
-# Sem hash pré-configurado = login sempre falha (desligado por padrão,
-# mesmo padrão de segurança já usado em notificações e click-to-call).
 ADMIN_PASSWORD_HASH = os.environ.get("ADMIN_PASSWORD_HASH", "")
 
 AMI_HOST = os.environ.get("AMI_HOST", "127.0.0.1")
@@ -40,6 +46,25 @@ AMI_USERNAME = os.environ.get("AMI_USERNAME", "admin-api")
 AMI_SECRET = os.environ.get("AMI_SECRET", "troque_esta_senha_ami")
 
 sessions = SessionStore()
+
+
+def ensure_bootstrap_admin():
+    """
+    Roda na inicialização: se USERS_PATH ainda não tem ninguém e as
+    variáveis ADMIN_USERNAME/ADMIN_PASSWORD_HASH estão configuradas,
+    cria o primeiro usuário (papel admin) a partir delas. Se
+    ADMIN_PASSWORD_HASH estiver vazio, não cria nada - login continua
+    desabilitado até alguém configurar isso de propósito.
+    """
+    if load_users(USERS_PATH):
+        return
+    if not ADMIN_PASSWORD_HASH:
+        return
+    save_users(USERS_PATH, [{
+        "username": ADMIN_USERNAME,
+        "password_hash": ADMIN_PASSWORD_HASH,
+        "role": "admin",
+    }])
 
 
 def regenerate_and_reload():
@@ -84,10 +109,31 @@ class Handler(BaseHTTPRequestHandler):
             return None
         return sessions.validate(auth_header[len("Bearer "):])
 
+    def _authenticated_role(self):
+        auth_header = self.headers.get("Authorization", "")
+        if not auth_header.startswith("Bearer "):
+            return None
+        return sessions.get_role(auth_header[len("Bearer "):])
+
     def _require_auth(self):
         username = self._authenticated_username()
         if not username:
             self._send_json(401, {"error": "não autenticado"})
+        return username
+
+    def _require_role(self, allowed_roles):
+        """
+        Checa autenticação E papel. Retorna o username se tudo ok,
+        None caso contrário (já tendo mandado a resposta de erro).
+        """
+        username = self._authenticated_username()
+        if not username:
+            self._send_json(401, {"error": "não autenticado"})
+            return None
+        role = self._authenticated_role()
+        if role not in allowed_roles:
+            self._send_json(403, {"error": f"papel '{role}' não tem permissão para esta ação"})
+            return None
         return username
 
     def log_message(self, format, *args):
@@ -96,18 +142,23 @@ class Handler(BaseHTTPRequestHandler):
     # ---------- GET ----------
     def do_GET(self):
         if self.path.startswith("/api/extensions"):
-            if not self._require_auth():
+            if not self._require_role({"admin", "supervisor"}):
                 return
             extensions = [public_view(e) for e in load_store(STORE_PATH)]
             self._send_json(200, {"extensions": extensions})
         elif self.path.startswith("/api/blocklist"):
-            if not self._require_auth():
+            if not self._require_role({"admin", "supervisor"}):
                 return
             self._handle_list_blocklist()
         elif self.path.startswith("/api/config/modo-feriado"):
-            if not self._require_auth():
+            if not self._require_role({"admin", "supervisor"}):
                 return
             self._handle_get_holiday_mode()
+        elif self.path.startswith("/api/users"):
+            if not self._require_role({"admin"}):
+                return
+            users = [public_user(u) for u in load_users(USERS_PATH)]
+            self._send_json(200, {"users": users})
         elif self.path in ("/", "/index.html"):
             self._serve_static("index.html", "text/html")
         else:
@@ -159,11 +210,27 @@ class Handler(BaseHTTPRequestHandler):
             self._handle_add_to_blocklist()
         elif self.path == "/api/config/modo-feriado":
             self._handle_set_holiday_mode()
+        elif self.path == "/api/users":
+            self._handle_create_user()
         else:
             self._send_json(404, {"error": "not found"})
 
+    def _handle_create_user(self):
+        if not self._require_role({"admin"}):
+            return
+        data = self._read_json_body()
+        if data is None:
+            self._send_json(400, {"error": "JSON inválido"})
+            return
+
+        ok, error, cleaned = add_user(USERS_PATH, data)
+        if not ok:
+            self._send_json(400, {"error": error})
+            return
+        self._send_json(201, {"user": public_user(cleaned)})
+
     def _handle_set_holiday_mode(self):
-        if not self._require_auth():
+        if not self._require_role({"admin", "supervisor"}):
             return
         data = self._read_json_body()
         if data is None or "enabled" not in data:
@@ -181,7 +248,7 @@ class Handler(BaseHTTPRequestHandler):
             client.close()
 
     def _handle_add_to_blocklist(self):
-        if not self._require_auth():
+        if not self._require_role({"admin"}):
             return
         data = self._read_json_body()
         if data is None:
@@ -212,19 +279,21 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json(400, {"error": "JSON inválido"})
             return
 
-        username = data.get("username", "")
+        username = (data.get("username") or "").strip().lower()
         password = data.get("password", "")
 
-        if not ADMIN_PASSWORD_HASH:
-            self._send_json(503, {"error": "painel não configurado (sem senha de admin definida)"})
+        users = load_users(USERS_PATH)
+        if not users:
+            self._send_json(503, {"error": "painel não configurado (nenhum usuário cadastrado)"})
             return
 
-        if username != ADMIN_USERNAME or not verify_password(password, ADMIN_PASSWORD_HASH):
+        user = find_user(users, username)
+        if not user or not verify_password(password, user["password_hash"]):
             self._send_json(401, {"error": "usuário ou senha inválidos"})
             return
 
-        token = sessions.create(username)
-        self._send_json(200, {"token": token})
+        token = sessions.create(username, role=user["role"])
+        self._send_json(200, {"token": token, "role": user["role"]})
 
     def _handle_logout(self):
         auth_header = self.headers.get("Authorization", "")
@@ -233,7 +302,7 @@ class Handler(BaseHTTPRequestHandler):
         self._send_json(200, {"ok": True})
 
     def _handle_create_extension(self):
-        if not self._require_auth():
+        if not self._require_role({"admin"}):
             return
         data = self._read_json_body()
         if data is None:
@@ -255,10 +324,15 @@ class Handler(BaseHTTPRequestHandler):
 
     # ---------- PUT / DELETE ----------
     def do_PUT(self):
-        if not self.path.startswith("/api/extensions/"):
+        if self.path.startswith("/api/extensions/"):
+            self._handle_update_extension()
+        elif self.path.startswith("/api/users/"):
+            self._handle_update_user()
+        else:
             self._send_json(404, {"error": "not found"})
-            return
-        if not self._require_auth():
+
+    def _handle_update_extension(self):
+        if not self._require_role({"admin"}):
             return
 
         name = self.path[len("/api/extensions/"):]
@@ -280,16 +354,34 @@ class Handler(BaseHTTPRequestHandler):
 
         self._send_json(200, {"extension": public_view(cleaned), "reload": reload_result})
 
+    def _handle_update_user(self):
+        if not self._require_role({"admin"}):
+            return
+
+        username = self.path[len("/api/users/"):]
+        data = self._read_json_body()
+        if data is None:
+            self._send_json(400, {"error": "JSON inválido"})
+            return
+
+        ok, error, cleaned = update_user(USERS_PATH, username, data)
+        if not ok:
+            self._send_json(400, {"error": error})
+            return
+        self._send_json(200, {"user": public_user(cleaned)})
+
     def do_DELETE(self):
         if self.path.startswith("/api/extensions/"):
             self._handle_delete_extension()
         elif self.path.startswith("/api/blocklist/"):
             self._handle_remove_from_blocklist()
+        elif self.path.startswith("/api/users/"):
+            self._handle_delete_user()
         else:
             self._send_json(404, {"error": "not found"})
 
     def _handle_delete_extension(self):
-        if not self._require_auth():
+        if not self._require_role({"admin"}):
             return
 
         name = self.path[len("/api/extensions/"):]
@@ -307,7 +399,7 @@ class Handler(BaseHTTPRequestHandler):
         self._send_json(200, {"ok": True, "reload": reload_result})
 
     def _handle_remove_from_blocklist(self):
-        if not self._require_auth():
+        if not self._require_role({"admin"}):
             return
 
         number = self.path[len("/api/blocklist/"):]
@@ -321,10 +413,22 @@ class Handler(BaseHTTPRequestHandler):
         finally:
             client.close()
 
+    def _handle_delete_user(self):
+        if not self._require_role({"admin"}):
+            return
+
+        username = self.path[len("/api/users/"):]
+        ok, error = delete_user(USERS_PATH, username)
+        if not ok:
+            self._send_json(400, {"error": error})
+            return
+        self._send_json(200, {"ok": True})
+
 
 def main():
     Path(STORE_PATH).parent.mkdir(parents=True, exist_ok=True)
     Path(ASTERISK_CONF_DIR).mkdir(parents=True, exist_ok=True)
+    ensure_bootstrap_admin()
     server = ThreadingHTTPServer(("0.0.0.0", HTTP_PORT), Handler)
     print(f"admin-api ouvindo em :{HTTP_PORT}")
     server.serve_forever()

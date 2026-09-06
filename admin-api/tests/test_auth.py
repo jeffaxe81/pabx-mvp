@@ -32,6 +32,23 @@ def test_session_create_and_validate():
     assert store.validate(token) == "admin"
 
 
+def test_session_stores_role_and_defaults_to_admin():
+    store = SessionStore()
+    token = store.create("admin")
+    assert store.get_role(token) == "admin"
+
+
+def test_session_stores_custom_role():
+    store = SessionStore()
+    token = store.create("maria", role="supervisor")
+    assert store.get_role(token) == "supervisor"
+
+
+def test_get_role_returns_none_for_unknown_token():
+    store = SessionStore()
+    assert store.get_role("token-invalido") is None
+
+
 def test_session_validate_rejects_unknown_token():
     store = SessionStore()
     assert store.validate("token-que-nao-existe") is None

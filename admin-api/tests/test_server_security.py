@@ -3,58 +3,95 @@ Verificação estática do server.py - as mesmas garantias de segurança
 já checadas assim no queue-api (test_server_routes.py): a proteção
 precisa estar no lugar certo do código, não só existir em algum lugar.
 """
+import re
 from pathlib import Path
 
 SERVER_PY = Path(__file__).parent.parent / "server.py"
+
+FUNCTION_DEF_RE = re.compile(r"\n    def \w+\(")
 
 
 def load_source():
     return SERVER_PY.read_text(encoding="utf-8")
 
 
-def test_login_disabled_by_default_without_password_hash():
-    source = load_source()
-    assert 'ADMIN_PASSWORD_HASH = os.environ.get("ADMIN_PASSWORD_HASH", "")' in source
-    fn_start = source.index("def _handle_login")
-    fn_end = source.index("def _handle_logout")
-    body = source[fn_start:fn_end]
-    assert "if not ADMIN_PASSWORD_HASH:" in body
-
-
-def test_all_extension_mutating_routes_require_auth_before_touching_store():
+def get_function_body(source: str, fn_name: str) -> str:
     """
-    Criar/editar/apagar ramal, e adicionar/remover número da lista de
-    bloqueio, precisam checar autenticação ANTES de mexer no store/AMI
-    - senão a proteção é decorativa.
+    Retorna o corpo de um método (sem a linha 'def nome(...):'), até o
+    próximo método da classe ou o fim do arquivo.
+    """
+    fn_start = source.index(f"def {fn_name}(")
+    signature_end = source.index("):", fn_start) + 2
+    match = FUNCTION_DEF_RE.search(source, signature_end)
+    fn_end = match.start() if match else len(source)
+    return source[signature_end:fn_end]
+
+
+def test_login_disabled_by_default_without_bootstrap_or_users():
+    source = load_source()
+    bootstrap_body = get_function_body(source, "ensure_bootstrap_admin")
+    assert "if not ADMIN_PASSWORD_HASH:" in bootstrap_body
+
+    login_body = get_function_body(source, "_handle_login")
+    assert "if not users:" in login_body
+
+
+def test_role_checks_happen_before_any_mutation():
+    """
+    Toda rota que muda ramal/usuário/lista de bloqueio/modo feriado
+    precisa checar o papel ANTES de mexer no store/AMI - senão a
+    proteção é decorativa. Cada entrada é (função, papéis esperados,
+    chamada de mutação que ela dispara).
     """
     source = load_source()
 
     checks = [
-        ("_handle_create_extension", "def do_PUT"),
-        ("do_PUT", "def do_DELETE"),
-        ("_handle_delete_extension", "def _handle_remove_from_blocklist"),
-        ("_handle_remove_from_blocklist", "def main"),
-        ("_handle_add_to_blocklist", "def _handle_login"),
-        ("_handle_set_holiday_mode", "def _handle_add_to_blocklist"),
+        ("_handle_create_extension", {"admin"}, "add_extension("),
+        ("_handle_update_extension", {"admin"}, "update_extension("),
+        ("_handle_delete_extension", {"admin"}, "delete_extension("),
+        ("_handle_add_to_blocklist", {"admin"}, "block_number("),
+        ("_handle_remove_from_blocklist", {"admin"}, "unblock_number("),
+        ("_handle_set_holiday_mode", {"admin", "supervisor"}, "set_holiday_mode("),
+        ("_handle_create_user", {"admin"}, "add_user("),
+        ("_handle_update_user", {"admin"}, "update_user("),
+        ("_handle_delete_user", {"admin"}, "delete_user("),
     ]
 
-    for fn_name, next_marker in checks:
-        fn_start = source.index(f"def {fn_name}")
-        fn_end = source.index(next_marker, fn_start)
-        signature_end = source.index("):", fn_start) + 2
-        body = source[signature_end:fn_end]  # exclui a linha "def nome(...):" da busca
-        auth_pos = body.index("_require_auth()")
-        mutation_candidates = [
-            body.index(m) for m in (
-                "add_extension(", "update_extension(", "delete_extension(",
-                "block_number(", "unblock_number(", "set_holiday_mode(",
-            )
-            if m in body
-        ]
-        assert mutation_candidates, f"{fn_name} não parece mutar nada - verifique o teste"
-        assert auth_pos < min(mutation_candidates), (
-            f"{fn_name} muta o store/AMI antes de checar autenticação"
+    for fn_name, expected_roles, mutation_call in checks:
+        body = get_function_body(source, fn_name)
+
+        assert "_require_role(" in body, f"{fn_name} não usa _require_role - checagem ausente"
+        role_call_pos = body.index("_require_role(")
+        role_set_text = body[role_call_pos:body.index(")", role_call_pos) + 1]
+        for role in expected_roles:
+            assert f'"{role}"' in role_set_text, f"{fn_name} deveria permitir o papel '{role}'"
+
+        assert mutation_call in body, f"{fn_name} não parece chamar {mutation_call} - verifique o teste"
+        mutation_pos = body.index(mutation_call)
+        assert role_call_pos < mutation_pos, (
+            f"{fn_name} muta o store/AMI antes de checar o papel"
         )
+
+
+def test_get_routes_require_appropriate_role():
+    source = load_source()
+    do_get_body = get_function_body(source, "do_GET")
+
+    for path_fragment, expected_roles in [
+        ("/api/extensions", {"admin", "supervisor"}),
+        ("/api/blocklist", {"admin", "supervisor"}),
+        ("/api/config/modo-feriado", {"admin", "supervisor"}),
+        ("/api/users", {"admin"}),
+    ]:
+        branch_start = do_get_body.index(path_fragment)
+        branch_text = do_get_body[branch_start:branch_start + 200]
+        assert "_require_role(" in branch_text, f"GET {path_fragment} sem checagem de papel"
+        role_call_pos = branch_text.index("_require_role(")
+        role_set_text = branch_text[role_call_pos:branch_text.index(")", role_call_pos) + 1]
+        for role in expected_roles:
+            assert f'"{role}"' in role_set_text, (
+                f"GET {path_fragment} deveria permitir o papel '{role}'"
+            )
 
 
 def test_password_is_stripped_before_sending_to_browser():
@@ -64,19 +101,21 @@ def test_password_is_stripped_before_sending_to_browser():
     assert "public_view(" in source
 
 
-def test_get_blocklist_requires_auth():
+def test_password_hash_is_stripped_before_sending_users_to_browser():
     source = load_source()
-    fn_start = source.index("def do_GET")
-    fn_end = source.index("def _handle_list_blocklist")
-    body = source[fn_start:fn_end]
-    blocklist_branch = body[body.index("/api/blocklist"):]
-    assert "_require_auth()" in blocklist_branch
+    assert "public_user(" in source
 
 
-def test_get_holiday_mode_requires_auth():
+def test_only_one_role_can_toggle_holiday_mode_and_it_includes_supervisor():
+    """
+    Modo feriado é operacional (não destrutivo) - por isso supervisor
+    também pode alternar, diferente de ramal/bloqueio/usuários que são
+    admin-only. Esse teste garante que a distinção não se perde numa
+    refatoração futura.
+    """
     source = load_source()
-    fn_start = source.index("def do_GET")
-    fn_end = source.index("def _handle_list_blocklist")
-    body = source[fn_start:fn_end]
-    holiday_branch = body[body.index("/api/config/modo-feriado"):]
-    assert "_require_auth()" in holiday_branch
+    holiday_body = get_function_body(source, "_handle_set_holiday_mode")
+    extension_body = get_function_body(source, "_handle_create_extension")
+
+    assert '"supervisor"' in holiday_body
+    assert '"supervisor"' not in extension_body

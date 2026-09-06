@@ -13,6 +13,9 @@ REQUIRED_IDS = [
     "formTitle", "formName", "formNumber", "formDisplayName", "formPassword",
     "saveBtn", "cancelEditBtn", "formError",
     "blocklistTableBody", "blocklistEmptyHint", "blocklistInput", "addBlockBtn", "blocklistError",
+    "myRoleBadge", "usersFormCard", "usersTableBody",
+    "userNameInput", "userRoleSelect", "userPasswordInput", "saveUserBtn",
+    "cancelUserEditBtn", "userFormError",
 ]
 
 
@@ -69,3 +72,30 @@ def test_holiday_mode_toggle_present():
     assert 'id="holidayModeBtn"' in html
     assert "/api/config/modo-feriado" in html
     assert "loadHolidayMode()" in html
+
+
+def test_users_section_exists_and_hidden_by_default():
+    """
+    A seção de usuários (backlog #19) só deve aparecer pra admin -
+    começa escondida no HTML, e applyRolePermissions() decide se mostra.
+    """
+    html = load_html()
+    assert 'id="usersFormCard" style="margin-top:24px; display:none;"' in html
+    assert "/api/users" in html
+
+
+def test_apply_role_permissions_hides_admin_only_cards_for_supervisor():
+    html = load_html()
+    fn_start = html.index("function applyRolePermissions")
+    fn_end = html.index("}", html.index("continua visível", fn_start))
+    body = html[fn_start:fn_end]
+    assert "extensionFormCard" in body
+    assert "blocklistFormCard" in body
+    assert "usersFormCard" in body
+    assert "isAdmin" in body
+
+
+def test_login_stores_role_from_response():
+    html = load_html()
+    assert "myRole = data.role;" in html
+    assert "applyRolePermissions()" in html

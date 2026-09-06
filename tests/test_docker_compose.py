@@ -174,6 +174,7 @@ def test_admin_api_service_present_and_login_disabled_by_default():
     assert "admin-api" in compose["services"]
     env = compose["services"]["admin-api"].get("environment", {})
     assert env.get("ADMIN_PASSWORD_HASH") == ""
+    assert "USERS_PATH" in env
 
 
 def test_admin_api_ami_secret_matches_manager_conf():

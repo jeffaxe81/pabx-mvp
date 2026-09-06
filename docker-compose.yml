@@ -133,6 +133,7 @@ services:
     environment:
       HTTP_PORT: "8091"
       STORE_PATH: "/app/data/extensions_store.json"
+      USERS_PATH: "/app/data/users.json"
       ASTERISK_CONF_DIR: "/app/asterisk-conf"
       STATIC_DIR: "/app/static"
       AMI_HOST: "127.0.0.1"
@@ -140,7 +141,10 @@ services:
       AMI_USERNAME: "admin-api"
       AMI_SECRET: "troque_esta_senha_ami_admin"   # deve bater com manager.conf
       ADMIN_USERNAME: "admin"
-      ADMIN_PASSWORD_HASH: ""   # vazio = login desabilitado (ver manual 16)
+      ADMIN_PASSWORD_HASH: ""   # vazio = login desabilitado; usado só pra
+      # criar o primeiro usuário (papel admin) na primeira vez que o
+      # painel sobe - depois disso, gerencie usuários pela própria
+      # interface (backlog #19, ver manual 25)
     command: python3 server.py
 
 volumes:

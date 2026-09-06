@@ -171,8 +171,9 @@ PWA) não estão listados aqui de novo — só o que falta ou está parcial.
     áudio placeholder), ver docs/manual-23
 18. ~~Grupos de toque~~ — IMPLEMENTADO (ramal 900 simultâneo, 901
     em sequência, com hints combinados), ver docs/manual-24
-19. Controle de permissões e perfis (admin/supervisor/atendente) -
-    pré-requisito natural do painel de administração (item 10)
+19. ~~Permissões e perfis~~ — IMPLEMENTADO (admin/supervisor no
+    painel de administração, backend checa papel antes de mutar),
+    ver docs/manual-25
 20. Autenticação em dois fatores para o painel de administração
 
 **Fase 3 — Diferenciais e IA (novo)**

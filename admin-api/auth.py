@@ -40,9 +40,9 @@ class SessionStore:
         self._ttl = ttl_seconds
         self._clock = clock
 
-    def create(self, username: str) -> str:
+    def create(self, username: str, role: str = "admin") -> str:
         token = secrets.token_hex(32)
-        self._sessions[token] = {"username": username, "expires_at": self._clock() + self._ttl}
+        self._sessions[token] = {"username": username, "role": role, "expires_at": self._clock() + self._ttl}
         return token
 
     def validate(self, token: str):
@@ -54,6 +54,13 @@ class SessionStore:
             del self._sessions[token]
             return None
         return session["username"]
+
+    def get_role(self, token: str):
+        """Retorna o papel (role) da sessão, ou None se o token for inválido/expirado."""
+        session = self._sessions.get(token)
+        if not session or self._clock() > session["expires_at"]:
+            return None
+        return session["role"]
 
     def revoke(self, token: str):
         self._sessions.pop(token, None)

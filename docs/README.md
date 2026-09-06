@@ -28,6 +28,7 @@ configurar, como testar manualmente, e limitações conhecidas.
 22. [E-mail de correio de voz](manual-22-email-correio-voz.md)
 23. [URA / IVR](manual-23-ura.md)
 24. [Grupos de toque](manual-24-grupos-de-toque.md)
+25. [Permissões e perfis](manual-25-permissoes-perfis.md)
 
 ## Regra de manutenção
 

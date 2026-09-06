@@ -78,7 +78,10 @@
 <div class="app-screen" id="appScreen">
   <div class="app-header">
     <h1>Ramais (tenant 1)</h1>
-    <button class="btn-ghost" id="logoutBtn">Sair</button>
+    <div style="display:flex; align-items:center; gap:10px;">
+      <span id="myRoleBadge" style="font-size:11px; color:var(--text-muted); text-transform:uppercase;"></span>
+      <button class="btn-ghost" id="logoutBtn">Sair</button>
+    </div>
   </div>
 
   <table>
@@ -89,7 +92,7 @@
   </table>
   <div class="empty-hint" id="emptyHint" style="display:none;">Nenhum ramal cadastrado ainda.</div>
 
-  <div class="form-card">
+  <div class="form-card" id="extensionFormCard">
     <h2 id="formTitle">Novo ramal</h2>
     <div class="form-row">
       <div>
@@ -131,7 +134,7 @@
     <button class="btn-ghost" id="holidayModeBtn">Carregando...</button>
   </div>
 
-  <div class="form-card" style="margin-top:24px;">
+  <div class="form-card" id="blocklistFormCard" style="margin-top:24px;">
     <h2>Números bloqueados (discagem de saída)</h2>
     <table>
       <thead><tr><th>Número</th><th></th></tr></thead>
@@ -147,6 +150,36 @@
     <button class="btn-primary" id="addBlockBtn" style="width:auto;">Bloquear</button>
     <div class="error-msg" id="blocklistError"></div>
   </div>
+
+  <div class="form-card" id="usersFormCard" style="margin-top:24px; display:none;">
+    <h2 id="userFormTitle">Usuários do painel</h2>
+    <table>
+      <thead><tr><th>Usuário</th><th>Papel</th><th></th></tr></thead>
+      <tbody id="usersTableBody"></tbody>
+    </table>
+    <div class="form-row" style="margin-top:14px;">
+      <div>
+        <label for="userNameInput">Usuário</label>
+        <input id="userNameInput" placeholder="maria">
+      </div>
+      <div>
+        <label for="userRoleSelect">Papel</label>
+        <select id="userRoleSelect">
+          <option value="supervisor">Supervisor (só leitura + modo feriado)</option>
+          <option value="admin">Admin (acesso total)</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div>
+        <label for="userPasswordInput">Senha (em branco ao editar = mantém a atual)</label>
+        <input id="userPasswordInput" type="text">
+      </div>
+    </div>
+    <button class="btn-primary" id="saveUserBtn" style="width:auto;">Salvar usuário</button>
+    <button class="btn-ghost" id="cancelUserEditBtn" style="display:none; margin-top:18px; margin-left:8px;">Cancelar edição</button>
+    <div class="error-msg" id="userFormError"></div>
+  </div>
 </div>
 
 <script>
@@ -156,6 +189,7 @@
   const el = (id) => document.getElementById(id);
   let token = null;
   let editingName = null;
+  let myRole = null;
 
   function apiFetch(path, options = {}) {
     return fetch(path, {
@@ -180,11 +214,14 @@
     })
       .then((data) => {
         token = data.token;
+        myRole = data.role;
         el('loginScreen').style.display = 'none';
         el('appScreen').style.display = 'block';
+        applyRolePermissions();
         loadExtensions();
         loadBlocklist();
         loadHolidayMode();
+        if (myRole === 'admin') loadUsers();
       })
       .catch((err) => { el('loginError').textContent = err.message; });
   });
@@ -192,6 +229,7 @@
   el('logoutBtn').addEventListener('click', () => {
     apiFetch('/api/logout', { method: 'POST' }).finally(() => {
       token = null;
+      myRole = null;
       el('appScreen').style.display = 'none';
       el('loginScreen').style.display = 'flex';
     });
@@ -334,6 +372,91 @@
       renderHolidayModeBtn();
     }).catch((err) => alert(err.message));
   });
+
+  // ---------- Permissões por papel ----------
+  function applyRolePermissions() {
+    el('myRoleBadge').textContent = myRole;
+
+    const isAdmin = myRole === 'admin';
+    el('extensionFormCard').style.display = isAdmin ? 'block' : 'none';
+    el('blocklistFormCard').style.display = isAdmin ? 'block' : 'none';
+    el('usersFormCard').style.display = isAdmin ? 'block' : 'none';
+    // A tabela de ramais/lista de bloqueio continua visível (leitura)
+    // pro supervisor - só os formulários de edição somem.
+  }
+
+  // ---------- Usuários do painel (só admin) ----------
+  let editingUsername = null;
+
+  function loadUsers() {
+    apiFetch('/api/users').then((data) => renderUsersTable(data.users || []));
+  }
+
+  function renderUsersTable(users) {
+    el('usersTableBody').innerHTML = users.map((u) => `
+      <tr>
+        <td class="mono">${u.username}</td>
+        <td>${u.role}</td>
+        <td class="actions">
+          <button class="btn-ghost" data-edit-user="${u.username}" data-role="${u.role}">Editar</button>
+          <button class="btn-danger" data-delete-user="${u.username}">Excluir</button>
+        </td>
+      </tr>`).join('');
+
+    document.querySelectorAll('[data-edit-user]').forEach((btn) => {
+      btn.addEventListener('click', () => startEditUser(btn.dataset.editUser, btn.dataset.role));
+    });
+    document.querySelectorAll('[data-delete-user]').forEach((btn) => {
+      btn.addEventListener('click', () => deleteUserAccount(btn.dataset.deleteUser));
+    });
+  }
+
+  function startEditUser(username, role) {
+    editingUsername = username;
+    el('userFormTitle').textContent = `Editando usuário: ${username}`;
+    el('userNameInput').value = username;
+    el('userNameInput').disabled = true;
+    el('userRoleSelect').value = role;
+    el('userPasswordInput').value = '';
+    el('cancelUserEditBtn').style.display = 'inline-block';
+  }
+
+  function resetUserForm() {
+    editingUsername = null;
+    el('userFormTitle').textContent = 'Usuários do painel';
+    el('userNameInput').value = '';
+    el('userNameInput').disabled = false;
+    el('userRoleSelect').value = 'supervisor';
+    el('userPasswordInput').value = '';
+    el('cancelUserEditBtn').style.display = 'none';
+    el('userFormError').textContent = '';
+  }
+
+  el('cancelUserEditBtn').addEventListener('click', resetUserForm);
+
+  el('saveUserBtn').addEventListener('click', () => {
+    el('userFormError').textContent = '';
+    const payload = {
+      username: el('userNameInput').value,
+      role: el('userRoleSelect').value,
+      password: el('userPasswordInput').value || undefined,
+    };
+
+    const request = editingUsername
+      ? apiFetch(`/api/users/${editingUsername}`, { method: 'PUT', body: JSON.stringify(payload) })
+      : apiFetch('/api/users', { method: 'POST', body: JSON.stringify(payload) });
+
+    request
+      .then(() => { resetUserForm(); loadUsers(); })
+      .catch((err) => { el('userFormError').textContent = err.message; });
+  });
+
+  function deleteUserAccount(username) {
+    if (!confirm(`Excluir o usuário "${username}"? Essa ação não pode ser desfeita.`)) return;
+    apiFetch(`/api/users/${username}`, { method: 'DELETE' })
+      .then(loadUsers)
+      .catch((err) => alert(err.message));
+  }
 })();
 </script>
 
