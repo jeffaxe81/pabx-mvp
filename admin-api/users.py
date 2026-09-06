@@ -63,6 +63,11 @@ def validate_user_input(data: dict, existing: list, editing_username: str = None
         "username": username,
         "password_hash": password_hash,
         "role": role,
+        # Campos de 2FA (backlog #20) - None/False pra usuário novo;
+        # em edição, 'data' já vem mesclado com os valores atuais (ver
+        # update_user), então .get() aqui preserva o que já existia.
+        "totp_secret": data.get("totp_secret"),
+        "totp_enabled": bool(data.get("totp_enabled", False)),
     }
 
 
@@ -105,5 +110,5 @@ def delete_user(path, username: str):
 
 
 def public_user(user: dict) -> dict:
-    """Remove o hash de senha antes de mandar pro navegador."""
-    return {k: v for k, v in user.items() if k != "password_hash"}
+    """Remove o hash de senha e o segredo TOTP antes de mandar pro navegador."""
+    return {k: v for k, v in user.items() if k not in ("password_hash", "totp_secret")}

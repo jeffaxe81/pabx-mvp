@@ -8,6 +8,7 @@ ADMIN_HTML = Path(__file__).parent.parent / "admin" / "index.html"
 
 REQUIRED_IDS = [
     "loginScreen", "loginUser", "loginPass", "loginBtn", "loginError",
+    "totpScreen", "totpCodeInput", "totpVerifyBtn", "totpCancelBtn", "totpError",
     "appScreen", "logoutBtn",
     "extensionsTableBody", "emptyHint",
     "formTitle", "formName", "formNumber", "formDisplayName", "formPassword",
@@ -16,6 +17,8 @@ REQUIRED_IDS = [
     "myRoleBadge", "usersFormCard", "usersTableBody",
     "userNameInput", "userRoleSelect", "userPasswordInput", "saveUserBtn",
     "cancelUserEditBtn", "userFormError",
+    "totpSetupBtn", "totpSetupBlock", "totpSecretDisplay", "totpConfirmInput", "totpConfirmBtn",
+    "totpDisableBlock", "totpDisablePasswordInput", "totpDisableBtn", "totpConfigError",
 ]
 
 
@@ -99,3 +102,36 @@ def test_login_stores_role_from_response():
     html = load_html()
     assert "myRole = data.role;" in html
     assert "applyRolePermissions()" in html
+
+
+def test_login_handles_totp_required_flow():
+    """
+    O login precisa reconhecer requires_totp e mostrar a tela de
+    verificação em vez de completar o login direto - senão o 2FA do
+    backend fica sem efeito prático nenhum na interface.
+    """
+    html = load_html()
+    fn_start = html.index("el('loginBtn').addEventListener")
+    fn_end = html.index("});", html.index("catch", fn_start))
+    body = html[fn_start:fn_end]
+    assert "data.requires_totp" in body
+    assert "pendingTotpToken = data.pending_token" in body
+    assert "completeLogin(data)" in body
+
+
+def test_totp_setup_flow_shows_secret_before_activation():
+    html = load_html()
+    setup_start = html.index("el('totpSetupBtn').addEventListener")
+    setup_end = html.index("});", html.index("catch", setup_start))
+    body = html[setup_start:setup_end]
+    assert "/api/totp/setup" in body
+    assert "totpSecretDisplay" in body
+
+
+def test_totp_disable_sends_password_confirmation():
+    html = load_html()
+    disable_start = html.index("el('totpDisableBtn').addEventListener")
+    disable_end = html.index("});", html.index("catch", disable_start))
+    body = html[disable_start:disable_end]
+    assert "/api/totp/disable" in body
+    assert "totpDisablePasswordInput" in body

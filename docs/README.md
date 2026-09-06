@@ -29,6 +29,7 @@ configurar, como testar manualmente, e limitações conhecidas.
 23. [URA / IVR](manual-23-ura.md)
 24. [Grupos de toque](manual-24-grupos-de-toque.md)
 25. [Permissões e perfis](manual-25-permissoes-perfis.md)
+26. [Autenticação em dois fatores (2FA)](manual-26-2fa.md)
 
 ## Regra de manutenção
 

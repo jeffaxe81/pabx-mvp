@@ -75,6 +75,18 @@
   </div>
 </div>
 
+<div class="login-screen" id="totpScreen" style="display:none;">
+  <div class="login-card">
+    <h1>Verificação em duas etapas</h1>
+    <p>Digite o código de 6 dígitos do seu app autenticador.</p>
+    <label for="totpCodeInput">Código</label>
+    <input id="totpCodeInput" inputmode="numeric" maxlength="6" placeholder="123456">
+    <button class="btn-primary" id="totpVerifyBtn">Verificar</button>
+    <button class="btn-ghost" id="totpCancelBtn" style="width:100%; margin-top:10px;">Cancelar</button>
+    <div class="error-msg" id="totpError"></div>
+  </div>
+</div>
+
 <div class="app-screen" id="appScreen">
   <div class="app-header">
     <h1>Ramais (tenant 1)</h1>
@@ -151,6 +163,32 @@
     <div class="error-msg" id="blocklistError"></div>
   </div>
 
+  <div class="form-card" style="margin-top:24px;">
+    <h2>Autenticação em dois fatores (2FA)</h2>
+    <p style="font-size:13px; color:var(--text-muted); margin:0 0 12px;" id="totpStatusText">
+      Carregando...
+    </p>
+
+    <div id="totpSetupBlock" style="display:none;">
+      <p style="font-size:13px; color:var(--text-muted);">
+        Segredo (cole num app autenticador como Google Authenticator ou Authy):
+      </p>
+      <p class="mono" id="totpSecretDisplay" style="word-break:break-all; background:var(--panel-alt); padding:8px; border-radius:4px; font-size:12px;"></p>
+      <label for="totpConfirmInput">Código gerado pelo app (pra confirmar)</label>
+      <input id="totpConfirmInput" inputmode="numeric" maxlength="6" placeholder="123456">
+      <button class="btn-primary" id="totpConfirmBtn" style="width:auto; margin-top:10px;">Confirmar e ativar</button>
+    </div>
+
+    <button class="btn-ghost" id="totpSetupBtn" style="display:none;">Configurar 2FA</button>
+
+    <div id="totpDisableBlock" style="display:none;">
+      <label for="totpDisablePasswordInput">Confirme sua senha pra desativar</label>
+      <input id="totpDisablePasswordInput" type="password">
+      <button class="btn-danger" id="totpDisableBtn" style="margin-top:10px;">Desativar 2FA</button>
+    </div>
+    <div class="error-msg" id="totpConfigError"></div>
+  </div>
+
   <div class="form-card" id="usersFormCard" style="margin-top:24px; display:none;">
     <h2 id="userFormTitle">Usuários do painel</h2>
     <table>
@@ -206,6 +244,22 @@
     });
   }
 
+  let pendingTotpToken = null;
+
+  function completeLogin(data) {
+    token = data.token;
+    myRole = data.role;
+    el('loginScreen').style.display = 'none';
+    el('totpScreen').style.display = 'none';
+    el('appScreen').style.display = 'block';
+    applyRolePermissions();
+    loadExtensions();
+    loadBlocklist();
+    loadHolidayMode();
+    loadTotpStatus();
+    if (myRole === 'admin') loadUsers();
+  }
+
   el('loginBtn').addEventListener('click', () => {
     el('loginError').textContent = '';
     apiFetch('/api/login', {
@@ -213,17 +267,33 @@
       body: JSON.stringify({ username: el('loginUser').value, password: el('loginPass').value }),
     })
       .then((data) => {
-        token = data.token;
-        myRole = data.role;
-        el('loginScreen').style.display = 'none';
-        el('appScreen').style.display = 'block';
-        applyRolePermissions();
-        loadExtensions();
-        loadBlocklist();
-        loadHolidayMode();
-        if (myRole === 'admin') loadUsers();
+        if (data.requires_totp) {
+          pendingTotpToken = data.pending_token;
+          el('loginScreen').style.display = 'none';
+          el('totpScreen').style.display = 'flex';
+          el('totpCodeInput').value = '';
+          el('totpError').textContent = '';
+          return;
+        }
+        completeLogin(data);
       })
       .catch((err) => { el('loginError').textContent = err.message; });
+  });
+
+  el('totpVerifyBtn').addEventListener('click', () => {
+    el('totpError').textContent = '';
+    apiFetch('/api/login/verify-totp', {
+      method: 'POST',
+      body: JSON.stringify({ pending_token: pendingTotpToken, code: el('totpCodeInput').value }),
+    })
+      .then(completeLogin)
+      .catch((err) => { el('totpError').textContent = err.message; });
+  });
+
+  el('totpCancelBtn').addEventListener('click', () => {
+    pendingTotpToken = null;
+    el('totpScreen').style.display = 'none';
+    el('loginScreen').style.display = 'flex';
   });
 
   el('logoutBtn').addEventListener('click', () => {
@@ -457,6 +527,55 @@
       .then(loadUsers)
       .catch((err) => alert(err.message));
   }
+
+  // ---------- 2FA (autoatendimento - cada usuário configura o próprio) ----------
+  function loadTotpStatus() {
+    // Não existe endpoint GET dedicado - usamos a lista de usuários se
+    // formos admin, senão assumimos desativado até o usuário configurar
+    // (o backend é a fonte de verdade real; isso é só o estado inicial da tela).
+    el('totpStatusText').textContent = 'Proteja sua conta com um segundo fator de autenticação.';
+    el('totpSetupBtn').style.display = 'inline-block';
+    el('totpSetupBlock').style.display = 'none';
+    el('totpDisableBlock').style.display = 'none';
+  }
+
+  el('totpSetupBtn').addEventListener('click', () => {
+    el('totpConfigError').textContent = '';
+    apiFetch('/api/totp/setup', { method: 'POST' })
+      .then((data) => {
+        el('totpSecretDisplay').textContent = data.secret;
+        el('totpSetupBlock').style.display = 'block';
+        el('totpSetupBtn').style.display = 'none';
+      })
+      .catch((err) => { el('totpConfigError').textContent = err.message; });
+  });
+
+  el('totpConfirmBtn').addEventListener('click', () => {
+    el('totpConfigError').textContent = '';
+    apiFetch('/api/totp/confirm', {
+      method: 'POST',
+      body: JSON.stringify({ code: el('totpConfirmInput').value }),
+    })
+      .then(() => {
+        el('totpSetupBlock').style.display = 'none';
+        el('totpStatusText').textContent = '2FA ativado nesta conta.';
+        el('totpDisableBlock').style.display = 'block';
+      })
+      .catch((err) => { el('totpConfigError').textContent = err.message; });
+  });
+
+  el('totpDisableBtn').addEventListener('click', () => {
+    el('totpConfigError').textContent = '';
+    apiFetch('/api/totp/disable', {
+      method: 'POST',
+      body: JSON.stringify({ password: el('totpDisablePasswordInput').value }),
+    })
+      .then(() => {
+        el('totpDisablePasswordInput').value = '';
+        loadTotpStatus();
+      })
+      .catch((err) => { el('totpConfigError').textContent = err.message; });
+  });
 })();
 </script>
 

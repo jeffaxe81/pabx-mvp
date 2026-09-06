@@ -24,6 +24,7 @@ from conf_generator import render_all
 from ami_client import AMIClient
 from blocklist import validate_blocklist_number
 from users import load_users, save_users, find_user, add_user, update_user, delete_user, public_user
+from totp import generate_secret, verify_totp, build_provisioning_uri
 
 HTTP_PORT = int(os.environ.get("HTTP_PORT", "8091"))
 STORE_PATH = os.environ.get("STORE_PATH", "/app/data/extensions_store.json")
@@ -45,6 +46,13 @@ AMI_PORT = int(os.environ.get("AMI_PORT", "5038"))
 AMI_USERNAME = os.environ.get("AMI_USERNAME", "admin-api")
 AMI_SECRET = os.environ.get("AMI_SECRET", "troque_esta_senha_ami")
 
+# 2FA (backlog #20). Papel-sentinela usado só na sessão pré-login,
+# entre "senha confirmada" e "código TOTP confirmado" - nunca bate em
+# nenhum _require_role() de verdade, então uma sessão pendente nunca
+# consegue fazer nada além de terminar a verificação.
+TOTP_PENDING_ROLE = "__pending_totp__"
+TOTP_ISSUER = "PABX Admin"
+
 sessions = SessionStore()
 
 
@@ -64,6 +72,8 @@ def ensure_bootstrap_admin():
         "username": ADMIN_USERNAME,
         "password_hash": ADMIN_PASSWORD_HASH,
         "role": "admin",
+        "totp_secret": None,
+        "totp_enabled": False,
     }])
 
 
@@ -212,8 +222,76 @@ class Handler(BaseHTTPRequestHandler):
             self._handle_set_holiday_mode()
         elif self.path == "/api/users":
             self._handle_create_user()
+        elif self.path == "/api/login/verify-totp":
+            self._handle_verify_totp_login()
+        elif self.path == "/api/totp/setup":
+            self._handle_totp_setup()
+        elif self.path == "/api/totp/confirm":
+            self._handle_totp_confirm()
+        elif self.path == "/api/totp/disable":
+            self._handle_totp_disable()
         else:
             self._send_json(404, {"error": "not found"})
+
+    def _handle_totp_setup(self):
+        """
+        Autoatendimento: qualquer usuário logado configura o 2FA da
+        PRÓPRIA conta, não de terceiros - por isso só _require_auth(),
+        sem checar papel (admin e supervisor podem ativar 2FA igual).
+        """
+        username = self._require_auth()
+        if not username:
+            return
+
+        secret = generate_secret()
+        # Guarda o segredo já, mas com totp_enabled=False - só vira
+        # "de verdade" depois de confirmado com um código válido
+        # (senão a pessoa poderia travar a própria conta com um
+        # segredo que nunca configurou no app dela).
+        ok, error, cleaned = update_user(USERS_PATH, username, {"totp_secret": secret, "totp_enabled": False})
+        if not ok:
+            self._send_json(400, {"error": error})
+            return
+
+        uri = build_provisioning_uri(secret, username, issuer=TOTP_ISSUER)
+        self._send_json(200, {"secret": secret, "otpauth_uri": uri})
+
+    def _handle_totp_confirm(self):
+        username = self._require_auth()
+        if not username:
+            return
+
+        data = self._read_json_body()
+        code = (data or {}).get("code", "")
+
+        user = find_user(load_users(USERS_PATH), username)
+        if not user or not user.get("totp_secret"):
+            self._send_json(400, {"error": "nenhuma configuração de 2FA pendente - chame /api/totp/setup primeiro"})
+            return
+
+        if not verify_totp(user["totp_secret"], code):
+            self._send_json(401, {"error": "código inválido"})
+            return
+
+        update_user(USERS_PATH, username, {"totp_enabled": True})
+        self._send_json(200, {"enabled": True})
+
+    def _handle_totp_disable(self):
+        """Exige a senha de novo - desativar 2FA é sensível o bastante pra reconfirmar identidade."""
+        username = self._require_auth()
+        if not username:
+            return
+
+        data = self._read_json_body()
+        password = (data or {}).get("password", "")
+
+        user = find_user(load_users(USERS_PATH), username)
+        if not user or not verify_password(password, user["password_hash"]):
+            self._send_json(401, {"error": "senha incorreta"})
+            return
+
+        update_user(USERS_PATH, username, {"totp_secret": None, "totp_enabled": False})
+        self._send_json(200, {"enabled": False})
 
     def _handle_create_user(self):
         if not self._require_role({"admin"}):
@@ -292,6 +370,37 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json(401, {"error": "usuário ou senha inválidos"})
             return
 
+        if user.get("totp_enabled"):
+            # Senha confirmada, mas falta o segundo fator - emite um
+            # token pendente de curta duração em vez da sessão de verdade.
+            pending_token = sessions.create(username, role=TOTP_PENDING_ROLE)
+            self._send_json(200, {"requires_totp": True, "pending_token": pending_token})
+            return
+
+        token = sessions.create(username, role=user["role"])
+        self._send_json(200, {"token": token, "role": user["role"]})
+
+    def _handle_verify_totp_login(self):
+        data = self._read_json_body()
+        if data is None:
+            self._send_json(400, {"error": "JSON inválido"})
+            return
+
+        pending_token = data.get("pending_token", "")
+        code = data.get("code", "")
+
+        username = sessions.validate(pending_token)
+        role_check = sessions.get_role(pending_token)
+        if not username or role_check != TOTP_PENDING_ROLE:
+            self._send_json(401, {"error": "sessão de verificação inválida ou expirada"})
+            return
+
+        user = find_user(load_users(USERS_PATH), username)
+        if not user or not verify_totp(user.get("totp_secret", ""), code):
+            self._send_json(401, {"error": "código de verificação inválido"})
+            return
+
+        sessions.revoke(pending_token)
         token = sessions.create(username, role=user["role"])
         self._send_json(200, {"token": token, "role": user["role"]})
 

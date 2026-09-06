@@ -119,3 +119,61 @@ def test_only_one_role_can_toggle_holiday_mode_and_it_includes_supervisor():
 
     assert '"supervisor"' in holiday_body
     assert '"supervisor"' not in extension_body
+
+
+def test_totp_setup_and_confirm_only_require_own_authentication():
+    """
+    2FA é autoatendimento - configurar o 2FA da PRÓPRIA conta só
+    precisa estar logado, não precisa ser admin (senão supervisor
+    nunca conseguiria proteger a própria conta).
+    """
+    source = load_source()
+    for fn_name in ("_handle_totp_setup", "_handle_totp_confirm"):
+        body = get_function_body(source, fn_name)
+        assert "_require_auth()" in body
+        assert "_require_role(" not in body
+
+
+def test_totp_confirm_does_not_enable_before_verifying_code():
+    """
+    O segredo é salvo com totp_enabled=False no setup, e só vira True
+    depois que um código válido é conferido - nunca antes.
+    """
+    source = load_source()
+    body = get_function_body(source, "_handle_totp_confirm")
+    verify_pos = body.index("verify_totp(")
+    enable_pos = body.index('"totp_enabled": True')
+    assert verify_pos < enable_pos
+
+
+def test_totp_disable_requires_password_confirmation():
+    source = load_source()
+    body = get_function_body(source, "_handle_totp_disable")
+    verify_pos = body.index("verify_password(")
+    disable_pos = body.index('"totp_enabled": False')
+    assert verify_pos < disable_pos
+
+
+def test_login_returns_pending_token_instead_of_real_session_when_totp_enabled():
+    """
+    Se o usuário tem 2FA ligado, o login NUNCA deve devolver um token
+    de sessão de verdade antes do código ser confirmado - senão o
+    segundo fator é só decorativo.
+    """
+    source = load_source()
+    body = get_function_body(source, "_handle_login")
+    totp_check_pos = body.index('user.get("totp_enabled")')
+    real_session_calls = [m.start() for m in re.finditer(r'sessions\.create\(username, role=user\["role"\]\)', body)]
+    assert len(real_session_calls) == 1
+    assert totp_check_pos < real_session_calls[0]
+
+
+def test_verify_totp_login_checks_pending_role_sentinel():
+    """
+    O endpoint que completa o login com o código TOTP precisa exigir
+    que o token pré-autenticação seja realmente do tipo "pendente de
+    2FA" - senão uma sessão comum poderia ser reaproveitada aqui.
+    """
+    source = load_source()
+    body = get_function_body(source, "_handle_verify_totp_login")
+    assert "TOTP_PENDING_ROLE" in body

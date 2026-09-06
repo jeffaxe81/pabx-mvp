@@ -125,6 +125,40 @@ def test_public_user_strips_password_hash():
     assert result["username"] == "joao"
 
 
+def test_public_user_strips_totp_secret_but_keeps_enabled_flag():
+    from users import public_user
+    user = {"username": "joao", "password_hash": "x", "role": "admin", "totp_secret": "SEGREDO", "totp_enabled": True}
+    result = public_user(user)
+    assert "totp_secret" not in result
+    assert result["totp_enabled"] is True
+
+
+def test_validate_user_input_defaults_totp_fields_for_new_user():
+    ok, error, cleaned = validate_user_input(ADMIN_USER, existing=[])
+    assert ok is True
+    assert cleaned["totp_secret"] is None
+    assert cleaned["totp_enabled"] is False
+
+
+def test_update_user_preserves_totp_fields_when_not_touched(tmp_path):
+    """
+    Editar o papel de um usuário não pode acidentalmente apagar o
+    2FA dele - os campos precisam sobreviver a uma edição que não
+    mexe neles.
+    """
+    path = tmp_path / "users.json"
+    save_users(path, [{
+        "username": "joao", "password_hash": "x", "role": "admin",
+        "totp_secret": "SEGREDO123", "totp_enabled": True,
+    }])
+
+    ok, error, cleaned = update_user(path, "joao", {"role": "supervisor"})
+
+    assert ok is True
+    assert cleaned["totp_secret"] == "SEGREDO123"
+    assert cleaned["totp_enabled"] is True
+
+
 def test_delete_user_rejects_unknown_username(tmp_path):
     path = tmp_path / "users.json"
     add_user(path, ADMIN_USER)

@@ -174,7 +174,11 @@ PWA) não estão listados aqui de novo — só o que falta ou está parcial.
 19. ~~Permissões e perfis~~ — IMPLEMENTADO (admin/supervisor no
     painel de administração, backend checa papel antes de mutar),
     ver docs/manual-25
-20. Autenticação em dois fatores para o painel de administração
+20. ~~Autenticação em dois fatores (2FA)~~ — IMPLEMENTADO (TOTP
+    RFC 6238 puro stdlib, validado contra vetor de teste oficial,
+    autoatendimento por usuário), ver docs/manual-26
+
+**Fase 2 completa (17-20) ✅**
 
 **Fase 3 — Diferenciais e IA (novo)**
 21. Transcrição automática de chamadas
