@@ -46,6 +46,43 @@ class AMIClient:
             "voicemail": voicemail_response.get("Response"),
         }
 
+    def block_number(self, number: str):
+        """Adiciona um número na família 'blocklist' do AstDB (usado pelo dialplan)."""
+        return self._send_action({
+            "Action": "DBPut", "Family": "blocklist", "Key": number, "Val": "1",
+        })
+
+    def unblock_number(self, number: str):
+        return self._send_action({
+            "Action": "DBDel", "Family": "blocklist", "Key": number,
+        })
+
+    def list_blocked_numbers(self):
+        """
+        DBGetTree retorna uma Action ID com múltiplos eventos
+        DBGetTreeEntry - simplificado aqui: lê tudo que vier do socket
+        num intervalo curto, já que é uma lista pequena por natureza.
+        """
+        with self._lock:
+            self._sock.sendall(build_action({
+                "Action": "DBGetTree", "Family": "blocklist",
+            }).encode("utf-8"))
+            self._sock.settimeout(2.0)
+            data = b""
+            try:
+                while True:
+                    chunk = self._sock.recv(4096)
+                    if not chunk:
+                        break
+                    data += chunk
+            except socket.timeout:
+                pass
+            finally:
+                self._sock.settimeout(None)
+
+        blocks = parse_ami_blocks(data.decode("utf-8", errors="replace"))
+        return [b["Key"].split("/")[-1] for b in blocks if b.get("Key")]
+
     def close(self):
         if self._sock:
             self._sock.close()

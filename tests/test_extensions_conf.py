@@ -118,6 +118,45 @@ def test_click_to_call_context_dials_via_tdm_gateway():
     assert "Dial(PJSIP/${EXTEN}@gateway-tdm" in click_block
 
 
+def test_outbound_calls_check_blocklist_before_dialing():
+    """
+    Chamada de saída (backlog #14) precisa checar a lista de bloqueio
+    (AstDB) ANTES de discar - senão o número bloqueado pelo painel de
+    administração continua discando normalmente.
+    """
+    blocks = blocks_as_dict(load_ext_blocks())
+    text = blocks["t1-internal"].replace(" ", "")
+    exten_pos = text.index("exten=>_0.,1,")
+    blocklist_check_pos = text.index("DB(blocklist/", exten_pos)
+    dial_pos = text.index("Dial(PJSIP/${DESTINO}@gateway-tdm,30)", exten_pos)
+    assert exten_pos < blocklist_check_pos < dial_pos
+
+
+def test_blocked_number_route_uses_congestion_not_normal_dial():
+    blocks = blocks_as_dict(load_ext_blocks())
+    text = blocks["t1-internal"]
+    blocked_start = text.index("exten => numero-bloqueado,1,")
+    blocked_end = text.index("exten =>", blocked_start + 1)
+    blocked_block = text[blocked_start:blocked_end].replace(" ", "")
+    assert "Congestion()" in blocked_block
+    assert "Dial(PJSIP/" not in blocked_block
+
+
+def test_alternate_route_uses_second_trunk():
+    """
+    Prefixo "00" precisa rotear pelo tronco alternativo
+    (gateway-tdm-2), não pelo padrão - é isso que torna isso uma
+    "rota diferente por prefixo", não só um bloqueio.
+    """
+    blocks = blocks_as_dict(load_ext_blocks())
+    text = blocks["t1-internal"]
+    alt_start = text.index("exten => rota-alternativa,1,")
+    alt_end = text.index("exten =>", alt_start + 1)
+    alt_block = text[alt_start:alt_end].replace(" ", "")
+    assert "@gateway-tdm-2," in alt_block
+    assert "@gateway-tdm," not in alt_block
+
+
 def test_every_hint_references_an_endpoint_that_exists_in_pjsip_conf():
     """
     Todo 'hint,PJSIP/xxx' em extensions.conf precisa ter um endpoint

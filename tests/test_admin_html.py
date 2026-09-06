@@ -12,6 +12,7 @@ REQUIRED_IDS = [
     "extensionsTableBody", "emptyHint",
     "formTitle", "formName", "formNumber", "formDisplayName", "formPassword",
     "saveBtn", "cancelEditBtn", "formError",
+    "blocklistTableBody", "blocklistEmptyHint", "blocklistInput", "addBlockBtn", "blocklistError",
 ]
 
 
@@ -55,3 +56,9 @@ def test_password_field_is_optional_in_form():
     """
     html = load_html()
     assert "em branco" in html.lower() or "gera automático" in html.lower()
+
+
+def test_blocklist_uses_bearer_token_like_extensions():
+    html = load_html()
+    assert "/api/blocklist" in html
+    assert "loadBlocklist()" in html

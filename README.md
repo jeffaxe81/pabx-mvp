@@ -222,6 +222,10 @@ persistido em disco — ver `docs/manual-18-relatorios.md`.
 opcional do servidor, avisando quem está ligando assim que a chamada
 começa a tocar — ver `docs/manual-19-crm-screen-pop.md`.
 
+**E regras de discagem externa**: bloqueio de números via AstDB
+(gerenciável pelo painel de administração), rota alternativa por
+prefixo, segundo tronco (`gateway-tdm-2`) — ver `docs/manual-20-discagem-externa.md`.
+
 Para ajustar quais ramais aparecem na lista de colegas, edite o array
 `COLLEAGUES` no início do `<script>` em `webphone/index.html`. Cada
 ramal monitorado precisa ter um `hint` correspondente em
@@ -246,7 +250,7 @@ cd ../queue-api
 python3 -m pytest tests/ -v
 ```
 
-248 testes estáticos no total, em 3 suítes (`tests/`, `queue-api/tests/`,
+260 testes estáticos no total, em 3 suítes (`tests/`, `queue-api/tests/`,
 `admin-api/tests/`) — nenhuma delas sobe o Asterisk de verdade.
 Detalhes em `tests/README.md`.
 

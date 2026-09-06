@@ -115,6 +115,23 @@
     <button class="btn-ghost" id="cancelEditBtn" style="display:none; margin-top:18px; margin-left:8px;">Cancelar edição</button>
     <div class="error-msg" id="formError"></div>
   </div>
+
+  <div class="form-card" style="margin-top:24px;">
+    <h2>Números bloqueados (discagem de saída)</h2>
+    <table>
+      <thead><tr><th>Número</th><th></th></tr></thead>
+      <tbody id="blocklistTableBody"></tbody>
+    </table>
+    <div class="empty-hint" id="blocklistEmptyHint" style="display:none;">Nenhum número bloqueado.</div>
+    <div class="form-row" style="margin-top:14px;">
+      <div>
+        <label for="blocklistInput">Número a bloquear</label>
+        <input id="blocklistInput" placeholder="0900123456">
+      </div>
+    </div>
+    <button class="btn-primary" id="addBlockBtn" style="width:auto;">Bloquear</button>
+    <div class="error-msg" id="blocklistError"></div>
+  </div>
 </div>
 
 <script>
@@ -151,6 +168,7 @@
         el('loginScreen').style.display = 'none';
         el('appScreen').style.display = 'block';
         loadExtensions();
+        loadBlocklist();
       })
       .catch((err) => { el('loginError').textContent = err.message; });
   });
@@ -235,6 +253,40 @@
     if (!confirm(`Excluir o ramal "${name}"? Essa ação não pode ser desfeita.`)) return;
     apiFetch(`/api/extensions/${name}`, { method: 'DELETE' })
       .then(loadExtensions)
+      .catch((err) => alert(err.message));
+  }
+
+  // ---------- Lista de bloqueio (discagem externa) ----------
+  function loadBlocklist() {
+    apiFetch('/api/blocklist').then((data) => renderBlocklist(data.numbers || []));
+  }
+
+  function renderBlocklist(numbers) {
+    el('blocklistEmptyHint').style.display = numbers.length === 0 ? 'block' : 'none';
+    el('blocklistTableBody').innerHTML = numbers.map((number) => `
+      <tr>
+        <td class="mono">${number}</td>
+        <td class="actions"><button class="btn-danger" data-unblock="${number}">Desbloquear</button></td>
+      </tr>`).join('');
+
+    document.querySelectorAll('[data-unblock]').forEach((btn) => {
+      btn.addEventListener('click', () => unblockNumber(btn.dataset.unblock));
+    });
+  }
+
+  el('addBlockBtn').addEventListener('click', () => {
+    el('blocklistError').textContent = '';
+    apiFetch('/api/blocklist', {
+      method: 'POST',
+      body: JSON.stringify({ number: el('blocklistInput').value }),
+    })
+      .then(() => { el('blocklistInput').value = ''; loadBlocklist(); })
+      .catch((err) => { el('blocklistError').textContent = err.message; });
+  });
+
+  function unblockNumber(number) {
+    apiFetch(`/api/blocklist/${number}`, { method: 'DELETE' })
+      .then(loadBlocklist)
       .catch((err) => alert(err.message));
   }
 })();

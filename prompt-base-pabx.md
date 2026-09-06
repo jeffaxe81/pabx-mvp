@@ -154,8 +154,9 @@ PWA) não estão listados aqui de novo — só o que falta ou está parcial.
 13. ~~Integração CRM PABX→CRM (screen-pop)~~ — IMPLEMENTADO (link
     clicável configurável + webhook opcional via DialBegin), ver
     docs/manual-19
-14. Regras de discagem externa: bloqueio de números/DDIs, prefixos
-    por rota, múltiplos troncos por operadora (hoje é 1 tronco fixo)
+14. ~~Regras de discagem externa~~ — IMPLEMENTADO (bloqueio via
+    AstDB gerenciado pelo painel, rota alternativa por prefixo,
+    2º tronco gateway-tdm-2), ver docs/manual-20
 15. Busca de gravações por atendente/número e política de retenção
     (hoje só lista por data, sem expurgo automático - manual 09)
 16. Envio de correio de voz por e-mail (infraestrutura já existe em

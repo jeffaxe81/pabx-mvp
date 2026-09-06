@@ -22,6 +22,7 @@ from auth import hash_password, verify_password, SessionStore
 from store import add_extension, update_extension, delete_extension, load_store
 from conf_generator import render_all
 from ami_client import AMIClient
+from blocklist import validate_blocklist_number
 
 HTTP_PORT = int(os.environ.get("HTTP_PORT", "8091"))
 STORE_PATH = os.environ.get("STORE_PATH", "/app/data/extensions_store.json")
@@ -99,10 +100,25 @@ class Handler(BaseHTTPRequestHandler):
                 return
             extensions = [public_view(e) for e in load_store(STORE_PATH)]
             self._send_json(200, {"extensions": extensions})
+        elif self.path.startswith("/api/blocklist"):
+            if not self._require_auth():
+                return
+            self._handle_list_blocklist()
         elif self.path in ("/", "/index.html"):
             self._serve_static("index.html", "text/html")
         else:
             self._send_json(404, {"error": "not found"})
+
+    def _handle_list_blocklist(self):
+        client = AMIClient(AMI_HOST, AMI_PORT, AMI_USERNAME, AMI_SECRET)
+        try:
+            client.connect_and_login()
+            numbers = client.list_blocked_numbers()
+            self._send_json(200, {"numbers": numbers})
+        except Exception as exc:  # noqa: BLE001
+            self._send_json(502, {"error": f"falha ao consultar AMI: {exc}"})
+        finally:
+            client.close()
 
     def _serve_static(self, filename, content_type):
         file_path = STATIC_DIR / filename
@@ -124,8 +140,36 @@ class Handler(BaseHTTPRequestHandler):
             self._handle_logout()
         elif self.path == "/api/extensions":
             self._handle_create_extension()
+        elif self.path == "/api/blocklist":
+            self._handle_add_to_blocklist()
         else:
             self._send_json(404, {"error": "not found"})
+
+    def _handle_add_to_blocklist(self):
+        if not self._require_auth():
+            return
+        data = self._read_json_body()
+        if data is None:
+            self._send_json(400, {"error": "JSON inválido"})
+            return
+
+        number = validate_blocklist_number(data.get("number", ""))
+        if not number:
+            self._send_json(400, {"error": "número inválido"})
+            return
+
+        client = AMIClient(AMI_HOST, AMI_PORT, AMI_USERNAME, AMI_SECRET)
+        try:
+            client.connect_and_login()
+            response = client.block_number(number)
+            if response.get("Response") == "Success":
+                self._send_json(201, {"number": number})
+            else:
+                self._send_json(502, {"error": "falha ao bloquear", "detail": response})
+        except Exception as exc:  # noqa: BLE001
+            self._send_json(502, {"error": f"falha ao consultar AMI: {exc}"})
+        finally:
+            client.close()
 
     def _handle_login(self):
         data = self._read_json_body()
@@ -202,9 +246,14 @@ class Handler(BaseHTTPRequestHandler):
         self._send_json(200, {"extension": public_view(cleaned), "reload": reload_result})
 
     def do_DELETE(self):
-        if not self.path.startswith("/api/extensions/"):
+        if self.path.startswith("/api/extensions/"):
+            self._handle_delete_extension()
+        elif self.path.startswith("/api/blocklist/"):
+            self._handle_remove_from_blocklist()
+        else:
             self._send_json(404, {"error": "not found"})
-            return
+
+    def _handle_delete_extension(self):
         if not self._require_auth():
             return
 
@@ -221,6 +270,21 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         self._send_json(200, {"ok": True, "reload": reload_result})
+
+    def _handle_remove_from_blocklist(self):
+        if not self._require_auth():
+            return
+
+        number = self.path[len("/api/blocklist/"):]
+        client = AMIClient(AMI_HOST, AMI_PORT, AMI_USERNAME, AMI_SECRET)
+        try:
+            client.connect_and_login()
+            client.unblock_number(number)
+            self._send_json(200, {"ok": True})
+        except Exception as exc:  # noqa: BLE001
+            self._send_json(502, {"error": f"falha ao consultar AMI: {exc}"})
+        finally:
+            client.close()
 
 
 def main():

@@ -23,28 +23,36 @@ def test_login_disabled_by_default_without_password_hash():
 
 def test_all_extension_mutating_routes_require_auth_before_touching_store():
     """
-    Criar/editar/apagar ramal precisa checar autenticação ANTES de
-    mexer no store - senão a proteção é decorativa.
+    Criar/editar/apagar ramal, e adicionar/remover número da lista de
+    bloqueio, precisam checar autenticação ANTES de mexer no store/AMI
+    - senão a proteção é decorativa.
     """
     source = load_source()
 
-    for fn_name, next_marker in [
+    checks = [
         ("_handle_create_extension", "def do_PUT"),
         ("do_PUT", "def do_DELETE"),
-        ("do_DELETE", "def main"),
-    ]:
+        ("_handle_delete_extension", "def _handle_remove_from_blocklist"),
+        ("_handle_remove_from_blocklist", "def main"),
+        ("_handle_add_to_blocklist", "def _handle_login"),
+    ]
+
+    for fn_name, next_marker in checks:
         fn_start = source.index(f"def {fn_name}")
         fn_end = source.index(next_marker, fn_start)
-        body = source[fn_start:fn_end]
+        signature_end = source.index("):", fn_start) + 2
+        body = source[signature_end:fn_end]  # exclui a linha "def nome(...):" da busca
         auth_pos = body.index("_require_auth()")
-        # a primeira operação de escrita real (add/update/delete_extension)
         mutation_candidates = [
-            body.index(m) for m in ("add_extension(", "update_extension(", "delete_extension(")
+            body.index(m) for m in (
+                "add_extension(", "update_extension(", "delete_extension(",
+                "block_number(", "unblock_number(",
+            )
             if m in body
         ]
-        assert mutation_candidates, f"{fn_name} não parece mutar o store - verifique o teste"
+        assert mutation_candidates, f"{fn_name} não parece mutar nada - verifique o teste"
         assert auth_pos < min(mutation_candidates), (
-            f"{fn_name} muta o store antes de checar autenticação"
+            f"{fn_name} muta o store/AMI antes de checar autenticação"
         )
 
 
@@ -53,3 +61,12 @@ def test_password_is_stripped_before_sending_to_browser():
     assert "def public_view(extension: dict)" in source
     assert '!= "password"' in source
     assert "public_view(" in source
+
+
+def test_get_blocklist_requires_auth():
+    source = load_source()
+    fn_start = source.index("def do_GET")
+    fn_end = source.index("def _handle_list_blocklist")
+    body = source[fn_start:fn_end]
+    blocklist_branch = body[body.index("/api/blocklist"):]
+    assert "_require_auth()" in blocklist_branch

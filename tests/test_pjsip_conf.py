@@ -39,7 +39,7 @@ def test_tls_transport_has_certificates():
 def test_expected_endpoints_present():
     blocks = load_blocks()
     endpoint_names = {b["name"] for b in blocks_by_type(blocks, "endpoint")}
-    expected = {"t1-1001", "t1-1002", "t1-recepcao", "t1-recepcao-2", "t2-1001", "gateway-tdm"}
+    expected = {"t1-1001", "t1-1002", "t1-recepcao", "t1-recepcao-2", "t2-1001", "gateway-tdm", "gateway-tdm-2"}
     missing = expected - endpoint_names
     assert not missing, f"Endpoints esperados ausentes: {missing}"
 
@@ -58,8 +58,8 @@ def test_every_endpoint_has_matching_auth_and_aor():
     auth_names = {b["name"] for b in blocks_by_type(blocks, "auth")}
     aor_names = {b["name"] for b in blocks_by_type(blocks, "aor")}
 
-    # gateway-tdm é identificado por IP, não usa auth de usuário/senha
-    endpoints_needing_auth = endpoint_names - {"gateway-tdm"}
+    # troncos identificados por IP não usam auth de usuário/senha
+    endpoints_needing_auth = endpoint_names - {"gateway-tdm", "gateway-tdm-2"}
 
     missing_auth = endpoints_needing_auth - auth_names
     missing_aor = endpoint_names - aor_names

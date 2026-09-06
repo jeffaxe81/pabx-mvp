@@ -23,6 +23,7 @@ configurar, como testar manualmente, e limitações conhecidas.
 17. [Painel operacional consolidado](manual-17-painel-operacional.md)
 18. [Relatórios por atendente, tenant e período](manual-18-relatorios.md)
 19. [Integração CRM: screen-pop PABX→CRM](manual-19-crm-screen-pop.md)
+20. [Regras de discagem externa](manual-20-discagem-externa.md)
 
 ## Regra de manutenção
 
