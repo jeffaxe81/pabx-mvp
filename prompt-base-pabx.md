@@ -54,6 +54,14 @@ https://github.com/jeffaxe81/pabx-mvp
 - Originate via AMI: liga pro ramal da telefonista, ela atende,
   Asterisk completa pro número do cliente
 
+**Painel de administração web**
+- CRUD de ramais do tenant 1 (admin/ + admin-api/), login com hash
+  PBKDF2, sessão por token; desligado por padrão sem ADMIN_PASSWORD_HASH
+- Gera pjsip_dynamic.conf/extensions_dynamic_*.conf/voicemail_dynamic_t1.conf
+  via #include, recarrega Asterisk via AMI sem reiniciar
+- Só tenant 1, sem 2FA, sem perfis de permissão (ver itens #19/#20
+  do backlog fase 2/3) - ver limitações no docs/manual-16
+
 **PWA instalável com notificação nativa**
 - manifest.json + ícones + service worker (webphone/); instalável
   como app
@@ -119,8 +127,14 @@ https://github.com/jeffaxe81/pabx-mvp
 7. ~~Dashboard de métricas do dia~~ — IMPLEMENTADO (via CDR do Asterisk; ainda sem separação por tenant), ver docs/manual-13
 8. ~~Múltiplas telefonistas simultâneas~~ — IMPLEMENTADO (2 operadoras, fila rrmemory, pickup por-operador), ver docs/manual-14
 9. ~~PWA instalável com notificação nativa~~ — IMPLEMENTADO (manifest, service worker, campainha via Web Audio; sem Push real), ver docs/manual-15
-10. Painel de administração web para cadastro de ramais/tenants (hoje
-    é tudo manual editando os arquivos `.conf`)
+10. ~~Painel de administração web~~ — IMPLEMENTADO (CRUD de ramais do
+    tenant 1 via admin-api + #include no Asterisk, reload via AMI),
+    ver docs/manual-16
+
+## Backlog original (10/10 IMPLEMENTADO) ✅
+
+Todos os 10 itens do backlog original foram concluídos - ver
+`docs/README.md` pro índice completo dos 16 manuais.
 
 ## Backlog fase 2/3 (a partir do documento de funcionalidades completo)
 

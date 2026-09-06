@@ -8,8 +8,12 @@ services:
     network_mode: host   # necessário para SIP/RTP funcionarem sem dor de cabeça com NAT
     volumes:
       - ./asterisk/pjsip.conf:/etc/asterisk/pjsip.conf
+      - ./asterisk/pjsip_dynamic.conf:/etc/asterisk/pjsip_dynamic.conf
       - ./asterisk/extensions.conf:/etc/asterisk/extensions.conf
+      - ./asterisk/extensions_dynamic_dial.conf:/etc/asterisk/extensions_dynamic_dial.conf
+      - ./asterisk/extensions_dynamic_hints.conf:/etc/asterisk/extensions_dynamic_hints.conf
       - ./asterisk/voicemail.conf:/etc/asterisk/voicemail.conf
+      - ./asterisk/voicemail_dynamic_t1.conf:/etc/asterisk/voicemail_dynamic_t1.conf
       - ./asterisk/rtp.conf:/etc/asterisk/rtp.conf
       - ./asterisk/http.conf:/etc/asterisk/http.conf
       - ./asterisk/manager.conf:/etc/asterisk/manager.conf
@@ -87,5 +91,35 @@ services:
     volumes:
       - ./provisioning/files:/usr/share/nginx/html:ro
 
+  # Painel de administração web (backlog #10) - CRUD de ramais do
+  # tenant 1, gera os arquivos *_dynamic.conf e manda o Asterisk
+  # recarregar via AMI. Vem DESLIGADO por padrão (sem ADMIN_PASSWORD_HASH
+  # configurado, o login sempre falha) - ver manual 16 pra como gerar
+  # o hash da senha.
+  admin-api:
+    image: python:3.12-slim
+    container_name: pabx-admin-api
+    restart: unless-stopped
+    network_mode: host   # precisa enxergar o Asterisk em 127.0.0.1:5038 (AMI)
+    working_dir: /app
+    volumes:
+      - ./admin-api:/app:ro
+      - ./admin:/app/static:ro
+      - ./asterisk:/app/asterisk-conf
+      - admin_data:/app/data
+    environment:
+      HTTP_PORT: "8091"
+      STORE_PATH: "/app/data/extensions_store.json"
+      ASTERISK_CONF_DIR: "/app/asterisk-conf"
+      STATIC_DIR: "/app/static"
+      AMI_HOST: "127.0.0.1"
+      AMI_PORT: "5038"
+      AMI_USERNAME: "admin-api"
+      AMI_SECRET: "troque_esta_senha_ami_admin"   # deve bater com manager.conf
+      ADMIN_USERNAME: "admin"
+      ADMIN_PASSWORD_HASH: ""   # vazio = login desabilitado (ver manual 16)
+    command: python3 server.py
+
 volumes:
   asterisk_data:
+  admin_data:

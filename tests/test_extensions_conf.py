@@ -72,6 +72,17 @@ def test_pickup_target_context_dials_receptionist():
     assert "Dial(PJSIP/t1-recepcao-2,20)" in pickup_block
 
 
+def test_admin_panel_dynamic_extensions_are_included():
+    """
+    Sem esses #include, os ramais criados pelo painel de administração
+    (backlog #10) nunca aparecem no dialplan de verdade, mesmo que o
+    admin-api tenha gerado o arquivo certinho.
+    """
+    blocks = blocks_as_dict(load_ext_blocks())
+    assert "#include extensions_dynamic_dial.conf" in blocks["t1-internal"]
+    assert "#include extensions_dynamic_hints.conf" in blocks["t1-hints"]
+
+
 def test_direct_operator_extensions_are_recorded():
     """
     Os ramais diretos de cada telefonista (1010/1011, uso interno da

@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Administração — PABX</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #14181F; --panel: #1D2330; --panel-alt: #242B3A; --border: #2E3646;
+    --text: #E8EAED; --text-muted: #8B93A3;
+    --amber: #E3A038; --green: #3FAE7A; --red: #D14343;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font-family: 'Inter', sans-serif; }
+  .mono { font-family: 'IBM Plex Mono', monospace; }
+
+  .login-screen {
+    min-height: 100vh; display: flex; align-items: center; justify-content: center;
+  }
+  .login-card {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
+    padding: 32px; width: 320px;
+  }
+  .login-card h1 { font-size: 18px; margin: 0 0 4px; }
+  .login-card p { color: var(--text-muted); font-size: 13px; margin: 0 0 20px; }
+
+  label { display: block; font-size: 12px; color: var(--text-muted); margin: 14px 0 5px; }
+  label:first-of-type { margin-top: 0; }
+  input {
+    width: 100%; background: var(--panel-alt); border: 1px solid var(--border);
+    color: var(--text); padding: 9px 10px; border-radius: 4px; font-size: 14px;
+  }
+  button {
+    font-family: 'Inter', sans-serif; font-weight: 600; font-size: 14px;
+    border: none; border-radius: 4px; padding: 10px 14px; cursor: pointer;
+  }
+  .btn-primary { background: var(--green); color: #0C1712; width: 100%; margin-top: 18px; }
+  .btn-danger { background: var(--red); color: #fff; }
+  .btn-ghost { background: transparent; border: 1px solid var(--border); color: var(--text); }
+  .error-msg { color: var(--red); font-size: 13px; margin-top: 12px; }
+
+  .app-screen { display: none; max-width: 900px; margin: 0 auto; padding: 32px 20px; }
+  .app-header {
+    display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;
+  }
+  .app-header h1 { font-size: 18px; margin: 0; }
+
+  table { width: 100%; border-collapse: collapse; margin-bottom: 28px; }
+  th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--border); font-size: 14px; }
+  th { color: var(--text-muted); font-weight: 600; font-size: 12px; text-transform: uppercase; }
+  td.actions { text-align: right; white-space: nowrap; }
+  td.actions button { margin-left: 6px; padding: 5px 10px; font-size: 12px; }
+
+  .form-card {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 20px;
+  }
+  .form-card h2 { font-size: 14px; margin: 0 0 14px; }
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .empty-hint { color: var(--text-muted); font-size: 13px; }
+</style>
+</head>
+<body>
+
+<div class="login-screen" id="loginScreen">
+  <div class="login-card">
+    <h1>Administração do PABX</h1>
+    <p>Acesso restrito. Cadastro de ramais.</p>
+    <label for="loginUser">Usuário</label>
+    <input id="loginUser" value="admin">
+    <label for="loginPass">Senha</label>
+    <input id="loginPass" type="password">
+    <button class="btn-primary" id="loginBtn">Entrar</button>
+    <div class="error-msg" id="loginError"></div>
+  </div>
+</div>
+
+<div class="app-screen" id="appScreen">
+  <div class="app-header">
+    <h1>Ramais (tenant 1)</h1>
+    <button class="btn-ghost" id="logoutBtn">Sair</button>
+  </div>
+
+  <table>
+    <thead>
+      <tr><th>Ramal</th><th>Nome</th><th>Nº</th><th></th></tr>
+    </thead>
+    <tbody id="extensionsTableBody"></tbody>
+  </table>
+  <div class="empty-hint" id="emptyHint" style="display:none;">Nenhum ramal cadastrado ainda.</div>
+
+  <div class="form-card">
+    <h2 id="formTitle">Novo ramal</h2>
+    <div class="form-row">
+      <div>
+        <label for="formName">Identificador (ex: vendas-1)</label>
+        <input id="formName" placeholder="vendas-1">
+      </div>
+      <div>
+        <label for="formNumber">Número (1100-1199)</label>
+        <input id="formNumber" type="number" min="1100" max="1199">
+      </div>
+    </div>
+    <div class="form-row">
+      <div>
+        <label for="formDisplayName">Nome de exibição</label>
+        <input id="formDisplayName" placeholder="Vendas 1">
+      </div>
+      <div>
+        <label for="formPassword">Senha SIP (em branco = gera automático)</label>
+        <input id="formPassword" type="text">
+      </div>
+    </div>
+    <button class="btn-primary" id="saveBtn" style="width:auto;">Salvar</button>
+    <button class="btn-ghost" id="cancelEditBtn" style="display:none; margin-top:18px; margin-left:8px;">Cancelar edição</button>
+    <div class="error-msg" id="formError"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  const el = (id) => document.getElementById(id);
+  let token = null;
+  let editingName = null;
+
+  function apiFetch(path, options = {}) {
+    return fetch(path, {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(options.headers || {}),
+      },
+    }).then(async (res) => {
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || `erro ${res.status}`);
+      return data;
+    });
+  }
+
+  el('loginBtn').addEventListener('click', () => {
+    el('loginError').textContent = '';
+    apiFetch('/api/login', {
+      method: 'POST',
+      body: JSON.stringify({ username: el('loginUser').value, password: el('loginPass').value }),
+    })
+      .then((data) => {
+        token = data.token;
+        el('loginScreen').style.display = 'none';
+        el('appScreen').style.display = 'block';
+        loadExtensions();
+      })
+      .catch((err) => { el('loginError').textContent = err.message; });
+  });
+
+  el('logoutBtn').addEventListener('click', () => {
+    apiFetch('/api/logout', { method: 'POST' }).finally(() => {
+      token = null;
+      el('appScreen').style.display = 'none';
+      el('loginScreen').style.display = 'flex';
+    });
+  });
+
+  function loadExtensions() {
+    apiFetch('/api/extensions').then((data) => renderTable(data.extensions || []));
+  }
+
+  function renderTable(extensions) {
+    el('emptyHint').style.display = extensions.length === 0 ? 'block' : 'none';
+    el('extensionsTableBody').innerHTML = extensions.map((ext) => `
+      <tr>
+        <td class="mono">${ext.name}</td>
+        <td>${ext.display_name}</td>
+        <td class="mono">${ext.number}</td>
+        <td class="actions">
+          <button class="btn-ghost" data-edit="${ext.name}">Editar</button>
+          <button class="btn-danger" data-delete="${ext.name}">Excluir</button>
+        </td>
+      </tr>`).join('');
+
+    document.querySelectorAll('[data-edit]').forEach((btn) => {
+      btn.addEventListener('click', () => startEdit(extensions.find((e) => e.name === btn.dataset.edit)));
+    });
+    document.querySelectorAll('[data-delete]').forEach((btn) => {
+      btn.addEventListener('click', () => deleteExtension(btn.dataset.delete));
+    });
+  }
+
+  function startEdit(ext) {
+    editingName = ext.name;
+    el('formTitle').textContent = `Editando: ${ext.name}`;
+    el('formName').value = ext.name;
+    el('formName').disabled = true;
+    el('formNumber').value = ext.number;
+    el('formDisplayName').value = ext.display_name;
+    el('formPassword').value = '';
+    el('cancelEditBtn').style.display = 'inline-block';
+  }
+
+  function resetForm() {
+    editingName = null;
+    el('formTitle').textContent = 'Novo ramal';
+    el('formName').value = '';
+    el('formName').disabled = false;
+    el('formNumber').value = '';
+    el('formDisplayName').value = '';
+    el('formPassword').value = '';
+    el('cancelEditBtn').style.display = 'none';
+    el('formError').textContent = '';
+  }
+
+  el('cancelEditBtn').addEventListener('click', resetForm);
+
+  el('saveBtn').addEventListener('click', () => {
+    el('formError').textContent = '';
+    const payload = {
+      name: el('formName').value,
+      number: Number(el('formNumber').value),
+      display_name: el('formDisplayName').value,
+      password: el('formPassword').value || undefined,
+    };
+
+    const request = editingName
+      ? apiFetch(`/api/extensions/${editingName}`, { method: 'PUT', body: JSON.stringify(payload) })
+      : apiFetch('/api/extensions', { method: 'POST', body: JSON.stringify(payload) });
+
+    request
+      .then(() => { resetForm(); loadExtensions(); })
+      .catch((err) => { el('formError').textContent = err.message; });
+  });
+
+  function deleteExtension(name) {
+    if (!confirm(`Excluir o ramal "${name}"? Essa ação não pode ser desfeita.`)) return;
+    apiFetch(`/api/extensions/${name}`, { method: 'DELETE' })
+      .then(loadExtensions)
+      .catch((err) => alert(err.message));
+  }
+})();
+</script>
+
+</body>
+</html>

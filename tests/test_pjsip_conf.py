@@ -126,3 +126,12 @@ def test_subscribe_context_points_to_existing_hint_context():
             assert subscribe_context in existing_contexts, (
                 f"Endpoint {block['name']} referencia subscribe_context inexistente: {subscribe_context}"
             )
+
+
+def test_pjsip_conf_includes_admin_panel_dynamic_extensions():
+    """
+    Sem esse #include, ramais criados pelo painel de administração
+    (backlog #10) nunca aparecem no PJSIP de verdade.
+    """
+    content = PJSIP_CONF.read_text(encoding="utf-8")
+    assert "#include pjsip_dynamic.conf" in content

@@ -92,3 +92,16 @@ def test_cdr_manager_enabled():
     cdr_manager_conf = Path(__file__).parent.parent / "asterisk" / "cdr_manager.conf"
     blocks = {b["name"]: b["text"] for b in parse_blocks(cdr_manager_conf)}
     assert get_key(blocks["general"], "enabled") == "yes"
+
+
+def test_manager_has_admin_api_user_scoped_to_reload_only():
+    """
+    O admin-api só precisa recarregar config (Action: Command) -
+    não deveria ter permissão de ler eventos de chamada (call/agent),
+    que é escopo do queue-api, não dele.
+    """
+    blocks = {b["name"]: b["text"] for b in parse_blocks(MANAGER_CONF)}
+    assert "admin-api" in blocks
+    write_classes = (get_key(blocks["admin-api"], "write") or "").split(",")
+    assert "system" in write_classes or "command" in write_classes
+    assert "call" not in (get_key(blocks["admin-api"], "read") or "").split(",")

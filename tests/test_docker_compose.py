@@ -118,3 +118,23 @@ def test_cdr_config_files_mounted_for_metrics():
     asterisk_volumes = compose["services"]["asterisk"].get("volumes", [])
     assert any("cdr.conf" in v for v in asterisk_volumes)
     assert any("cdr_manager.conf" in v for v in asterisk_volumes)
+
+
+def test_admin_api_service_present_and_login_disabled_by_default():
+    """
+    Painel de administração (backlog #10) precisa existir no compose,
+    mas com login desligado até alguém configurar ADMIN_PASSWORD_HASH
+    de propósito - mesmo padrão de segurança das outras integrações.
+    """
+    compose = load_compose()
+    assert "admin-api" in compose["services"]
+    env = compose["services"]["admin-api"].get("environment", {})
+    assert env.get("ADMIN_PASSWORD_HASH") == ""
+
+
+def test_admin_api_ami_secret_matches_manager_conf():
+    compose = load_compose()
+    env = compose["services"]["admin-api"].get("environment", {})
+    manager_conf = (PROJECT_ROOT / "asterisk" / "manager.conf").read_text(encoding="utf-8")
+    assert env.get("AMI_USERNAME") and f"[{env['AMI_USERNAME']}]" in manager_conf
+    assert env.get("AMI_SECRET") and f"secret = {env['AMI_SECRET']}" in manager_conf

@@ -28,6 +28,10 @@ Suíte separada em `queue-api/tests/` (parsing do protocolo AMI, lógica
 de estado da fila, e listagem/segurança de gravações - tudo sem
 depender de rede) — rodar com `cd queue-api && python3 -m pytest tests/ -v`.
 
+Suíte separada em `admin-api/tests/` (autenticação, CRUD de ramais,
+geração de config dinâmica, segurança das rotas do painel) — rodar
+com `cd admin-api && python3 -m pytest tests/ -v`.
+
 ## O que esses testes **não** cobrem (ainda)
 
 - Registro SIP de verdade (precisaria subir o Asterisk em container e
