@@ -54,6 +54,14 @@ https://github.com/jeffaxe81/pabx-mvp
 - Originate via AMI: liga pro ramal da telefonista, ela atende,
   Asterisk completa pro número do cliente
 
+**PWA instalável com notificação nativa**
+- manifest.json + ícones + service worker (webphone/); instalável
+  como app
+- Campainha via Web Audio (sem arquivo externo) + notificação
+  nativa do SO em toda chamada recebida, mesmo com aba em 2º plano
+- NÃO é Push real (não funciona com navegador fechado) - exigiria
+  servidor de push + VAPID, fora do escopo
+
 **Múltiplas telefonistas simultâneas**
 - 2 operadoras (t1-recepcao, t1-recepcao-2), ramal 1000 agora entra
   na fila (Queue) em vez de discar fixo; fila usa strategy=rrmemory
@@ -110,8 +118,7 @@ https://github.com/jeffaxe81/pabx-mvp
 6. ~~Discagem por clique a partir do CRM~~ — IMPLEMENTADO (API com chave, Originate via AMI), ver docs/manual-12
 7. ~~Dashboard de métricas do dia~~ — IMPLEMENTADO (via CDR do Asterisk; ainda sem separação por tenant), ver docs/manual-13
 8. ~~Múltiplas telefonistas simultâneas~~ — IMPLEMENTADO (2 operadoras, fila rrmemory, pickup por-operador), ver docs/manual-14
-9. PWA instalável com notificação nativa (tocar mesmo em segundo
-   plano/tela bloqueada)
+9. ~~PWA instalável com notificação nativa~~ — IMPLEMENTADO (manifest, service worker, campainha via Web Audio; sem Push real), ver docs/manual-15
 10. Painel de administração web para cadastro de ramais/tenants (hoje
     é tudo manual editando os arquivos `.conf`)
 

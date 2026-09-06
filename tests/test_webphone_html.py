@@ -213,3 +213,33 @@ def test_pickup_sends_own_extension_along_with_channel():
 def test_my_extension_is_captured_on_registration():
     html = load_html()
     assert "myExtension = extension;" in html
+
+
+def test_pwa_manifest_and_service_worker_are_linked():
+    html = load_html()
+    assert 'rel="manifest"' in html
+    assert "serviceWorker.register(" in html
+
+
+def test_incoming_call_triggers_ringtone_and_notification():
+    """
+    As duas chamadas recebidas possíveis (linha 1 direto, linha 2 via
+    banner) precisam disparar campainha E notificação nativa - é isso
+    que faz a telefonista perceber a chamada com a aba em segundo
+    plano (o pedido original do backlog #9).
+    """
+    html = load_html()
+    fn_start = html.index("function handleNewSession")
+    fn_end = html.index("function wireSessionEvents")
+    body = html[fn_start:fn_end]
+    assert "startRingtone()" in body
+    assert "notifyIncomingCall(peer)" in body
+
+
+def test_ringtone_stops_on_answer_and_on_decline():
+    html = load_html()
+    answer_fn = html[html.index("function answerLine"):html.index("function handleLineEnded")]
+    assert "stopRingtone()" in answer_fn
+
+    decline_calls = html.count("stopRingtone(); session.terminate();")
+    assert decline_calls == 2  # declineBtn e declineSecondLineBtn

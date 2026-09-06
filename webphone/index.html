@@ -4,6 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Telefonista — Console Web</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#1D2330">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/jssip@3.10.1/dist/jssip.min.js"></script>
@@ -595,6 +598,63 @@
   const el = (id) => document.getElementById(id);
   const remoteAudio = el('remoteAudio');
 
+  // ---------- PWA: service worker + notificação nativa ----------
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('service-worker.js').catch(() => {
+      // ambiente sem HTTPS (ex: acesso direto por IP sem certificado
+      // válido) impede o registro - a interface continua funcionando
+      // normalmente, só sem a notificação nativa/instalação como app
+    });
+  }
+
+  function requestNotificationPermission() {
+    if (!('Notification' in window)) return;
+    if (Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+  }
+
+  function notifyIncomingCall(peer) {
+    if (!('serviceWorker' in navigator) || Notification.permission !== 'granted') return;
+    navigator.serviceWorker.ready.then((registration) => {
+      if (registration.active) {
+        registration.active.postMessage({ type: 'incoming-call', peer });
+      }
+    });
+  }
+
+  // ---------- Campainha (Web Audio, sem arquivo externo) ----------
+  let ringtoneContext = null;
+  let ringtoneInterval = null;
+
+  function startRingtone() {
+    if (ringtoneInterval) return; // já tocando
+    ringtoneContext = ringtoneContext || new (window.AudioContext || window.webkitAudioContext)();
+
+    const playBeepPair = () => {
+      const ctx = ringtoneContext;
+      [0, 0.28].forEach((delay) => {
+        const oscillator = ctx.createOscillator();
+        const gain = ctx.createGain();
+        oscillator.frequency.value = 880;
+        oscillator.type = 'sine';
+        gain.gain.value = 0.15;
+        oscillator.connect(gain);
+        gain.connect(ctx.destination);
+        oscillator.start(ctx.currentTime + delay);
+        oscillator.stop(ctx.currentTime + delay + 0.22);
+      });
+    };
+
+    playBeepPair();
+    ringtoneInterval = setInterval(playBeepPair, 2000);
+  }
+
+  function stopRingtone() {
+    clearInterval(ringtoneInterval);
+    ringtoneInterval = null;
+  }
+
   // ---------- UI: troca de telas ----------
   function showView(view) {
     ['idleView', 'incomingView', 'activeView', 'consultView'].forEach((v) => {
@@ -673,6 +733,8 @@
     const line = lines[index];
     if (!line) return;
 
+    stopRingtone();
+
     // Se já existe outra linha ativa, coloca ela em espera primeiro -
     // é isso que torna isso "multi-chamada" e não só "trocar de chamada".
     if (activeLineIndex !== null && activeLineIndex !== index) {
@@ -695,6 +757,8 @@
   function handleLineEnded(index, outcome) {
     const line = lines[index];
     if (!line) return; // já foi limpa manualmente (ex: fim de transferência)
+
+    if (line.state === 'ringing') stopRingtone();
 
     logCall(line.peer, line.direction === 'incoming' ? 'in' : 'out', outcome);
     lines[index] = null;
@@ -800,6 +864,7 @@
     ua.on('disconnected', () => setStatus('error', 'Conexão perdida'));
     ua.on('registered', () => {
       myExtension = extension;
+      requestNotificationPermission();
       setStatus('online', `Conectado como ${extension}`);
       el('connectForm').style.display = 'none';
       el('disconnectBtn').style.display = 'block';
@@ -1162,20 +1227,23 @@
     wireSessionEvents(session, freeIndex);
 
     if (session.direction === 'incoming') {
+      startRingtone();
+      notifyIncomingCall(peer);
+
       if (freeIndex === 0) {
         // primeira chamada - tela normal de chamada recebida
         el('incomingPeer').textContent = peer;
         showView('incomingView');
         setStatus('ringing', 'Chamada recebida');
         el('answerBtn').onclick = () => answerLine(freeIndex);
-        el('declineBtn').onclick = () => { session.terminate(); };
+        el('declineBtn').onclick = () => { stopRingtone(); session.terminate(); };
       } else {
         // segunda linha tocando enquanto já se está em outra chamada -
         // mostra um aviso, sem tirar a chamada atual da tela
         el('secondLinePeer').textContent = peer;
         el('secondLineBanner').style.display = 'block';
         el('answerSecondLineBtn').onclick = () => answerLine(freeIndex);
-        el('declineSecondLineBtn').onclick = () => { session.terminate(); };
+        el('declineSecondLineBtn').onclick = () => { stopRingtone(); session.terminate(); };
       }
     } else {
       // chamada de saída (discada por nós) sempre vira a linha em foco

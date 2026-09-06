@@ -18,6 +18,7 @@ configurar, como testar manualmente, e limitações conhecidas.
 12. [Discagem por clique a partir do CRM](manual-12-click-to-call.md)
 13. [Dashboard de métricas do dia](manual-13-dashboard-metricas.md)
 14. [Múltiplas telefonistas simultâneas](manual-14-multiplas-telefonistas.md)
+15. [PWA instalável com notificação nativa](manual-15-pwa-notificacao.md)
 
 ## Regra de manutenção
 
