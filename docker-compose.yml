@@ -1,0 +1,29 @@
+version: "3.8"
+
+services:
+  asterisk:
+    image: andrius/asterisk:latest
+    container_name: pabx-mvp
+    restart: unless-stopped
+    network_mode: host   # necessário para SIP/RTP funcionarem sem dor de cabeça com NAT
+    volumes:
+      - ./asterisk/pjsip.conf:/etc/asterisk/pjsip.conf
+      - ./asterisk/extensions.conf:/etc/asterisk/extensions.conf
+      - ./asterisk/voicemail.conf:/etc/asterisk/voicemail.conf
+      - ./asterisk/rtp.conf:/etc/asterisk/rtp.conf
+      - ./asterisk/certs:/etc/asterisk/certs:ro
+      - asterisk_data:/var/spool/asterisk
+
+  # Servidor HTTP simples que entrega os arquivos de auto-provisionamento.
+  # Os telefones apontam para http://<ip-servidor>:8080/<MAC>.cfg
+  provisioning:
+    image: nginx:alpine
+    container_name: pabx-provisioning
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    volumes:
+      - ./provisioning/files:/usr/share/nginx/html:ro
+
+volumes:
+  asterisk_data:
