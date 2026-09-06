@@ -25,6 +25,7 @@ configurar, como testar manualmente, e limitações conhecidas.
 19. [Integração CRM: screen-pop PABX→CRM](manual-19-crm-screen-pop.md)
 20. [Regras de discagem externa](manual-20-discagem-externa.md)
 21. [Busca de gravações e política de retenção](manual-21-busca-retencao-gravacoes.md)
+22. [E-mail de correio de voz](manual-22-email-correio-voz.md)
 
 ## Regra de manutenção
 

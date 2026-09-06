@@ -136,6 +136,8 @@ https://github.com/jeffaxe81/pabx-mvp
 Todos os 10 itens do backlog original foram concluídos - ver
 `docs/README.md` pro índice completo dos 16 manuais.
 
+## Itens 12-16 (completar o que existia parcial) - TODOS IMPLEMENTADOS ✅
+
 ## Backlog fase 2/3 (a partir do documento de funcionalidades completo)
 
 Comparado contra um documento de funcionalidades de PABX/CCaaS
@@ -160,8 +162,8 @@ PWA) não estão listados aqui de novo — só o que falta ou está parcial.
 15. ~~Busca de gravações e retenção~~ — IMPLEMENTADO (filtro por
     número/destino/período extraído do nome do arquivo, expurgo
     automático opt-in), ver docs/manual-21
-16. Envio de correio de voz por e-mail (infraestrutura já existe em
-    `voicemail.conf`, falta configurar o envio)
+16. ~~E-mail de correio de voz~~ — IMPLEMENTADO (script mail_relay.py
+    repassa pro SMTP, desligado por padrão), ver docs/manual-22
 
 **Fase 2 — Gestão (novo)**
 17. URA (menus de voz: "digite 1 para vendas...", horários e

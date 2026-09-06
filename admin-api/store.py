@@ -55,12 +55,14 @@ def validate_extension_input(data: dict, existing: list, editing_name: str = Non
         return False, "nome de exibição obrigatório", None
 
     password = data.get("password") or secrets.token_urlsafe(12)
+    email = (data.get("email") or "").strip()
 
     return True, None, {
         "name": name,
         "number": number,
         "display_name": display_name,
         "password": password,
+        "email": email,
         "tenant": "t1",
     }
 

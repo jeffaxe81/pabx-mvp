@@ -111,6 +111,12 @@
         <input id="formPassword" type="text">
       </div>
     </div>
+    <div class="form-row">
+      <div>
+        <label for="formEmail">E-mail (opcional - recebe correio de voz)</label>
+        <input id="formEmail" type="email" placeholder="vendas1@empresa.com">
+      </div>
+    </div>
     <button class="btn-primary" id="saveBtn" style="width:auto;">Salvar</button>
     <button class="btn-ghost" id="cancelEditBtn" style="display:none; margin-top:18px; margin-left:8px;">Cancelar edição</button>
     <div class="error-msg" id="formError"></div>
@@ -213,6 +219,7 @@
     el('formName').disabled = true;
     el('formNumber').value = ext.number;
     el('formDisplayName').value = ext.display_name;
+    el('formEmail').value = ext.email || '';
     el('formPassword').value = '';
     el('cancelEditBtn').style.display = 'inline-block';
   }
@@ -224,6 +231,7 @@
     el('formName').disabled = false;
     el('formNumber').value = '';
     el('formDisplayName').value = '';
+    el('formEmail').value = '';
     el('formPassword').value = '';
     el('cancelEditBtn').style.display = 'none';
     el('formError').textContent = '';
@@ -237,6 +245,7 @@
       name: el('formName').value,
       number: Number(el('formNumber').value),
       display_name: el('formDisplayName').value,
+      email: el('formEmail').value,
       password: el('formPassword').value || undefined,
     };
 

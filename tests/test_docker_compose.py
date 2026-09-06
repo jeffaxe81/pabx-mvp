@@ -101,6 +101,21 @@ def test_recordings_retention_disabled_by_default():
     assert env.get("RECORDINGS_RETENTION_DAYS") == "0"
 
 
+def test_voicemail_mail_relay_script_mounted_and_disabled_by_default():
+    """
+    Backlog #16: o script que relaia o e-mail do correio de voz
+    precisa estar montado no container do Asterisk, e o SMTP vem
+    desligado por padrão (mesmo padrão de segurança das outras
+    integrações opt-in do projeto).
+    """
+    compose = load_compose()
+    asterisk_volumes = compose["services"]["asterisk"].get("volumes", [])
+    assert any("scripts" in v for v in asterisk_volumes)
+
+    env = compose["services"]["asterisk"].get("environment", {})
+    assert env.get("SMTP_HOST") == ""
+
+
 def test_notify_channels_env_present_and_disabled_by_default():
     """
     Notificação de chamada perdida deve vir DESLIGADA por padrão (o

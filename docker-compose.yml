@@ -21,8 +21,19 @@ services:
       - ./asterisk/cdr.conf:/etc/asterisk/cdr.conf
       - ./asterisk/cdr_manager.conf:/etc/asterisk/cdr_manager.conf
       - ./asterisk/certs:/etc/asterisk/certs:ro
+      - ./asterisk/scripts:/var/lib/asterisk/scripts:ro
       - ./recordings:/var/spool/asterisk/monitor
       - asterisk_data:/var/spool/asterisk
+    environment:
+      # Envio de correio de voz por e-mail (backlog #16) - vazio =
+      # desabilitado (mail_relay.py sai sem enviar nada). Mesmas
+      # credenciais SMTP podem ser reaproveitadas das notificações de
+      # chamada perdida do queue-api (SMTP_HOST/SMTP_PORT/etc.).
+      SMTP_HOST: ""
+      SMTP_PORT: "587"
+      SMTP_USERNAME: ""
+      SMTP_PASSWORD: ""
+      SMTP_USE_TLS: "true"
 
   # Backend que fala AMI com o Asterisk e expõe a fila de atendimento
   # (quem está esperando) como uma API HTTP simples pro webphone consumir.
