@@ -77,6 +77,11 @@
   <div id="fraudAlertsList"><div class="empty">Carregando...</div></div>
 </div>
 
+<div class="panel" style="margin-top: 16px;">
+  <h2>Qualidade de chamada</h2>
+  <div id="qualityList"><div class="empty">Carregando...</div></div>
+</div>
+
 <script>
 (function () {
   'use strict';
@@ -93,13 +98,32 @@
       fetch(`${apiUrl}/api/extension-states`).then((r) => r.json()).catch(() => null),
       fetch(`${apiUrl}/api/queue`).then((r) => r.json()).catch(() => null),
       fetch(`${apiUrl}/api/fraud-alerts`).then((r) => r.json()).catch(() => null),
-    ]).then(([metrics, extensions, queue, fraud]) => {
+      fetch(`${apiUrl}/api/quality?only_poor=true`).then((r) => r.json()).catch(() => null),
+    ]).then(([metrics, extensions, queue, fraud, quality]) => {
       if (metrics) renderMetrics(metrics);
       if (extensions) renderExtensions(extensions.extensions || []);
       if (queue) renderQueue(queue.waiting || []);
       if (fraud) renderFraudAlerts(fraud.alerts || []);
+      if (quality) renderQuality(quality.quality_reports || []);
       el('lastUpdate').textContent = `Atualizado às ${new Date().toLocaleTimeString('pt-BR')}`;
     });
+  }
+
+  function renderQuality(reports) {
+    if (reports.length === 0) {
+      el('qualityList').innerHTML = '<div class="empty">Nenhum problema de qualidade detectado.</div>';
+      return;
+    }
+    el('qualityList').innerHTML = reports.map((q) => {
+      const when = new Date(q.timestamp * 1000).toLocaleString('pt-BR');
+      const jitter = q.jitter_ms != null ? `${q.jitter_ms}ms` : '—';
+      const loss = q.packet_loss_percent != null ? `${q.packet_loss_percent}%` : '—';
+      return `<div class="item-row">
+        <span><span class="dot em-espera"></span>${q.channel}</span>
+        <span class="mono">jitter ${jitter} · perda ${loss}</span>
+      </div>
+      <div style="font-size:12px; color:var(--text-muted); margin:-4px 0 6px 16px;">${when}</div>`;
+    }).join('');
   }
 
   function renderFraudAlerts(alerts) {

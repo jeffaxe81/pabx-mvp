@@ -7,7 +7,7 @@ from pathlib import Path
 PANEL_HTML = Path(__file__).parent.parent / "webphone" / "painel-operacional.html"
 WEBPHONE_HTML = Path(__file__).parent.parent / "webphone" / "index.html"
 
-REQUIRED_IDS = ["metricsRow", "extensionsList", "queueList", "lastUpdate", "fraudAlertsList"]
+REQUIRED_IDS = ["metricsRow", "extensionsList", "queueList", "lastUpdate", "fraudAlertsList", "qualityList"]
 
 
 def load_panel_html():
@@ -31,6 +31,17 @@ def test_fetches_fraud_alerts_too():
     html = load_panel_html()
     assert "/api/fraud-alerts" in html
     assert "renderFraudAlerts" in html
+
+
+def test_fetches_quality_reports_filtered_to_poor_only():
+    """
+    O painel operacional pede só os relatórios RUINS (only_poor=true)
+    - senão a lista ficaria poluída de chamadas com qualidade normal,
+    que não é o que interessa numa tela de supervisão.
+    """
+    html = load_panel_html()
+    assert "/api/quality?only_poor=true" in html
+    assert "renderQuality" in html
 
 
 def test_polls_periodically_for_supervision_use_case():

@@ -32,6 +32,7 @@ from extension_states import ExtensionStateTracker
 from reports import parse_cdr_for_report, CallLogStore, aggregate, group_by, extract_operator
 from screen_pop import dispatch_screen_pop
 from fraud_detection import CallRateTracker, FraudAlertsLog, is_external_call, is_over_spending_limit
+from quality_monitoring import parse_quality_event, is_poor_quality, QualityLog
 
 AMI_HOST = os.environ.get("AMI_HOST", "127.0.0.1")
 AMI_PORT = int(os.environ.get("AMI_PORT", "5038"))
@@ -60,6 +61,12 @@ FRAUD_RATE_THRESHOLD = int(os.environ.get("FRAUD_RATE_THRESHOLD", "10"))
 FRAUD_AUTO_BLOCK = os.environ.get("FRAUD_AUTO_BLOCK", "false").lower() == "true"
 FRAUD_COST_PER_MINUTE = float(os.environ.get("FRAUD_COST_PER_MINUTE", "0"))
 FRAUD_DAILY_COST_LIMIT = float(os.environ.get("FRAUD_DAILY_COST_LIMIT", "0"))  # 0 = desabilitado
+
+# Monitoramento de qualidade (backlog #34) - só visibilidade, sem
+# nenhuma ação com efeito colateral, então os limiares já vêm ativos
+# por padrão (valores usados como referência comum de telefonia VoIP).
+QUALITY_JITTER_THRESHOLD_MS = float(os.environ.get("QUALITY_JITTER_THRESHOLD_MS", "30"))
+QUALITY_PACKET_LOSS_THRESHOLD_PERCENT = float(os.environ.get("QUALITY_PACKET_LOSS_THRESHOLD_PERCENT", "3"))
 
 # Notificação de chamada perdida - canais habilitados via variável de
 # ambiente (ex: "email,whatsapp"). Vazio = notificação desabilitada,
@@ -100,14 +107,20 @@ extension_states = ExtensionStateTracker()
 call_log_store = CallLogStore(CALL_LOG_PATH)
 rate_tracker = CallRateTracker()
 fraud_alerts_log = FraudAlertsLog()
+quality_log = QualityLog()
 ami = None  # inicializado em main(), None durante os testes automatizados
 
 
 def handle_ami_event(event: dict):
-    """Callback único do AMI: alimenta fila, chamadas perdidas, métricas, estado dos ramais, relatórios e fraude."""
+    """Callback único do AMI: alimenta fila, chamadas perdidas, métricas, estado dos ramais, relatórios, fraude e qualidade."""
     state.apply_event(event)
     daily_metrics.apply_cdr_event(event)
     extension_states.apply_event(event)
+
+    quality = parse_quality_event(event)
+    if quality:
+        poor = is_poor_quality(quality, QUALITY_JITTER_THRESHOLD_MS, QUALITY_PACKET_LOSS_THRESHOLD_PERCENT)
+        quality_log.append(quality, poor)
 
     report_record = parse_cdr_for_report(event)
     if report_record:
@@ -190,6 +203,8 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json(200, {"missed_calls": missed_calls_log.list()})
         elif self.path.startswith("/api/fraud-alerts"):
             self._send_json(200, {"alerts": fraud_alerts_log.list()})
+        elif self.path.startswith("/api/quality"):
+            self._handle_quality_query()
         elif self.path.startswith("/api/metrics/today"):
             self._send_json(200, daily_metrics.snapshot())
         elif self.path.startswith("/api/extension-states"):
@@ -200,6 +215,11 @@ class Handler(BaseHTTPRequestHandler):
             self._serve_recording_file()
         else:
             self._send_json(404, {"error": "not found"})
+
+    def _handle_quality_query(self):
+        query = parse_qs(urlparse(self.path).query)
+        only_poor = query.get("only_poor", ["false"])[0].lower() == "true"
+        self._send_json(200, {"quality_reports": quality_log.list(only_poor=only_poor)})
 
     def _handle_reports(self):
         query = parse_qs(urlparse(self.path).query)

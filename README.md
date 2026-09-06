@@ -262,6 +262,13 @@ o aviso honesto logo no início do manual): empacota configuração e
 dados de negócio diariamente, com procedimento de restauração
 documentado — ver `docs/manual-28-backup-disponibilidade.md`.
 
+**E monitoramento de qualidade de chamada**: jitter, perda de pacotes
+e RTT capturados via RTCP nas chamadas da telefonista, com alerta
+automático — ver `docs/manual-29-monitoramento-qualidade.md`.
+
+Com isso, os **itens de infraestrutura do backlog (31-34) estão
+completos** — resta só a Fase 3 (recursos de IA/ML).
+
 Para ajustar quais ramais aparecem na lista de colegas, edite o array
 `COLLEAGUES` no início do `<script>` em `webphone/index.html`. Cada
 ramal monitorado precisa ter um `hint` correspondente em
@@ -286,7 +293,7 @@ cd ../queue-api
 python3 -m pytest tests/ -v
 ```
 
-379 testes estáticos no total, em 5 suítes (`tests/`, `queue-api/tests/`,
+396 testes estáticos no total, em 5 suítes (`tests/`, `queue-api/tests/`,
 `admin-api/tests/`, `asterisk/scripts/tests/`, `backup/tests/`) —
 nenhuma delas sobe o Asterisk de verdade. Detalhes em `tests/README.md`.
 

@@ -30,6 +30,7 @@ def test_expected_contexts_present():
     expected = {
         "t1-internal", "t2-internal", "t1-hints", "t2-hints",
         "from-tdm-gateway", "pickup-target", "click-to-call",
+        "qualidade-chamada",
     }
     missing = expected - contexts
     assert not missing, f"Contextos esperados ausentes: {missing}"
@@ -43,7 +44,10 @@ def test_receptionist_extension_1000_routes_to_web_endpoint():
     """
     blocks = blocks_as_dict(load_ext_blocks())
     text = blocks["t1-internal"].replace(" ", "")
-    assert "exten=>1000,1,Queue(fila-t1)" in text
+    assert "exten=>1000,1," in text
+    exten_start = text.index("exten=>1000,1,")
+    exten_end = text.index("exten=>", exten_start + 1)
+    assert "Queue(fila-t1)" in text[exten_start:exten_end]
 
 
 def test_unmatched_incoming_calls_go_into_the_ura():
@@ -105,6 +109,28 @@ def test_receptionist_calls_are_recorded():
     blocks = blocks_as_dict(load_ext_blocks())
     assert "MixMonitor(" in blocks["t1-internal"]
     assert "MixMonitor(" in blocks["pickup-target"]
+
+
+def test_receptionist_calls_push_quality_hangup_handler():
+    """
+    Sem o hangup_handler_push, o monitoramento de qualidade (backlog
+    #34) nunca roda - as estatísticas RTCP simplesmente não são
+    coletadas em nenhuma chamada.
+    """
+    blocks = blocks_as_dict(load_ext_blocks())
+    for context_name in ("t1-internal", "pickup-target"):
+        text = blocks[context_name].replace(" ", "")
+        assert "CHANNEL(hangup_handler_push)=qualidade-chamada,s,1" in text
+
+
+def test_quality_context_reads_rtcp_and_sends_user_event():
+    blocks = blocks_as_dict(load_ext_blocks())
+    text = blocks["qualidade-chamada"].replace(" ", "")
+    assert "UserEvent(QualityStats" in text
+    assert "CHANNEL(rtcp,rxjitter)" in text
+    assert "CHANNEL(rtcp,rxploss)" in text
+    assert "CHANNEL(rtcp,rtt)" in text
+    assert "Return()" in text
 
 
 def test_click_to_call_context_dials_via_tdm_gateway():

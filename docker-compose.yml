@@ -76,6 +76,10 @@ services:
       FRAUD_AUTO_BLOCK: "false"
       FRAUD_COST_PER_MINUTE: "0"
       FRAUD_DAILY_COST_LIMIT: "0"
+      # Monitoramento de qualidade (backlog #34) - só visibilidade,
+      # sem ação com efeito colateral, então já vem ativo por padrão.
+      QUALITY_JITTER_THRESHOLD_MS: "30"
+      QUALITY_PACKET_LOSS_THRESHOLD_PERCENT: "3"
       # Notificação de chamada perdida - vazio = desabilitado.
       # Preencha com "email", "whatsapp" ou "email,whatsapp" pra ativar.
       NOTIFY_CHANNELS: ""

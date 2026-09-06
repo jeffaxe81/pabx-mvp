@@ -245,3 +245,16 @@ def test_backup_retention_disabled_by_default():
     compose = load_compose()
     env = compose["services"]["backup"].get("environment", {})
     assert env.get("BACKUP_RETENTION_DAYS") == "0"
+
+
+def test_quality_monitoring_thresholds_configured():
+    """
+    Diferente de fraude/backup (opt-in), monitoramento de qualidade é
+    só visibilidade - por isso os limiares já vêm com valor ativo por
+    padrão, não "0"/"desligado".
+    """
+    compose = load_compose()
+    env = compose["services"]["queue-api"].get("environment", {})
+    assert "QUALITY_JITTER_THRESHOLD_MS" in env
+    assert "QUALITY_PACKET_LOSS_THRESHOLD_PERCENT" in env
+    assert float(env["QUALITY_JITTER_THRESHOLD_MS"]) > 0

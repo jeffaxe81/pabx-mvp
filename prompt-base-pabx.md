@@ -194,15 +194,19 @@ PWA) não estão listados aqui de novo — só o que falta ou está parcial.
 30. Atendimento multilíngue
 
 **Infraestrutura e segurança (novo)**
-31. Lista de bloqueio (números/DDIs/anônimas)
+31. ~~Lista de bloqueio~~ — IMPLEMENTADO junto com o item #14
+    (bloqueio de números via AstDB, gerenciável pelo painel), ver
+    docs/manual-20
 32. ~~Detecção de fraude~~ — IMPLEMENTADO (volume anormal via
     DialBegin, bloqueio automático reaproveitando AstDB do manual
     20, limite de gasto), ver docs/manual-27
 33. ~~Backup automático~~ — IMPLEMENTADO (empacota config+dados
     diariamente, restauração documentada); NÃO é alta disponibilidade
     de verdade (sem failover) - ver docs/manual-28 pro aviso honesto
-34. Monitoramento de qualidade de chamada (jitter/latência/perda de
-    pacotes)
+34. ~~Monitoramento de qualidade de chamada~~ — IMPLEMENTADO (RTCP
+    via hangup handler + UserEvent), ver docs/manual-29
+
+**Itens de infraestrutura completos (31-34) ✅**
 
 **Fora de escopo deste projeto (mencionados no documento, mas são
 produtos à parte, não itens de backlog)**
