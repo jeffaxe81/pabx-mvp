@@ -283,3 +283,44 @@ def test_presence_path_configured():
     compose = load_compose()
     env = compose["services"]["queue-api"].get("environment", {})
     assert "PRESENCE_PATH" in env
+
+
+def test_ai_worker_and_ollama_services_present_and_disabled_by_default():
+    """
+    Backlog #21-24 (IA local via Whisper + Llama 3, ver manual 36):
+    os serviços precisam existir, mas processamento de IA tem custo
+    computacional real - por isso vem desligado até alguém ativar de
+    propósito, mesmo padrão de segurança/custo do resto do projeto.
+    """
+    compose = load_compose()
+    assert "ollama" in compose["services"]
+    assert "ai-worker" in compose["services"]
+
+    env = compose["services"]["ai-worker"].get("environment", {})
+    assert env.get("AI_FEATURES_ENABLED") == "false"
+
+
+def test_ollama_port_not_exposed_to_host():
+    """
+    Só o ai-worker precisa falar com o Ollama - expor a porta pro
+    host todo seria superfície de ataque desnecessária.
+    """
+    compose = load_compose()
+    assert "ports" not in compose["services"]["ollama"]
+
+
+def test_agi_scripts_mounted_into_asterisk_container():
+    """
+    Sem esse volume, o AGI(atendente_virtual.py) do dialplan (backlog
+    #24) nunca encontraria o script - a chamada falharia
+    silenciosamente ao tentar rodar o atendente virtual.
+    """
+    compose = load_compose()
+    asterisk_volumes = compose["services"]["asterisk"].get("volumes", [])
+    assert any("agi-bin" in v for v in asterisk_volumes)
+
+
+def test_asterisk_knows_where_to_reach_ai_worker():
+    compose = load_compose()
+    env = compose["services"]["asterisk"].get("environment", {})
+    assert "AI_WORKER_URL" in env

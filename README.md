@@ -297,8 +297,15 @@ inglês/espanhol), com fila e menu de áudio próprios pra cada um — ver
 `docs/manual-35-multilingue.md`.
 
 Com isso, **toda a Fase 3 sem dependência de IA está completa**.
-Restam só os itens que exigem escolher um provedor de IA externo
-(#21-24: transcrição, resumo, análise de sentimento, atendente virtual).
+
+**E, fechando o backlog inteiro: transcrição, resumo automático,
+análise de sentimento e atendente virtual com IA** — usando modelos
+**locais** (Whisper + Llama 3 via Ollama), sem nuvem, sem custo por
+requisição. Esta é a primeira parte do projeto com dependência
+externa real e sem teste de integração de verdade (sem GPU/modelos
+disponíveis no ambiente onde foi construído) — ver os avisos de
+honestidade técnica logo no início de `docs/manual-36-transcricao-resumo-sentimento.md`
+e `docs/manual-37-atendente-virtual.md`.
 
 Para ajustar quais ramais aparecem na lista de colegas, edite o array
 `COLLEAGUES` no início do `<script>` em `webphone/index.html`. Cada
@@ -324,9 +331,10 @@ cd ../queue-api
 python3 -m pytest tests/ -v
 ```
 
-497 testes estáticos no total, em 5 suítes (`tests/`, `queue-api/tests/`,
-`admin-api/tests/`, `asterisk/scripts/tests/`, `backup/tests/`) —
-nenhuma delas sobe o Asterisk de verdade. Detalhes em `tests/README.md`.
+571 testes estáticos no total, em 7 suítes (`tests/`, `queue-api/tests/`,
+`admin-api/tests/`, `asterisk/scripts/tests/`, `backup/tests/`,
+`ai-worker/tests/`, `asterisk/agi/tests/`) — nenhuma delas sobe o
+Asterisk, Whisper ou Ollama de verdade. Detalhes em `tests/README.md`.
 
 ## Documentação
 

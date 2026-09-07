@@ -39,6 +39,8 @@ configurar, como testar manualmente, e limitações conhecidas.
 33. [Transferência inteligente por regra](manual-33-transferencia-inteligente.md)
 34. [Presença corporativa avançada](manual-34-presenca-avancada.md)
 35. [Atendimento multilíngue](manual-35-multilingue.md)
+36. [Transcrição, resumo automático e análise de sentimento](manual-36-transcricao-resumo-sentimento.md)
+37. [Atendente virtual com IA](manual-37-atendente-virtual.md)
 
 ## Regra de manutenção
 

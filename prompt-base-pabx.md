@@ -181,10 +181,21 @@ PWA) não estão listados aqui de novo — só o que falta ou está parcial.
 **Fase 2 completa (17-20) ✅**
 
 **Fase 3 — Diferenciais e IA (novo)**
-21. Transcrição automática de chamadas
-22. Resumo automático de chamada com identificação de tarefas
-23. Análise de sentimento (detectar insatisfação/urgência)
-24. Atendente virtual com IA (primeira camada de triagem)
+21. ~~Transcrição automática de chamadas~~ — IMPLEMENTADO (Whisper
+    local via faster-whisper, servico ai-worker), ver docs/manual-36
+22. ~~Resumo automático de chamada~~ — IMPLEMENTADO (Llama 3 local
+    via Ollama), ver docs/manual-36 com identificação de tarefas
+23. ~~Análise de sentimento~~ — IMPLEMENTADO (Llama 3 local via
+    Ollama), ver docs/manual-36 (detectar insatisfação/urgência)
+24. ~~Atendente virtual com IA~~ — IMPLEMENTADO como camada de
+    triagem única (nao conversacional) via AGI + ai-worker, ver
+    docs/manual-37
+
+**BACKLOG COMPLETO - todos os itens 1-34 (Fase 1, Fase 2, Fase 3 e
+Infraestrutura) foram implementados.** Provedor de IA escolhido:
+local (Whisper + Llama 3 via Ollama), sem nuvem, sem custo por
+requisicao - ver docs/manual-36 e docs/manual-37 para avisos de
+honestidade tecnica sobre o que nao pode ser testado neste ambiente. (primeira camada de triagem)
 25. ~~Discador automático (campanhas)~~ — IMPLEMENTADO (reaproveita
     contexto do click-to-call, retry ate 3 tentativas), ver
     docs/manual-30

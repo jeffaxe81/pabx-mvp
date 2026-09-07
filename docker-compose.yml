@@ -23,6 +23,7 @@ services:
       - ./asterisk/certs:/etc/asterisk/certs:ro
       - ./asterisk/scripts:/var/lib/asterisk/scripts:ro
       - ./asterisk/sounds/custom:/var/lib/asterisk/sounds/custom:ro
+      - ./asterisk/agi:/var/lib/asterisk/agi-bin:ro
       - ./recordings:/var/spool/asterisk/monitor
       - asterisk_data:/var/spool/asterisk
     environment:
@@ -35,6 +36,9 @@ services:
       SMTP_USERNAME: ""
       SMTP_PASSWORD: ""
       SMTP_USE_TLS: "true"
+      # Atendente virtual com IA (backlog #24, ver manual 37) - só usado
+      # se o AGI atendente_virtual.py for de fato executado no dialplan.
+      AI_WORKER_URL: "http://ai-worker:8092"
 
   # Backend que fala AMI com o Asterisk e expõe a fila de atendimento
   # (quem está esperando) como uma API HTTP simples pro webphone consumir.
@@ -194,7 +198,46 @@ services:
       BACKUP_RETENTION_DAYS: "0"
     command: sh -c "while true; do sh /pabx-scripts/backup.sh; sleep 86400; done"
 
+  # Llama 3 local (backlog #21-24, ver manual 36). Roda o modelo
+  # localmente via Ollama - sem chamada pra nenhuma nuvem, sem custo
+  # por requisição, mas precisa de CPU/RAM reais (idealmente GPU) e de
+  # um download inicial de vários GB (ver manual pra instruções).
+  ollama:
+    image: ollama/ollama:latest
+    container_name: pabx-ollama
+    restart: unless-stopped
+    volumes:
+      - ollama_data:/root/.ollama
+    # Porta não exposta ao host de propósito - só o ai-worker (na
+    # mesma rede docker-compose) precisa falar com o Ollama.
+
+  # Transcrição (Whisper local) + resumo/sentimento/classificação de
+  # intenção (Llama 3 via Ollama) - backlog #21/#22/#23/#24.
+  # DESLIGADO POR PADRÃO (AI_FEATURES_ENABLED=false) - processamento
+  # de IA local tem custo computacional real, diferente do resto das
+  # integrações "grátis" deste projeto. Ver manual 36 antes de ligar.
+  ai-worker:
+    build: ./ai-worker
+    container_name: pabx-ai-worker
+    restart: unless-stopped
+    depends_on:
+      - ollama
+    volumes:
+      - ./recordings:/app/recordings:ro
+      - ai_worker_data:/app/data
+    environment:
+      AI_FEATURES_ENABLED: "false"
+      OLLAMA_URL: "http://ollama:11434"
+      OLLAMA_MODEL: "llama3"
+      WHISPER_MODEL_SIZE: "base"   # tiny/base/small/medium - maior = mais preciso e mais lento
+      SCAN_INTERVAL_SECONDS: "60"
+      TRANSCRIPTS_PATH: "/app/data/transcripts.jsonl"
+    ports:
+      - "8092:8092"
+
 volumes:
   asterisk_data:
   admin_data:
   queue_api_data:
+  ollama_data:
+  ai_worker_data:

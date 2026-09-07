@@ -32,6 +32,7 @@ def test_expected_contexts_present():
         "from-tdm-gateway", "pickup-target", "click-to-call",
         "qualidade-chamada", "solicitar-callback", "callback-connect",
         "pesquisa-satisfacao", "selecionar-idioma", "rotear-horario",
+        "atendente-virtual",
     }
     missing = expected - contexts
     assert not missing, f"Contextos esperados ausentes: {missing}"
@@ -360,6 +361,31 @@ def test_direct_dial_to_1000_defaults_to_portuguese_queue():
     exten_end = text.index("exten=>", exten_start + 1)
     block_text = text[exten_start:exten_end]
     assert 'FILA_IDIOMA=${IF($["${FILA_IDIOMA}"=""]?fila-t1' in block_text
+
+
+def test_virtual_attendant_test_extension_exists():
+    blocks = blocks_as_dict(load_ext_blocks())
+    text = blocks["t1-internal"].replace(" ", "")
+    assert "exten=>650,1,Goto(atendente-virtual,s,1)" in text
+
+
+def test_virtual_attendant_runs_agi_and_routes_by_intent():
+    blocks = blocks_as_dict(load_ext_blocks())
+    text = blocks["atendente-virtual"].replace(" ", "")
+    assert "AGI(atendente_virtual.py)" in text
+    assert "INTENT_DESTINO" in text
+
+
+def test_virtual_attendant_falls_back_to_general_queue_when_agi_sets_nothing():
+    """
+    Se o AGI não conseguir definir ${INTENT_DESTINO} por qualquer
+    motivo (ai-worker fora do ar, IA desligada, etc.), a chamada
+    precisa cair na fila geral - nunca travar sem destino nenhum.
+    """
+    blocks = blocks_as_dict(load_ext_blocks())
+    text = blocks["atendente-virtual"].replace(" ", "")
+    assert 'GotoIf($["${INTENT_DESTINO}"!=""]?rotear,1)' in text
+    assert "Goto(t1-internal,1000,1)" in text
 
 
 def test_simultaneous_ring_group_dials_all_members_at_once():
