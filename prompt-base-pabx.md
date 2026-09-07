@@ -200,7 +200,11 @@ PWA) não estão listados aqui de novo — só o que falta ou está parcial.
     manuais, autoatendimento, mesclado com BLF automático); SEM
     sincronização de calendário (categoria dos itens de IA), ver
     docs/manual-34
-30. Atendimento multilíngue
+30. ~~Atendimento multilíngue~~ — IMPLEMENTADO (seleção pt/en/es na
+    URA, fila+áudio próprios por idioma; só o fluxo principal, ver
+    limitação), ver docs/manual-35
+
+**Fase 3 sem IA completa (25-30, exceto os que dependem de provedor externo) ✅**
 
 **Infraestrutura e segurança (novo)**
 31. ~~Lista de bloqueio~~ — IMPLEMENTADO junto com o item #14

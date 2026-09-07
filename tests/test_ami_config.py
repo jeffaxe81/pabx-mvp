@@ -16,6 +16,19 @@ def test_queue_fila_t1_exists_with_receptionist_as_member():
     assert "member => PJSIP/t1-recepcao-2" in blocks["fila-t1"]
 
 
+def test_language_specific_queues_exist():
+    """
+    Backlog #30: cada idioma precisa da própria fila, com pelo menos
+    um atendente que "fala" aquele idioma - senão a seleção de idioma
+    da URA não teria efeito real nenhum.
+    """
+    blocks = {b["name"]: b["text"] for b in parse_blocks(QUEUES_CONF)}
+    assert "fila-t1-en" in blocks
+    assert "member => PJSIP/t1-recepcao" in blocks["fila-t1-en"]
+    assert "fila-t1-es" in blocks
+    assert "member => PJSIP/t1-recepcao-2" in blocks["fila-t1-es"]
+
+
 def test_queue_uses_round_robin_strategy_for_multiple_operators():
     """
     Com múltiplas telefonistas (backlog #8), a fila precisa distribuir

@@ -31,7 +31,7 @@ def test_expected_contexts_present():
         "t1-internal", "t2-internal", "t1-hints", "t2-hints",
         "from-tdm-gateway", "pickup-target", "click-to-call",
         "qualidade-chamada", "solicitar-callback", "callback-connect",
-        "pesquisa-satisfacao",
+        "pesquisa-satisfacao", "selecionar-idioma", "rotear-horario",
     }
     missing = expected - contexts
     assert not missing, f"Contextos esperados ausentes: {missing}"
@@ -48,7 +48,7 @@ def test_receptionist_extension_1000_routes_to_web_endpoint():
     assert "exten=>1000,1," in text
     exten_start = text.index("exten=>1000,1,")
     exten_end = text.index("exten=>", exten_start + 1)
-    assert "Queue(fila-t1,c)" in text[exten_start:exten_end]
+    assert "Queue(${FILA_IDIOMA},c)" in text[exten_start:exten_end]
 
 
 def test_unmatched_incoming_calls_go_into_the_ura():
@@ -161,7 +161,7 @@ def test_customer_stays_on_line_after_agent_hangs_up():
     """
     blocks = blocks_as_dict(load_ext_blocks())
     text = blocks["t1-internal"].replace(" ", "")
-    assert "Queue(fila-t1,c)" in text
+    assert "Queue(${FILA_IDIOMA},c)" in text
     assert "Dial(PJSIP/t1-recepcao,20,g)" in text
     assert "Dial(PJSIP/t1-recepcao-2,20,g)" in text
 
@@ -275,24 +275,28 @@ def test_ura_checks_holiday_mode_before_business_hours():
     O modo feriado (ligado manualmente pelo painel) precisa ter
     prioridade sobre o horário comercial normal - senão "feriado numa
     segunda de manhã" tocaria o menu de horário comercial mesmo assim.
+    Isso agora vive em [rotear-horario], depois da seleção de idioma
+    (backlog #30).
     """
     blocks = blocks_as_dict(load_ext_blocks())
-    text = blocks["ura-principal"].replace(" ", "")
+    text = blocks["rotear-horario"].replace(" ", "")
     holiday_check_pos = text.index("DB(config/modo-feriado")
     time_check_pos = text.index("GotoIfTime(")
     assert holiday_check_pos < time_check_pos
 
 
-def test_vip_check_has_priority_over_holiday_and_business_hours():
+def test_vip_check_has_priority_over_language_selection():
     """
-    Cliente VIP (backlog #28) precisa ser checado ANTES até do modo
-    feriado - é a regra de maior prioridade de todas.
+    Cliente VIP (backlog #28) precisa ser checado ANTES até da
+    seleção de idioma (backlog #30) - é a regra de maior prioridade
+    de todas, não faz sentido perguntar idioma pra quem já tem rota
+    direta definida.
     """
     blocks = blocks_as_dict(load_ext_blocks())
     text = blocks["ura-principal"].replace(" ", "")
     vip_check_pos = text.index("DB(vip/")
-    holiday_check_pos = text.index("DB(config/modo-feriado")
-    assert vip_check_pos < holiday_check_pos
+    language_check_pos = text.index("Background(custom/menu-idioma)")
+    assert vip_check_pos < language_check_pos
 
 
 def test_vip_route_uses_dynamic_extension_from_astdb():
@@ -320,6 +324,42 @@ def test_ura_test_extension_exists_for_internal_testing():
     blocks = blocks_as_dict(load_ext_blocks())
     text = blocks["t1-internal"].replace(" ", "")
     assert "exten=>700,1,Goto(ura-principal,s,1)" in text
+
+
+def test_language_selection_offers_three_languages():
+    blocks = blocks_as_dict(load_ext_blocks())
+    text = blocks["selecionar-idioma"].replace(" ", "")
+    assert "exten=>pt,1,Set(FILA_IDIOMA=fila-t1)" in text
+    assert "exten=>en,1,Set(FILA_IDIOMA=fila-t1-en)" in text
+    assert "exten=>es,1,Set(FILA_IDIOMA=fila-t1-es)" in text
+
+
+def test_language_selection_sets_language_specific_menu_audio():
+    blocks = blocks_as_dict(load_ext_blocks())
+    text = blocks["selecionar-idioma"].replace(" ", "")
+    assert "MENU_PRINCIPAL=custom/menu-principal-pt" in text
+    assert "MENU_PRINCIPAL=custom/menu-principal-en" in text
+    assert "MENU_PRINCIPAL=custom/menu-principal-es" in text
+
+
+def test_business_hours_menu_uses_selected_language_audio():
+    blocks = blocks_as_dict(load_ext_blocks())
+    text = blocks["horario-comercial"].replace(" ", "")
+    assert "Background(${MENU_PRINCIPAL})" in text
+
+
+def test_direct_dial_to_1000_defaults_to_portuguese_queue():
+    """
+    Ramal 1000 discado diretamente (sem passar pela URA - ex: ramal
+    interno ou teste) precisa cair na fila em português por padrão,
+    já que ${FILA_IDIOMA} nunca foi definido nesse caminho.
+    """
+    blocks = blocks_as_dict(load_ext_blocks())
+    text = blocks["t1-internal"].replace(" ", "")
+    exten_start = text.index("exten=>1000,1,")
+    exten_end = text.index("exten=>", exten_start + 1)
+    block_text = text[exten_start:exten_end]
+    assert 'FILA_IDIOMA=${IF($["${FILA_IDIOMA}"=""]?fila-t1' in block_text
 
 
 def test_simultaneous_ring_group_dials_all_members_at_once():
