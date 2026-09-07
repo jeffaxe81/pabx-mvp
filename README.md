@@ -318,6 +318,11 @@ pré-existentes (`ami_client.py` e `queue-api/server.py`), fechados com
 um novo teste de importabilidade em todas as suítes — ver
 `docs/manual-38-multi-tenant-completo.md`.
 
+**E um wizard de preparação de ambiente por tenant**: cria telefonistas,
+filas, dialplan completo e mapeamento de DID pra um tenant novo (t3,
+t4...) sem editar nenhum `.conf` na mão — usando `#include` com
+wildcard nos arquivos estáticos — ver `docs/manual-39-wizard-tenant.md`.
+
 Para ajustar quais ramais aparecem na lista de colegas, edite o array
 `COLLEAGUES` no início do `<script>` em `webphone/index.html`. Cada
 ramal monitorado precisa ter um `hint` correspondente em
@@ -342,7 +347,7 @@ cd ../queue-api
 python3 -m pytest tests/ -v
 ```
 
-606 testes estáticos no total, em 7 suítes (`tests/`, `queue-api/tests/`,
+639 testes estáticos no total, em 7 suítes (`tests/`, `queue-api/tests/`,
 `admin-api/tests/`, `asterisk/scripts/tests/`, `backup/tests/`,
 `ai-worker/tests/`, `asterisk/agi/tests/`) — nenhuma delas sobe o
 Asterisk, Whisper ou Ollama de verdade. Detalhes em `tests/README.md`.

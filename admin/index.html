@@ -248,6 +248,52 @@
     <button class="btn-ghost" id="cancelUserEditBtn" style="display:none; margin-top:18px; margin-left:8px;">Cancelar edição</button>
     <div class="error-msg" id="userFormError"></div>
   </div>
+
+  <div class="form-card" id="tenantWizardCard" style="margin-top:24px; display:none;">
+    <h2>Preparar ambiente de um tenant novo</h2>
+    <p style="font-size:13px; color:var(--text-muted); margin:0 0 12px;">
+      Cria telefonistas web, filas (padrão + inglês + espanhol) e todo
+      o dialplan de um tenant novo automaticamente - sem editar nenhum
+      arquivo `.conf` na mão. t1 e t2 já existem como exemplos fixos;
+      o wizard cria a partir de t3.
+    </p>
+
+    <table>
+      <thead><tr><th>Tenant</th><th>DID</th><th>Nome</th></tr></thead>
+      <tbody id="tenantsTableBody"></tbody>
+    </table>
+    <div class="empty-hint" id="tenantsEmptyHint" style="display:none;">Nenhum tenant criado pelo wizard ainda.</div>
+
+    <div id="tenantWizardStep1">
+      <div class="form-row" style="margin-top:14px;">
+        <div>
+          <label for="wizardTenantIdInput">ID do tenant (ex: t3, t4...)</label>
+          <input id="wizardTenantIdInput" placeholder="t3">
+        </div>
+        <div>
+          <label for="wizardDidInput">DID (número que o cliente vai discar)</label>
+          <input id="wizardDidInput" placeholder="5511900003333">
+        </div>
+      </div>
+      <div class="form-row">
+        <div>
+          <label for="wizardDisplayNameInput">Nome de exibição</label>
+          <input id="wizardDisplayNameInput" placeholder="Empresa C">
+        </div>
+      </div>
+      <button class="btn-primary" id="wizardReviewBtn" style="width:auto;">Revisar</button>
+    </div>
+
+    <div id="tenantWizardStep2" style="display:none;">
+      <p style="font-size:13px; color:var(--text-muted);">Confirme os dados antes de criar - isso gera arquivos de configuração e recarrega o Asterisk:</p>
+      <ul id="wizardReviewList" style="font-size:14px; line-height:1.8;"></ul>
+      <button class="btn-primary" id="wizardConfirmBtn" style="width:auto;">Criar tenant</button>
+      <button class="btn-ghost" id="wizardBackBtn" style="width:auto; margin-left:8px;">Voltar</button>
+    </div>
+
+    <div id="tenantWizardResult" style="display:none; margin-top:14px; font-size:13px;"></div>
+    <div class="error-msg" id="tenantWizardError"></div>
+  </div>
 </div>
 
 <script>
@@ -290,6 +336,7 @@
     loadHolidayMode();
     loadTotpStatus();
     if (myRole === 'admin') loadUsers();
+    if (myRole === 'admin') loadTenants();
   }
 
   el('loginBtn').addEventListener('click', () => {
@@ -538,6 +585,7 @@
     el('blocklistFormCard').style.display = isAdmin ? 'block' : 'none';
     el('vipFormCard').style.display = isAdmin ? 'block' : 'none';
     el('usersFormCard').style.display = isAdmin ? 'block' : 'none';
+    el('tenantWizardCard').style.display = isAdmin ? 'block' : 'none';
     // A tabela de ramais/lista de bloqueio continua visível (leitura)
     // pro supervisor - só os formulários de edição somem.
   }
@@ -662,6 +710,65 @@
         loadTotpStatus();
       })
       .catch((err) => { el('totpConfigError').textContent = err.message; });
+  });
+
+  // ---------- Wizard de preparação de ambiente por tenant (backlog #39) ----------
+  let pendingTenantData = null;
+
+  function loadTenants() {
+    apiFetch('/api/tenants').then((data) => renderTenantsTable(data.tenants || []));
+  }
+
+  function renderTenantsTable(tenantList) {
+    el('tenantsEmptyHint').style.display = tenantList.length === 0 ? 'block' : 'none';
+    el('tenantsTableBody').innerHTML = tenantList.map((t) => `
+      <tr>
+        <td class="mono">${t.tenant_id}</td>
+        <td class="mono">${t.did}</td>
+        <td>${t.display_name}</td>
+      </tr>`).join('');
+  }
+
+  el('wizardReviewBtn').addEventListener('click', () => {
+    el('tenantWizardError').textContent = '';
+    pendingTenantData = {
+      tenant_id: el('wizardTenantIdInput').value.trim(),
+      did: el('wizardDidInput').value.trim(),
+      display_name: el('wizardDisplayNameInput').value.trim(),
+    };
+
+    el('wizardReviewList').innerHTML = `
+      <li><strong>ID do tenant:</strong> ${pendingTenantData.tenant_id}</li>
+      <li><strong>DID:</strong> ${pendingTenantData.did}</li>
+      <li><strong>Nome:</strong> ${pendingTenantData.display_name}</li>
+      <li>Serão criadas 2 telefonistas web, 3 filas (padrão/inglês/espanhol) e o dialplan completo desse tenant.</li>
+    `;
+    el('tenantWizardStep1').style.display = 'none';
+    el('tenantWizardStep2').style.display = 'block';
+    el('tenantWizardResult').style.display = 'none';
+  });
+
+  el('wizardBackBtn').addEventListener('click', () => {
+    el('tenantWizardStep1').style.display = 'block';
+    el('tenantWizardStep2').style.display = 'none';
+  });
+
+  el('wizardConfirmBtn').addEventListener('click', () => {
+    el('tenantWizardError').textContent = '';
+    apiFetch('/api/tenants', { method: 'POST', body: JSON.stringify(pendingTenantData) })
+      .then((data) => {
+        el('tenantWizardResult').style.display = 'block';
+        el('tenantWizardResult').innerHTML = data.reload_error
+          ? `Tenant criado, mas o reload automático falhou (${data.reload_error}) - rode manualmente pelo Asterisk.`
+          : `Tenant "${data.tenant.tenant_id}" criado e recarregado com sucesso. Registre as telefonistas ${data.tenant.tenant_id}-recepcao / ${data.tenant.tenant_id}-recepcao-2 nos softphones.`;
+        el('tenantWizardStep1').style.display = 'block';
+        el('tenantWizardStep2').style.display = 'none';
+        el('wizardTenantIdInput').value = '';
+        el('wizardDidInput').value = '';
+        el('wizardDisplayNameInput').value = '';
+        loadTenants();
+      })
+      .catch((err) => { el('tenantWizardError').textContent = err.message; });
   });
 })();
 </script>

@@ -38,14 +38,16 @@ class AMIClient:
         return blocks[0] if blocks else {}
 
     def reload_pjsip_and_dialplan(self):
-        """Recarrega PJSIP e dialplan sem derrubar chamadas em andamento."""
+        """Recarrega PJSIP, dialplan, voicemail e filas sem derrubar chamadas em andamento."""
         pjsip_response = self._send_action({"Action": "Command", "Command": "pjsip reload"})
         dialplan_response = self._send_action({"Action": "Command", "Command": "dialplan reload"})
         voicemail_response = self._send_action({"Action": "Command", "Command": "voicemail reload"})
+        queue_response = self._send_action({"Action": "Command", "Command": "queue reload all"})
         return {
             "pjsip": pjsip_response.get("Response"),
             "dialplan": dialplan_response.get("Response"),
             "voicemail": voicemail_response.get("Response"),
+            "queue": queue_response.get("Response"),
         }
 
     def block_number(self, number: str, tenant: str = "t1"):
@@ -139,6 +141,22 @@ class AMIClient:
 
         blocks = parse_ami_blocks(data.decode("utf-8", errors="replace"))
         return [b["Key"].split("/")[-1] for b in blocks if b.get("Key")]
+
+    def register_tenant_did(self, did: str, tenant_id: str):
+        """
+        Wizard de preparação de ambiente (backlog #39): associa um DID
+        ao tenant, na mesma família AstDB que from-tdm-gateway consulta
+        pra decidir ${TENANT} de chamadas de entrada não mapeadas
+        explicitamente no dialplan.
+        """
+        return self._send_action({
+            "Action": "DBPut", "Family": "tenant-did", "Key": did, "Val": tenant_id,
+        })
+
+    def unregister_tenant_did(self, did: str):
+        return self._send_action({
+            "Action": "DBDel", "Family": "tenant-did", "Key": did,
+        })
 
     def close(self):
         if self._sock:

@@ -343,3 +343,24 @@ def test_every_context_env_var_read_by_queue_api_is_documented_in_compose():
     env = compose["services"]["queue-api"].get("environment", {})
     missing = [v for v in context_vars if v not in env]
     assert not missing, f"Variáveis de contexto sem entrada explícita no compose: {missing}"
+
+
+def test_tenant_dynamic_directories_mounted_into_asterisk():
+    """
+    Backlog #39 (wizard de preparação de ambiente): sem esses volumes
+    de diretório, os arquivos que o admin-api gera pra um tenant novo
+    (pjsip_tenants/t3.conf, etc.) nunca apareceriam dentro do
+    container do Asterisk - o wildcard #include não encontraria nada.
+    """
+    compose = load_compose()
+    asterisk_volumes = compose["services"]["asterisk"].get("volumes", [])
+    for subdir in ("pjsip_tenants", "queues_tenants", "extensions_tenants", "voicemail_tenants"):
+        assert any(f"./asterisk/{subdir}:" in v for v in asterisk_volumes), (
+            f"Diretório {subdir} não está montado no serviço asterisk"
+        )
+
+
+def test_tenants_path_configured_for_admin_api():
+    compose = load_compose()
+    env = compose["services"]["admin-api"].get("environment", {})
+    assert "TENANTS_PATH" in env

@@ -214,16 +214,16 @@ def test_tenant_is_validated_before_any_astdb_mutation():
 
 def test_unknown_tenant_is_rejected_not_silently_defaulted():
     """
-    validate_tenant() precisa recusar um tenant fora da lista
-    conhecida (VALID_TENANTS) - se aceitasse qualquer string, alguém
-    poderia criar famílias AstDB arbitrárias (blocklist-t99, por
-    exemplo) que o dialplan nunca consultaria, dando falsa sensação
-    de que o bloqueio funcionou.
+    validate_tenant() precisa recusar um tenant fora da lista de
+    conhecidos (estáticos t1/t2 + criados pelo wizard, backlog #39) -
+    se aceitasse qualquer string, alguém poderia criar famílias AstDB
+    arbitrárias (blocklist-t99, por exemplo) que o dialplan nunca
+    consultaria, dando falsa sensação de que o bloqueio funcionou.
     """
     source = load_source()
     fn_body = get_function_body(source, "validate_tenant")
-    assert "VALID_TENANTS" in fn_body
-    assert "in VALID_TENANTS" in fn_body
+    assert "STATIC_TENANTS" in fn_body
+    assert "load_tenants(TENANTS_PATH)" in fn_body
 
 
 def test_extension_listing_filters_by_tenant_query_param():
@@ -237,3 +237,29 @@ def test_extension_listing_filters_by_tenant_query_param():
     extensions_branch = do_get_body[extensions_branch_start:extensions_branch_start + 400]
     assert "tenant_filter" in extensions_branch
     assert 'e.get("tenant"' in extensions_branch
+
+
+def test_create_tenant_requires_admin_role():
+    source = load_source()
+    body = get_function_body(source, "_handle_create_tenant")
+    assert '_require_role({"admin"})' in body
+
+
+def test_create_tenant_validates_before_writing_any_file():
+    """
+    A validação (tenant novo, DID não duplicado, etc.) precisa
+    acontecer ANTES de escrever qualquer arquivo de config - senão um
+    tenant inválido deixaria arquivos órfãos no disco.
+    """
+    source = load_source()
+    body = get_function_body(source, "_handle_create_tenant")
+    validate_pos = body.index("validate_tenant_creation_input(")
+    write_pos = body.index("write_text(")
+    assert validate_pos < write_pos
+
+
+def test_create_tenant_registers_did_and_persists_only_after_success():
+    source = load_source()
+    body = get_function_body(source, "_handle_create_tenant")
+    assert "register_tenant_did(" in body
+    assert "save_tenants(" in body

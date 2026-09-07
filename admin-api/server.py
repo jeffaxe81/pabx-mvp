@@ -25,24 +25,29 @@ from conf_generator import render_all
 from ami_client import AMIClient
 from blocklist import validate_blocklist_number
 from vip import validate_vip_input
+from tenants import (
+    load_tenants, save_tenants, validate_tenant_creation_input,
+    render_tenant_pjsip, render_tenant_queues, render_tenant_extensions, render_tenant_voicemail,
+)
 from users import load_users, save_users, find_user, add_user, update_user, delete_user, public_user
 from totp import generate_secret, verify_totp, build_provisioning_uri
 
 HTTP_PORT = int(os.environ.get("HTTP_PORT", "8091"))
 STORE_PATH = os.environ.get("STORE_PATH", "/app/data/extensions_store.json")
+TENANTS_PATH = os.environ.get("TENANTS_PATH", "/app/data/tenants.json")
 
-# Multi-tenant (backlog #38): tenants conhecidos - qualquer requisição
-# de bloqueio/VIP/feriado que informar um tenant fora dessa lista é
-# rejeitada, em vez de criar silenciosamente uma família AstDB nova
-# pra um tenant que não existe de verdade no dialplan.
-VALID_TENANTS = {"t1", "t2"}
+# Multi-tenant (backlog #38/#39): t1/t2 são os exemplos estáticos
+# originais do projeto (sempre válidos); os demais são os que o
+# wizard de preparação de ambiente criou dinamicamente.
+STATIC_TENANTS = {"t1", "t2"}
 DEFAULT_TENANT = "t1"
 
 
 def validate_tenant(raw_tenant: str):
-    """Retorna o tenant se for válido, ou None. Vazio/ausente vira o padrão (t1)."""
+    """Retorna o tenant se for conhecido (estático ou criado pelo wizard), ou None. Vazio/ausente vira o padrão (t1)."""
     tenant = (raw_tenant or DEFAULT_TENANT).strip()
-    return tenant if tenant in VALID_TENANTS else None
+    known_tenants = STATIC_TENANTS | {t["tenant_id"] for t in load_tenants(TENANTS_PATH)}
+    return tenant if tenant in known_tenants else None
 USERS_PATH = os.environ.get("USERS_PATH", "/app/data/users.json")
 ASTERISK_CONF_DIR = os.environ.get("ASTERISK_CONF_DIR", "/app/asterisk-conf")
 STATIC_DIR = Path(os.environ.get("STATIC_DIR", "/app/static"))
@@ -192,6 +197,10 @@ class Handler(BaseHTTPRequestHandler):
                 return
             users = [public_user(u) for u in load_users(USERS_PATH)]
             self._send_json(200, {"users": users})
+        elif self.path.startswith("/api/tenants"):
+            if not self._require_role({"admin"}):
+                return
+            self._send_json(200, {"tenants": load_tenants(TENANTS_PATH)})
         elif self.path in ("/", "/index.html"):
             self._serve_static("index.html", "text/html")
         else:
@@ -200,7 +209,7 @@ class Handler(BaseHTTPRequestHandler):
     def _handle_list_blocklist(self):
         tenant = validate_tenant(parse_qs(urlparse(self.path).query).get("tenant", [None])[0])
         if not tenant:
-            self._send_json(400, {"error": f"tenant inválido - use um de: {sorted(VALID_TENANTS)}"})
+            self._send_json(400, {"error": "tenant inválido ou não cadastrado"})
             return
         client = AMIClient(AMI_HOST, AMI_PORT, AMI_USERNAME, AMI_SECRET)
         try:
@@ -215,7 +224,7 @@ class Handler(BaseHTTPRequestHandler):
     def _handle_list_vip(self):
         tenant = validate_tenant(parse_qs(urlparse(self.path).query).get("tenant", [None])[0])
         if not tenant:
-            self._send_json(400, {"error": f"tenant inválido - use um de: {sorted(VALID_TENANTS)}"})
+            self._send_json(400, {"error": "tenant inválido ou não cadastrado"})
             return
         client = AMIClient(AMI_HOST, AMI_PORT, AMI_USERNAME, AMI_SECRET)
         try:
@@ -230,7 +239,7 @@ class Handler(BaseHTTPRequestHandler):
     def _handle_get_holiday_mode(self):
         tenant = validate_tenant(parse_qs(urlparse(self.path).query).get("tenant", [None])[0])
         if not tenant:
-            self._send_json(400, {"error": f"tenant inválido - use um de: {sorted(VALID_TENANTS)}"})
+            self._send_json(400, {"error": "tenant inválido ou não cadastrado"})
             return
         client = AMIClient(AMI_HOST, AMI_PORT, AMI_USERNAME, AMI_SECRET)
         try:
@@ -270,6 +279,8 @@ class Handler(BaseHTTPRequestHandler):
             self._handle_set_holiday_mode()
         elif self.path == "/api/users":
             self._handle_create_user()
+        elif self.path == "/api/tenants":
+            self._handle_create_tenant()
         elif self.path == "/api/login/verify-totp":
             self._handle_verify_totp_login()
         elif self.path == "/api/totp/setup":
@@ -355,6 +366,55 @@ class Handler(BaseHTTPRequestHandler):
             return
         self._send_json(201, {"user": public_user(cleaned)})
 
+    def _handle_create_tenant(self):
+        """
+        Wizard de preparação de ambiente (backlog #39): cria um tenant
+        novo de ponta a ponta - gera os 4 arquivos de config (um por
+        tenant, incluídos via wildcard - ver manual 39), registra o
+        DID no AstDB, e persiste o tenant na lista de conhecidos.
+        Pede reload no final igual ao resto do painel.
+        """
+        if not self._require_role({"admin"}):
+            return
+        data = self._read_json_body()
+        if data is None:
+            self._send_json(400, {"error": "JSON inválido"})
+            return
+
+        existing = load_tenants(TENANTS_PATH)
+        ok, error, cleaned = validate_tenant_creation_input(data, existing)
+        if not ok:
+            self._send_json(400, {"error": error})
+            return
+
+        tenant_id = cleaned["tenant_id"]
+        for subdir, filename_prefix, render_fn in (
+            ("pjsip_tenants", "", render_tenant_pjsip),
+            ("queues_tenants", "", render_tenant_queues),
+            ("extensions_tenants", "", render_tenant_extensions),
+            ("voicemail_tenants", "", render_tenant_voicemail),
+        ):
+            target_dir = Path(ASTERISK_CONF_DIR, subdir)
+            target_dir.mkdir(parents=True, exist_ok=True)
+            Path(target_dir, f"{tenant_id}.conf").write_text(render_fn(tenant_id), encoding="utf-8")
+
+        client = AMIClient(AMI_HOST, AMI_PORT, AMI_USERNAME, AMI_SECRET)
+        try:
+            client.connect_and_login()
+            client.register_tenant_did(cleaned["did"], tenant_id)
+            reload_result = client.reload_pjsip_and_dialplan()
+        except Exception as exc:  # noqa: BLE001
+            existing.append(cleaned)
+            save_tenants(TENANTS_PATH, existing)
+            self._send_json(201, {"tenant": cleaned, "reload_error": str(exc)})
+            return
+        finally:
+            client.close()
+
+        existing.append(cleaned)
+        save_tenants(TENANTS_PATH, existing)
+        self._send_json(201, {"tenant": cleaned, "reload": reload_result})
+
     def _handle_set_holiday_mode(self):
         if not self._require_role({"admin", "supervisor"}):
             return
@@ -364,7 +424,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         tenant = validate_tenant(data.get("tenant"))
         if not tenant:
-            self._send_json(400, {"error": f"tenant inválido - use um de: {sorted(VALID_TENANTS)}"})
+            self._send_json(400, {"error": "tenant inválido ou não cadastrado"})
             return
 
         client = AMIClient(AMI_HOST, AMI_PORT, AMI_USERNAME, AMI_SECRET)
@@ -391,7 +451,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         tenant = validate_tenant(data.get("tenant"))
         if not tenant:
-            self._send_json(400, {"error": f"tenant inválido - use um de: {sorted(VALID_TENANTS)}"})
+            self._send_json(400, {"error": "tenant inválido ou não cadastrado"})
             return
 
         client = AMIClient(AMI_HOST, AMI_PORT, AMI_USERNAME, AMI_SECRET)
@@ -421,7 +481,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         tenant = validate_tenant(data.get("tenant"))
         if not tenant:
-            self._send_json(400, {"error": f"tenant inválido - use um de: {sorted(VALID_TENANTS)}"})
+            self._send_json(400, {"error": "tenant inválido ou não cadastrado"})
             return
 
         client = AMIClient(AMI_HOST, AMI_PORT, AMI_USERNAME, AMI_SECRET)
@@ -603,7 +663,7 @@ class Handler(BaseHTTPRequestHandler):
         number = path[len("/api/blocklist/"):]
         tenant = validate_tenant(parse_qs(query).get("tenant", [None])[0])
         if not tenant:
-            self._send_json(400, {"error": f"tenant inválido - use um de: {sorted(VALID_TENANTS)}"})
+            self._send_json(400, {"error": "tenant inválido ou não cadastrado"})
             return
 
         client = AMIClient(AMI_HOST, AMI_PORT, AMI_USERNAME, AMI_SECRET)
@@ -624,7 +684,7 @@ class Handler(BaseHTTPRequestHandler):
         number = path[len("/api/vip/"):]
         tenant = validate_tenant(parse_qs(query).get("tenant", [None])[0])
         if not tenant:
-            self._send_json(400, {"error": f"tenant inválido - use um de: {sorted(VALID_TENANTS)}"})
+            self._send_json(400, {"error": "tenant inválido ou não cadastrado"})
             return
 
         client = AMIClient(AMI_HOST, AMI_PORT, AMI_USERNAME, AMI_SECRET)

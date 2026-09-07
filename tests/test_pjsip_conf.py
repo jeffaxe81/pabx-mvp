@@ -154,3 +154,9 @@ def test_pjsip_conf_includes_admin_panel_dynamic_extensions():
     """
     content = PJSIP_CONF.read_text(encoding="utf-8")
     assert "#include pjsip_dynamic.conf" in content
+
+
+def test_pjsip_includes_wizard_created_tenants_via_wildcard():
+    """Backlog #39: tenant novo criado pelo wizard aparece automaticamente, sem editar este arquivo."""
+    content = PJSIP_CONF.read_text(encoding="utf-8")
+    assert "#include pjsip_tenants/*.conf" in content

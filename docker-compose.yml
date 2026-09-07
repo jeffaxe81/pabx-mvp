@@ -17,6 +17,15 @@ services:
       - ./asterisk/voicemail.conf:/etc/asterisk/voicemail.conf
       - ./asterisk/voicemail_dynamic_t1.conf:/etc/asterisk/voicemail_dynamic_t1.conf
       - ./asterisk/voicemail_dynamic_t2.conf:/etc/asterisk/voicemail_dynamic_t2.conf
+      # Tenants criados pelo wizard de preparação de ambiente (backlog
+      # #39, ver manual 39) - montados como DIRETÓRIO (não arquivo por
+      # arquivo) porque o admin-api gera um arquivo novo por tenant
+      # sem avisar o docker-compose - #include com wildcard nos .conf
+      # estáticos encontra qualquer arquivo que aparecer aqui.
+      - ./asterisk/pjsip_tenants:/etc/asterisk/pjsip_tenants
+      - ./asterisk/queues_tenants:/etc/asterisk/queues_tenants
+      - ./asterisk/extensions_tenants:/etc/asterisk/extensions_tenants
+      - ./asterisk/voicemail_tenants:/etc/asterisk/voicemail_tenants
       - ./asterisk/rtp.conf:/etc/asterisk/rtp.conf
       - ./asterisk/http.conf:/etc/asterisk/http.conf
       - ./asterisk/manager.conf:/etc/asterisk/manager.conf
@@ -158,6 +167,7 @@ services:
     environment:
       HTTP_PORT: "8091"
       STORE_PATH: "/app/data/extensions_store.json"
+      TENANTS_PATH: "/app/data/tenants.json"
       USERS_PATH: "/app/data/users.json"
       ASTERISK_CONF_DIR: "/app/asterisk-conf"
       STATIC_DIR: "/app/static"

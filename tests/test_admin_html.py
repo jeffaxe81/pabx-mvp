@@ -21,6 +21,9 @@ REQUIRED_IDS = [
     "totpSetupBtn", "totpSetupBlock", "totpSecretDisplay", "totpConfirmInput", "totpConfirmBtn",
     "totpDisableBlock", "totpDisablePasswordInput", "totpDisableBtn", "totpConfigError",
     "tenantSelect", "tenantLabel",
+    "tenantWizardCard", "tenantsTableBody", "tenantsEmptyHint",
+    "wizardTenantIdInput", "wizardDidInput", "wizardDisplayNameInput", "wizardReviewBtn",
+    "wizardReviewList", "wizardConfirmBtn", "wizardBackBtn", "tenantWizardResult", "tenantWizardError",
 ]
 
 
@@ -191,3 +194,51 @@ def test_new_extension_form_tags_created_ramal_with_current_tenant():
     fn_end = html.index("});", html.index("catch", fn_start))
     body = html[fn_start:fn_end]
     assert "tenant: currentTenant" in body
+
+
+# ---------- Wizard de preparação de ambiente (backlog #39) ----------
+
+def test_tenant_wizard_hidden_from_supervisor():
+    html = load_html()
+    fn_start = html.index("function applyRolePermissions")
+    fn_end = html.index("}", html.index("continua visível", fn_start))
+    body = html[fn_start:fn_end]
+    assert "tenantWizardCard" in body
+
+
+def test_wizard_has_two_step_flow_with_review_before_creating():
+    """
+    Criar um tenant gera arquivos de config de verdade e recarrega o
+    Asterisk - não pode ser um clique só sem confirmação, tem que
+    passar por uma etapa de revisão antes.
+    """
+    html = load_html()
+    assert 'id="tenantWizardStep1"' in html
+    assert 'id="tenantWizardStep2"' in html
+    review_start = html.index("el('wizardReviewBtn').addEventListener")
+    review_end = html.index("});", review_start)
+    review_body = html[review_start:review_end]
+    assert "tenantWizardStep1').style.display = 'none'" in review_body
+    assert "tenantWizardStep2').style.display = 'block'" in review_body
+
+
+def test_wizard_confirm_posts_to_tenants_endpoint():
+    html = load_html()
+    confirm_start = html.index("el('wizardConfirmBtn').addEventListener")
+    confirm_end = html.index("});", html.index("catch", confirm_start))
+    body = html[confirm_start:confirm_end]
+    assert "/api/tenants" in body
+    assert "method: 'POST'" in body
+
+
+def test_wizard_reports_reload_failure_without_hiding_it():
+    """
+    Se o reload automático falhar (Asterisk fora do ar no momento),
+    a interface precisa avisar isso claramente em vez de fingir
+    sucesso completo - o tenant foi criado, mas precisa de atenção.
+    """
+    html = load_html()
+    confirm_start = html.index("el('wizardConfirmBtn').addEventListener")
+    confirm_end = html.index("});", html.index("catch", confirm_start))
+    body = html[confirm_start:confirm_end]
+    assert "reload_error" in body

@@ -53,3 +53,9 @@ def test_tenant1_telephonist_mailboxes_present():
     content = VOICEMAIL_CONF.read_text(encoding="utf-8")
     assert "t1-recepcao => 1234" in content
     assert "t1-recepcao-2 => 1234" in content
+
+
+def test_voicemail_includes_wizard_created_tenants_via_wildcard():
+    """Backlog #39: caixa de voz do tenant novo aparece automaticamente, sem editar este arquivo."""
+    content = VOICEMAIL_CONF.read_text(encoding="utf-8")
+    assert "#include voicemail_tenants/*.conf" in content

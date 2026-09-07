@@ -578,3 +578,30 @@ def test_from_tdm_gateway_sets_tenant_before_entering_shared_contexts():
     t2_set_pos = text.index("Set(TENANT=t2)", t2_pos)
     t2_goto_pos = text.index("Goto(t2-internal,1001,1)", t2_pos)
     assert t2_pos < t2_set_pos < t2_goto_pos
+
+
+def test_unmapped_did_looks_up_tenant_dynamically_via_astdb():
+    """
+    Backlog #39 (wizard de preparação de ambiente): o "pega-tudo" de
+    DID não mapeado explicitamente precisa consultar o AstDB (família
+    "tenant-did", registrada pelo wizard ao criar um tenant novo) ANTES
+    de cair no padrão (t1) - senão criar um tenant novo pelo wizard
+    nunca teria efeito nenhum no roteamento de chamada de entrada.
+    """
+    blocks = blocks_as_dict(load_ext_blocks())
+    text = blocks["from-tdm-gateway"].replace(" ", "")
+    catch_all_pos = text.index("exten=>_X.,1,")
+    lookup_pos = text.index("DB(tenant-did/${EXTEN})", catch_all_pos)
+    default_pos = text.index('TENANT=${IF($["${TENANT}"=""]?t1', catch_all_pos)
+    assert catch_all_pos < lookup_pos < default_pos
+
+
+def test_extensions_conf_includes_wizard_created_tenants_via_wildcard():
+    """
+    Backlog #39: criar um tenant novo NUNCA deve exigir editar
+    extensions.conf de novo - o #include com wildcard precisa estar
+    presente pra qualquer arquivo novo em extensions_tenants/ ser
+    carregado automaticamente.
+    """
+    content = EXTENSIONS_CONF.read_text(encoding="utf-8")
+    assert "#include extensions_tenants/*.conf" in content

@@ -292,3 +292,18 @@ reais pré-existentes (ami_client.py, queue-api/server.py) - nenhum
 teste pegava porque os testes de segurança liam o código como texto,
 nunca importavam de verdade. Corrigido com test_module_importability.py
 em todas as 7 suítes. Ver docs/manual-38.
+
+
+## Item #39 (pedido explícito do usuário, novo épico): Wizard de preparação de ambiente por tenant
+~~Wizard de preparação de ambiente por tenant~~ — IMPLEMENTADO. Fecha
+a limitação documentada no item #38 ("adicionar tenant 3 exige editar
+.conf na mão"). Painel de administração ganhou um assistente guiado
+(2 passos: preencher -> revisar -> criar) que gera automaticamente:
+2 telefonistas web, 3 filas (padrao/en/es), dialplan completo
+([tN-internal]/[tN-hints] espelhando t1/t2), caixas de voz, e
+mapeamento de DID->tenant via AstDB. Arquitetura: #include com
+wildcard (pjsip_tenants/*.conf, queues_tenants/*.conf,
+extensions_tenants/*.conf, voicemail_tenants/*.conf) - criar um
+tenant novo NUNCA edita os arquivos estaticos de novo. Roteamento de
+entrada (from-tdm-gateway) passou a consultar AstDB dinamicamente
+pra DIDs nao mapeados manualmente. Ver docs/manual-39.

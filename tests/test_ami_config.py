@@ -118,3 +118,9 @@ def test_manager_has_admin_api_user_scoped_to_reload_only():
     write_classes = (get_key(blocks["admin-api"], "write") or "").split(",")
     assert "system" in write_classes or "command" in write_classes
     assert "call" not in (get_key(blocks["admin-api"], "read") or "").split(",")
+
+
+def test_queues_conf_includes_wizard_created_tenants_via_wildcard():
+    """Backlog #39: fila do tenant novo aparece automaticamente, sem editar este arquivo."""
+    content = QUEUES_CONF.read_text(encoding="utf-8")
+    assert "#include queues_tenants/*.conf" in content
