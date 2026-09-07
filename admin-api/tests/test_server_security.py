@@ -263,3 +263,35 @@ def test_create_tenant_registers_did_and_persists_only_after_success():
     body = get_function_body(source, "_handle_create_tenant")
     assert "register_tenant_did(" in body
     assert "save_tenants(" in body
+
+
+def test_monitoring_pin_endpoints_require_admin_not_supervisor():
+    """
+    Mais restrito que modo feriado de propósito - configurar
+    monitoramento habilita vigilância de conversa de terceiros, uma
+    ação de peso diferente de ligar uma mensagem de feriado.
+    """
+    source = load_source()
+    for fn_name in ("_handle_set_monitoring_pin", "_handle_disable_monitoring"):
+        body = get_function_body(source, fn_name)
+        assert '_require_role({"admin"})' in body
+        assert "supervisor" not in body
+
+
+def test_monitoring_pin_validated_before_writing_to_astdb():
+    source = load_source()
+    body = get_function_body(source, "_handle_set_monitoring_pin")
+    validate_pos = body.index("validate_monitoring_pin_input(")
+    write_pos = body.index("set_monitoring_pin(")
+    assert validate_pos < write_pos
+
+
+def test_monitoring_pin_value_never_returned_to_browser():
+    """
+    O endpoint de consulta só informa SE está configurado
+    (True/False), nunca o PIN em si - mesmo princípio de nunca
+    devolver hash de senha.
+    """
+    source = load_source()
+    assert "is_monitoring_configured(" in source
+    assert '"configured":' in source

@@ -324,7 +324,10 @@ identificando lacunas reais. Gaps encontrados, viraram novo backlog:
 - #41: ~~Estacionamento de chamada (Park/Unpark)~~ - IMPLEMENTADO
   (res_parking nativo do Asterisk, vaga isolada por tenant, retorno
   automatico se nao recuperada). Ver docs/manual-41.
-- #42: Monitoramento de chamada (escuta silenciosa/sussurro/intercalacao, ChanSpy) - PENDENTE
+- #42: ~~Monitoramento de chamada (escuta/sussurro/intercalacao)~~ -
+  IMPLEMENTADO (ChanSpy nativo, protegido por PIN admin-only por
+  tenant, aviso explicito de implicacoes legais/trabalhistas no
+  manual e na interface). Ver docs/manual-42.
 - #43: Sala de conferencia ad-hoc (ConfBridge, diferente de grupo de toque) - PENDENTE
 - #44: Motivo de pausa do agente - PENDENTE
 - #45: Overflow/transbordo entre filas por tempo de espera - PENDENTE

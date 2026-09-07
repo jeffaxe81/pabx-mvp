@@ -338,6 +338,12 @@ do Asterisk, com vaga isolada por tenant (inclusive nos criados pelo
 wizard) e retorno automático se ninguém recuperar — ver
 `docs/manual-41-estacionamento-chamada.md`.
 
+**E monitoramento de chamada** (escuta silenciosa/sussurro/
+intercalação): protegido por PIN admin-only por tenant, com aviso
+explícito sobre implicações legais e trabalhistas — vigilância de
+conversa de terceiros exige mais do que só ser tecnicamente possível.
+Ver `docs/manual-42-monitoramento-chamada.md`.
+
 Para ajustar quais ramais aparecem na lista de colegas, edite o array
 `COLLEAGUES` no início do `<script>` em `webphone/index.html`. Cada
 ramal monitorado precisa ter um `hint` correspondente em
@@ -362,7 +368,7 @@ cd ../queue-api
 python3 -m pytest tests/ -v
 ```
 
-653 testes estáticos no total, em 7 suítes (`tests/`, `queue-api/tests/`,
+671 testes estáticos no total, em 7 suítes (`tests/`, `queue-api/tests/`,
 `admin-api/tests/`, `asterisk/scripts/tests/`, `backup/tests/`,
 `ai-worker/tests/`, `asterisk/agi/tests/`) — nenhuma delas sobe o
 Asterisk, Whisper ou Ollama de verdade. Detalhes em `tests/README.md`.

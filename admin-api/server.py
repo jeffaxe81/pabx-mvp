@@ -25,6 +25,7 @@ from conf_generator import render_all
 from ami_client import AMIClient
 from blocklist import validate_blocklist_number
 from vip import validate_vip_input
+from monitoring import validate_monitoring_pin_input
 from tenants import (
     load_tenants, save_tenants, validate_tenant_creation_input,
     render_tenant_pjsip, render_tenant_queues, render_tenant_extensions, render_tenant_voicemail,
@@ -202,6 +203,22 @@ class Handler(BaseHTTPRequestHandler):
             if not self._require_role({"admin"}):
                 return
             self._send_json(200, {"tenants": load_tenants(TENANTS_PATH)})
+        elif self.path.startswith("/api/monitoring-pin"):
+            if not self._require_role({"admin"}):
+                return
+            tenant = validate_tenant(parse_qs(urlparse(self.path).query).get("tenant", [None])[0])
+            if not tenant:
+                self._send_json(400, {"error": "tenant inválido ou não cadastrado"})
+                return
+            client = AMIClient(AMI_HOST, AMI_PORT, AMI_USERNAME, AMI_SECRET)
+            try:
+                client.connect_and_login()
+                configured = client.is_monitoring_configured(tenant)
+                self._send_json(200, {"configured": configured, "tenant": tenant})
+            except Exception as exc:  # noqa: BLE001
+                self._send_json(502, {"error": f"falha ao consultar AMI: {exc}"})
+            finally:
+                client.close()
         elif self.path in ("/", "/index.html"):
             self._serve_static("index.html", "text/html")
         else:
@@ -282,6 +299,8 @@ class Handler(BaseHTTPRequestHandler):
             self._handle_create_user()
         elif self.path == "/api/tenants":
             self._handle_create_tenant()
+        elif self.path == "/api/monitoring-pin":
+            self._handle_set_monitoring_pin()
         elif self.path == "/api/login/verify-totp":
             self._handle_verify_totp_login()
         elif self.path == "/api/totp/setup":
@@ -416,6 +435,39 @@ class Handler(BaseHTTPRequestHandler):
         existing.append(cleaned)
         save_tenants(TENANTS_PATH, existing)
         self._send_json(201, {"tenant": cleaned, "reload": reload_result})
+
+    def _handle_set_monitoring_pin(self):
+        """
+        Admin-only de propósito (mais restrito que modo feriado) -
+        configurar o PIN é habilitar vigilância de conversa de
+        terceiros, uma ação de maior peso que ligar/desligar uma
+        mensagem de feriado. Ver manual 42 pras implicações legais.
+        """
+        if not self._require_role({"admin"}):
+            return
+        data = self._read_json_body()
+        if data is None:
+            self._send_json(400, {"error": "JSON inválido"})
+            return
+
+        ok, error, pin = validate_monitoring_pin_input(data)
+        if not ok:
+            self._send_json(400, {"error": error})
+            return
+        tenant = validate_tenant(data.get("tenant"))
+        if not tenant:
+            self._send_json(400, {"error": "tenant inválido ou não cadastrado"})
+            return
+
+        client = AMIClient(AMI_HOST, AMI_PORT, AMI_USERNAME, AMI_SECRET)
+        try:
+            client.connect_and_login()
+            client.set_monitoring_pin(pin, tenant)
+            self._send_json(200, {"configured": True, "tenant": tenant})
+        except Exception as exc:  # noqa: BLE001
+            self._send_json(502, {"error": f"falha ao consultar AMI: {exc}"})
+        finally:
+            client.close()
 
     def _handle_set_holiday_mode(self):
         if not self._require_role({"admin", "supervisor"}):
@@ -636,8 +688,28 @@ class Handler(BaseHTTPRequestHandler):
             self._handle_remove_vip()
         elif self.path.startswith("/api/users/"):
             self._handle_delete_user()
+        elif self.path.startswith("/api/monitoring-pin"):
+            self._handle_disable_monitoring()
         else:
             self._send_json(404, {"error": "not found"})
+
+    def _handle_disable_monitoring(self):
+        if not self._require_role({"admin"}):
+            return
+        tenant = validate_tenant(parse_qs(urlparse(self.path).query).get("tenant", [None])[0])
+        if not tenant:
+            self._send_json(400, {"error": "tenant inválido ou não cadastrado"})
+            return
+
+        client = AMIClient(AMI_HOST, AMI_PORT, AMI_USERNAME, AMI_SECRET)
+        try:
+            client.connect_and_login()
+            client.disable_monitoring(tenant)
+            self._send_json(200, {"configured": False, "tenant": tenant})
+        except Exception as exc:  # noqa: BLE001
+            self._send_json(502, {"error": f"falha ao consultar AMI: {exc}"})
+        finally:
+            client.close()
 
     def _handle_delete_extension(self):
         if not self._require_role({"admin"}):

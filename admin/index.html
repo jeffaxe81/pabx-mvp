@@ -294,6 +294,27 @@
     <div id="tenantWizardResult" style="display:none; margin-top:14px; font-size:13px;"></div>
     <div class="error-msg" id="tenantWizardError"></div>
   </div>
+
+  <div class="form-card" id="monitoringPinCard" style="margin-top:24px; display:none;">
+    <h2>PIN de monitoramento de chamada</h2>
+    <p style="font-size:13px; color:var(--text-muted); margin:0 0 12px;">
+      <strong>Leia antes de ativar:</strong> monitoramento de chamada
+      é vigilância de conversa de terceiros - existem implicações
+      legais e trabalhistas reais que vão além do que é
+      tecnicamente possível. Consulte a área jurídica/RH antes de
+      configurar isso em produção (ver manual 42).
+    </p>
+    <p style="font-size:13px;">Status: <strong id="monitoringStatusText">carregando...</strong></p>
+    <div class="form-row">
+      <div>
+        <label for="monitoringPinInput">Novo PIN (4-10 dígitos)</label>
+        <input id="monitoringPinInput" type="password" inputmode="numeric" placeholder="482913">
+      </div>
+    </div>
+    <button class="btn-primary" id="setMonitoringPinBtn" style="width:auto;">Configurar/trocar PIN</button>
+    <button class="btn-danger" id="disableMonitoringBtn" style="width:auto; margin-left:8px;">Desativar monitoramento</button>
+    <div class="error-msg" id="monitoringPinError"></div>
+  </div>
 </div>
 
 <script>
@@ -337,6 +358,7 @@
     loadTotpStatus();
     if (myRole === 'admin') loadUsers();
     if (myRole === 'admin') loadTenants();
+    if (myRole === 'admin') loadMonitoringStatus();
   }
 
   el('loginBtn').addEventListener('click', () => {
@@ -574,6 +596,7 @@
     loadBlocklist();
     loadVips();
     loadHolidayMode();
+    if (myRole === 'admin') loadMonitoringStatus();
   });
 
   // ---------- Permissões por papel ----------
@@ -586,6 +609,7 @@
     el('vipFormCard').style.display = isAdmin ? 'block' : 'none';
     el('usersFormCard').style.display = isAdmin ? 'block' : 'none';
     el('tenantWizardCard').style.display = isAdmin ? 'block' : 'none';
+    el('monitoringPinCard').style.display = isAdmin ? 'block' : 'none';
     // A tabela de ramais/lista de bloqueio continua visível (leitura)
     // pro supervisor - só os formulários de edição somem.
   }
@@ -769,6 +793,38 @@
         loadTenants();
       })
       .catch((err) => { el('tenantWizardError').textContent = err.message; });
+  });
+
+  // ---------- PIN de monitoramento de chamada (backlog #42) ----------
+  function loadMonitoringStatus() {
+    apiFetch(`/api/monitoring-pin?tenant=${currentTenant}`)
+      .then((data) => {
+        el('monitoringStatusText').textContent = data.configured
+          ? 'ativado (monitoramento habilitado)'
+          : 'desativado (monitoramento bloqueado)';
+      })
+      .catch(() => { el('monitoringStatusText').textContent = 'indisponível'; });
+  }
+
+  el('setMonitoringPinBtn').addEventListener('click', () => {
+    el('monitoringPinError').textContent = '';
+    apiFetch('/api/monitoring-pin', {
+      method: 'POST',
+      body: JSON.stringify({ pin: el('monitoringPinInput').value, tenant: currentTenant }),
+    })
+      .then(() => {
+        el('monitoringPinInput').value = '';
+        loadMonitoringStatus();
+      })
+      .catch((err) => { el('monitoringPinError').textContent = err.message; });
+  });
+
+  el('disableMonitoringBtn').addEventListener('click', () => {
+    if (!confirm('Desativar o monitoramento de chamada deste tenant?')) return;
+    el('monitoringPinError').textContent = '';
+    apiFetch(`/api/monitoring-pin?tenant=${currentTenant}`, { method: 'DELETE' })
+      .then(loadMonitoringStatus)
+      .catch((err) => { el('monitoringPinError').textContent = err.message; });
   });
 })();
 </script>

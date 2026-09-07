@@ -638,3 +638,61 @@ def test_recording_consent_announcement_plays_before_recording_starts():
     playback_pos = block_text.index("Playback(custom/aviso-gravacao)")
     mixmonitor_pos = block_text.index("MixMonitor(")
     assert playback_pos < mixmonitor_pos
+
+
+# ---------- Monitoramento de chamada (backlog #42) ----------
+
+def test_both_tenants_have_monitoring_prefixes():
+    """Cada tenant precisa dos 3 prefixos (*81 escuta, *82 sussurro, *83 intercalação)."""
+    blocks = blocks_as_dict(load_ext_blocks())
+    for context_name, tenant in (("t1-internal", "t1"), ("t2-internal", "t2")):
+        text = blocks[context_name].replace(" ", "")
+        for prefix, mode in (("*81", "listen"), ("*82", "whisper"), ("*83", "barge")):
+            pattern = f"exten=>_{prefix}X.,1,Set(TENANT={tenant})"
+            assert pattern in text, f"{context_name} sem o prefixo {prefix}"
+            block_start = text.index(pattern)
+            remaining = text[block_start + 1:]
+            next_exten_offset = remaining.find("exten=>")
+            block_end = block_start + 1 + next_exten_offset if next_exten_offset != -1 else len(text)
+            assert f"MONITOR_MODE={mode}" in text[block_start:block_end]
+
+
+def test_monitoring_blocked_without_pin_configured():
+    """
+    Sem PIN configurado (AstDB vazio), o monitoramento precisa ficar
+    bloqueado por completo - desligado por padrão, mesmo padrão de
+    segurança do resto do projeto.
+    """
+    blocks = blocks_as_dict(load_ext_blocks())
+    text = blocks["chamada-monitorada"].replace(" ", "")
+    pin_check_pos = text.index("DB(monitoring-pin-${TENANT}/pin)")
+    empty_check_pos = text.index('GotoIf($["${PIN_ESPERADO}"=""]?sem-configuracao,1)')
+    assert pin_check_pos < empty_check_pos
+
+
+def test_pin_is_validated_before_authorizing_chanspy():
+    blocks = blocks_as_dict(load_ext_blocks())
+    text = blocks["chamada-monitorada"].replace(" ", "")
+    read_pos = text.index("Read(PIN_DIGITADO,")
+    compare_pos = text.index('PIN_DIGITADO}"="${PIN_ESPERADO}', read_pos)
+    authorized_pos = text.index("exten=>autorizado,1,", compare_pos)
+    assert read_pos < compare_pos < authorized_pos
+
+
+def test_all_three_modes_use_correct_chanspy_options():
+    """
+    'q' silencioso nos 3 modos, 'w' só no sussurro, 'B' só na
+    intercalação - trocar essas letras muda completamente o
+    comportamento (sussurro vazando pro cliente seria grave).
+    """
+    blocks = blocks_as_dict(load_ext_blocks())
+    text = blocks["chamada-monitorada"].replace(" ", "")
+    assert "ChanSpy(${MONITOR_CHANNEL},q)" in text
+    assert "ChanSpy(${MONITOR_CHANNEL},qw)" in text
+    assert "ChanSpy(${MONITOR_CHANNEL},qB)" in text
+
+
+def test_invalid_monitoring_target_does_not_silently_spy_on_nothing():
+    blocks = blocks_as_dict(load_ext_blocks())
+    text = blocks["chamada-monitorada"].replace(" ", "")
+    assert 'GotoIf($["${MONITOR_CHANNEL}"=""]?destino-invalido,1)' in text

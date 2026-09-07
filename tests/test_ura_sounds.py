@@ -14,6 +14,7 @@ EXPECTED_FILES = [
     "menu-idioma.wav", "menu-principal-pt.wav", "menu-principal-en.wav", "menu-principal-es.wav",
     "menu-atendente-virtual.wav",
     "aviso-gravacao.wav",
+    "menu-monitoramento-pin.wav", "menu-monitoramento-nao-configurado.wav",
 ]
 
 

@@ -160,6 +160,28 @@ class AMIClient:
             "Action": "DBDel", "Family": "tenant-did", "Key": did,
         })
 
+    def set_monitoring_pin(self, pin: str, tenant: str = "t1"):
+        """PIN de monitoramento de chamada (backlog #42) - AstDB família 'monitoring-pin-{tenant}'."""
+        return self._send_action({
+            "Action": "DBPut", "Family": f"monitoring-pin-{tenant}", "Key": "pin", "Val": pin,
+        })
+
+    def disable_monitoring(self, tenant: str = "t1"):
+        """Remove o PIN - sem PIN configurado, o dialplan bloqueia o monitoramento por completo."""
+        return self._send_action({
+            "Action": "DBDel", "Family": f"monitoring-pin-{tenant}", "Key": "pin",
+        })
+
+    def is_monitoring_configured(self, tenant: str = "t1") -> bool:
+        """
+        Só informa SE tem PIN configurado - nunca devolve o PIN em si
+        (mesmo princípio de nunca expor hash de senha de volta).
+        """
+        response = self._send_action({
+            "Action": "DBGet", "Family": f"monitoring-pin-{tenant}", "Key": "pin",
+        })
+        return response.get("Response") == "Success"
+
     def close(self):
         if self._sock:
             self._sock.close()

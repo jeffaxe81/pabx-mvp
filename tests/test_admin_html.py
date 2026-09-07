@@ -24,6 +24,7 @@ REQUIRED_IDS = [
     "tenantWizardCard", "tenantsTableBody", "tenantsEmptyHint",
     "wizardTenantIdInput", "wizardDidInput", "wizardDisplayNameInput", "wizardReviewBtn",
     "wizardReviewList", "wizardConfirmBtn", "wizardBackBtn", "tenantWizardResult", "tenantWizardError",
+    "monitoringPinCard", "monitoringStatusText", "monitoringPinInput", "setMonitoringPinBtn", "disableMonitoringBtn", "monitoringPinError",
 ]
 
 
@@ -242,3 +243,40 @@ def test_wizard_reports_reload_failure_without_hiding_it():
     confirm_end = html.index("});", html.index("catch", confirm_start))
     body = html[confirm_start:confirm_end]
     assert "reload_error" in body
+
+
+# ---------- PIN de monitoramento de chamada (backlog #42) ----------
+
+def test_monitoring_pin_card_hidden_from_supervisor():
+    html = load_html()
+    fn_start = html.index("function applyRolePermissions")
+    fn_end = html.index("}", html.index("continua visível", fn_start))
+    body = html[fn_start:fn_end]
+    assert "monitoringPinCard" in body
+
+
+def test_monitoring_pin_section_warns_about_legal_implications():
+    """
+    Monitoramento de chamada é vigilância de conversa de terceiros -
+    a interface precisa deixar isso claro antes de alguém configurar,
+    não só oferecer o botão sem contexto nenhum.
+    """
+    html = load_html()
+    section_start = html.index('id="monitoringPinCard"')
+    section_end = html.index('id="monitoringPinError"', section_start)
+    section_html = html[section_start:section_end]
+    assert "legais" in section_html.lower() or "jurídic" in section_html.lower()
+
+
+def test_disable_monitoring_requires_confirmation():
+    html = load_html()
+    fn_start = html.index("el('disableMonitoringBtn').addEventListener")
+    fn_end = html.index("});", fn_start)
+    body = html[fn_start:fn_end]
+    assert "confirm(" in body
+
+
+def test_monitoring_requests_include_current_tenant():
+    html = load_html()
+    assert "/api/monitoring-pin?tenant=${currentTenant}" in html
+    assert "tenant: currentTenant" in html
