@@ -2,6 +2,7 @@
 Testes estáticos do docker-compose.yml: garante que os serviços,
 portas e volumes esperados não sumiram numa refatoração futura.
 """
+import re
 from pathlib import Path
 
 import yaml
@@ -324,3 +325,21 @@ def test_asterisk_knows_where_to_reach_ai_worker():
     compose = load_compose()
     env = compose["services"]["asterisk"].get("environment", {})
     assert "AI_WORKER_URL" in env
+
+
+def test_every_context_env_var_read_by_queue_api_is_documented_in_compose():
+    """
+    Auditoria de coerência: toda variável PICKUP_CONTEXT/
+    CLICK_TO_CALL_CONTEXT/CALLBACK_CONNECT_CONTEXT lida pelo
+    queue-api precisa aparecer explicitamente no compose - mesmo
+    quando o valor padrão do código já funciona, deixar implícito é
+    inconsistente com o resto do arquivo (achado numa auditoria final,
+    ver git log).
+    """
+    server_source = (Path(__file__).parent.parent / "queue-api" / "server.py").read_text(encoding="utf-8")
+    context_vars = re.findall(r'([A-Z_]+_CONTEXT) = os\.environ\.get\("\1"', server_source)
+
+    compose = load_compose()
+    env = compose["services"]["queue-api"].get("environment", {})
+    missing = [v for v in context_vars if v not in env]
+    assert not missing, f"Variáveis de contexto sem entrada explícita no compose: {missing}"

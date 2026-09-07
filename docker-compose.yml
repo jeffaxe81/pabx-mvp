@@ -61,6 +61,7 @@ services:
       # Pickup dirigido (backlog #2/#8) - quais ramais podem "puxar"
       # uma chamada da fila. Adicione novos operadores aqui também.
       PICKUP_ALLOWED_EXTENSIONS: "t1-recepcao,t1-recepcao-2"
+      PICKUP_CONTEXT: "pickup-target"
       RECORDINGS_DIR: "/app/recordings"
       # Retenção de gravações (backlog #15) - 0 = desabilitado (nunca
       # apaga nada sozinho). Defina em dias (ex: "90") pra ativar o
