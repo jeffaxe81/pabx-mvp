@@ -190,7 +190,9 @@ PWA) não estão listados aqui de novo — só o que falta ou está parcial.
     docs/manual-30
 26. ~~Chamada de retorno (callback)~~ — IMPLEMENTADO (opção 9 na
     URA, fila FIFO, Originate direto pro cliente), ver docs/manual-31
-27. Pesquisa de satisfação pós-atendimento
+27. ~~Pesquisa de satisfação pós-atendimento~~ — IMPLEMENTADO (opção
+    c/g do Asterisk mantém cliente na linha, nota 1-5 associada ao
+    atendente via DIALEDPEERNAME), ver docs/manual-32
 28. Transferência inteligente por regra (horário/cliente/assunto)
 29. Presença corporativa avançada (ausente/reunião/férias) com
     sincronização de calendário

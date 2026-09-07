@@ -35,6 +35,7 @@ from callbacks import (
     parse_callback_request_event, add_callback_request, load_callbacks,
     find_callback, next_pending_callback, mark_callback_calling, mark_callback_result,
 )
+from survey import parse_survey_event, SurveyStore, average_score, score_distribution, summarize_by_operator
 from metrics import DailyMetrics
 from pickup import validate_pickup_request
 from extension_states import ExtensionStateTracker
@@ -118,6 +119,7 @@ CAMPAIGNS_PATH = os.environ.get("CAMPAIGNS_PATH", "/app/data/campaigns.json")
 # de risco do click-to-call/campanhas (originar chamada via AMI).
 CALLBACKS_PATH = os.environ.get("CALLBACKS_PATH", "/app/data/callbacks.json")
 CALLBACK_CONNECT_CONTEXT = os.environ.get("CALLBACK_CONNECT_CONTEXT", "callback-connect")
+SURVEY_PATH = os.environ.get("SURVEY_PATH", "/app/data/survey.jsonl")
 
 state = QueueStateTracker()
 missed_calls_log = MissedCallsLog()
@@ -169,6 +171,10 @@ def handle_ami_event(event: dict):
     callback_request = parse_callback_request_event(event)
     if callback_request:
         add_callback_request(CALLBACKS_PATH, callback_request["caller_id_num"], callback_request["caller_id_name"])
+
+    survey_result = parse_survey_event(event)
+    if survey_result:
+        SurveyStore(SURVEY_PATH).append(survey_result)
 
 
 def apply_callback_dial_result(event: dict):
@@ -283,6 +289,8 @@ class Handler(BaseHTTPRequestHandler):
             self._handle_list_campaigns()
         elif self.path.startswith("/api/callbacks"):
             self._handle_list_callbacks()
+        elif self.path.startswith("/api/satisfaction"):
+            self._handle_satisfaction_query()
         elif self.path.startswith("/recordings/"):
             self._serve_recording_file()
         else:
@@ -293,7 +301,19 @@ class Handler(BaseHTTPRequestHandler):
         only_poor = query.get("only_poor", ["false"])[0].lower() == "true"
         self._send_json(200, {"quality_reports": quality_log.list(only_poor=only_poor)})
 
-    def _handle_reports(self):
+    def _handle_satisfaction_query(self):
+        query = parse_qs(urlparse(self.path).query)
+        operator = query.get("operator", [None])[0]
+        records = SurveyStore(SURVEY_PATH).query(operator=operator)
+
+        if query.get("group_by", [None])[0] == "operator":
+            self._send_json(200, {"by_operator": summarize_by_operator(records)})
+        else:
+            self._send_json(200, {
+                "average": average_score(records),
+                "count": len(records),
+                "distribution": score_distribution(records),
+            })    def _handle_reports(self):
         query = parse_qs(urlparse(self.path).query)
         start = query.get("start", [None])[0]
         end = query.get("end", [None])[0]

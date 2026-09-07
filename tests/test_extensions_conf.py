@@ -31,6 +31,7 @@ def test_expected_contexts_present():
         "t1-internal", "t2-internal", "t1-hints", "t2-hints",
         "from-tdm-gateway", "pickup-target", "click-to-call",
         "qualidade-chamada", "solicitar-callback", "callback-connect",
+        "pesquisa-satisfacao",
     }
     missing = expected - contexts
     assert not missing, f"Contextos esperados ausentes: {missing}"
@@ -47,7 +48,7 @@ def test_receptionist_extension_1000_routes_to_web_endpoint():
     assert "exten=>1000,1," in text
     exten_start = text.index("exten=>1000,1,")
     exten_end = text.index("exten=>", exten_start + 1)
-    assert "Queue(fila-t1)" in text[exten_start:exten_end]
+    assert "Queue(fila-t1,c)" in text[exten_start:exten_end]
 
 
 def test_unmatched_incoming_calls_go_into_the_ura():
@@ -70,10 +71,10 @@ def test_pickup_target_context_dials_receptionist():
     """
     blocks = blocks_as_dict(load_ext_blocks())
     pickup_block = blocks["pickup-target"].replace(" ", "")
-    assert "exten=>t1-recepcao,1," in pickup_block
-    assert "Dial(PJSIP/t1-recepcao,20)" in pickup_block
-    assert "exten=>t1-recepcao-2,1," in pickup_block
-    assert "Dial(PJSIP/t1-recepcao-2,20)" in pickup_block
+    assert "exten=>t1-recepcao,1,Set(CHANNEL(hangup_handler_push)" in pickup_block
+    assert "Dial(PJSIP/t1-recepcao,20,g)" in pickup_block
+    assert "exten=>t1-recepcao-2,1,Set(CHANNEL(hangup_handler_push)" in pickup_block
+    assert "Dial(PJSIP/t1-recepcao-2,20,g)" in pickup_block
 
 
 def test_admin_panel_dynamic_extensions_are_included():
@@ -150,6 +151,38 @@ def test_callback_connect_context_dials_receptionist():
     blocks = blocks_as_dict(load_ext_blocks())
     text = blocks["callback-connect"].replace(" ", "")
     assert "Dial(PJSIP/t1-recepcao" in text
+
+
+def test_customer_stays_on_line_after_agent_hangs_up():
+    """
+    Sem a opção "c" (Queue) / "g" (Dial), o Asterisk derruba a
+    chamada do CLIENTE assim que a telefonista desliga - a pesquisa
+    de satisfação nunca rodaria.
+    """
+    blocks = blocks_as_dict(load_ext_blocks())
+    text = blocks["t1-internal"].replace(" ", "")
+    assert "Queue(fila-t1,c)" in text
+    assert "Dial(PJSIP/t1-recepcao,20,g)" in text
+    assert "Dial(PJSIP/t1-recepcao-2,20,g)" in text
+
+    pickup_text = blocks["pickup-target"].replace(" ", "")
+    assert "Dial(PJSIP/t1-recepcao,20,g)" in pickup_text
+    assert "Dial(PJSIP/t1-recepcao-2,20,g)" in pickup_text
+
+
+def test_survey_context_reads_digit_and_sends_user_event_with_operator():
+    blocks = blocks_as_dict(load_ext_blocks())
+    text = blocks["pesquisa-satisfacao"].replace(" ", "")
+    assert "Read(NOTA,custom/menu-satisfacao,1" in text
+    assert "UserEvent(SatisfactionSurvey" in text
+    assert "Nota=${NOTA}" in text
+    assert "Operator=${DIALEDPEERNAME}" in text
+
+
+def test_survey_handles_no_response():
+    blocks = blocks_as_dict(load_ext_blocks())
+    text = blocks["pesquisa-satisfacao"].replace(" ", "")
+    assert 'GotoIf($["${NOTA}"="' in text or "sem-resposta" in text
 
 
 def test_click_to_call_context_dials_via_tdm_gateway():

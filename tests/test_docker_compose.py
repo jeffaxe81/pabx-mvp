@@ -271,3 +271,9 @@ def test_callbacks_path_configured():
     env = compose["services"]["queue-api"].get("environment", {})
     assert "CALLBACKS_PATH" in env
     assert "CALLBACK_CONNECT_CONTEXT" in env
+
+
+def test_survey_path_configured():
+    compose = load_compose()
+    env = compose["services"]["queue-api"].get("environment", {})
+    assert "SURVEY_PATH" in env

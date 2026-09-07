@@ -35,6 +35,7 @@ configurar, como testar manualmente, e limitações conhecidas.
 29. [Monitoramento de qualidade de chamada](manual-29-monitoramento-qualidade.md)
 30. [Discador automático / campanhas](manual-30-discador-campanhas.md)
 31. [Chamada de retorno / callback](manual-31-callback.md)
+32. [Pesquisa de satisfação pós-atendimento](manual-32-pesquisa-satisfacao.md)
 
 ## Regra de manutenção
 
