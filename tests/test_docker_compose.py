@@ -277,3 +277,9 @@ def test_survey_path_configured():
     compose = load_compose()
     env = compose["services"]["queue-api"].get("environment", {})
     assert "SURVEY_PATH" in env
+
+
+def test_presence_path_configured():
+    compose = load_compose()
+    env = compose["services"]["queue-api"].get("environment", {})
+    assert "PRESENCE_PATH" in env

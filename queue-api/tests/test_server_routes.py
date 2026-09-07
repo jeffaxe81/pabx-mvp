@@ -73,6 +73,30 @@ def test_callback_dial_marks_calling_before_originating():
     assert mark_pos < originate_pos
 
 
+def test_extension_states_endpoint_merges_manual_presence():
+    """
+    Sem essa mesclagem, o painel operacional continuaria mostrando só
+    livre/tocando/ocupado - a presença manual (ausente/reunião/
+    férias) simplesmente nunca apareceria em lugar nenhum.
+    """
+    source = load_source()
+    fn_start = source.index('"/api/extension-states"')
+    fn_end = source.index("elif", fn_start)
+    body = source[fn_start:fn_end]
+    assert "merge_presence_into_states(" in body
+
+
+def test_presence_validates_before_persisting():
+    source = load_source()
+    fn_start = source.index("def _handle_set_presence")
+    signature_end = source.index("):", fn_start) + 2
+    fn_end = source.index("\n    def ", signature_end)
+    body = source[signature_end:fn_end]
+    validate_pos = body.index("validate_presence_input(")
+    set_pos = body.index("set_presence(")
+    assert validate_pos < set_pos
+
+
 def test_click_to_call_validates_before_touching_ami():
     """
     A validação (chave de API, ramal permitido, número sanitizado)

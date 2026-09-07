@@ -196,8 +196,10 @@ PWA) não estão listados aqui de novo — só o que falta ou está parcial.
 28. ~~Transferência inteligente por regra~~ — IMPLEMENTADO (cliente
     VIP via AstDB com prioridade máxima, retorno automático real via
     DIALSTATUS/QUEUESTATUS), ver docs/manual-33
-29. Presença corporativa avançada (ausente/reunião/férias) com
-    sincronização de calendário
+29. ~~Presença corporativa avançada~~ — IMPLEMENTADO (4 estados
+    manuais, autoatendimento, mesclado com BLF automático); SEM
+    sincronização de calendário (categoria dos itens de IA), ver
+    docs/manual-34
 30. Atendimento multilíngue
 
 **Infraestrutura e segurança (novo)**

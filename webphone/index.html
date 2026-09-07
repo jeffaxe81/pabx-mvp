@@ -102,7 +102,7 @@
   }
   label:first-child { margin-top: 0; }
 
-  input {
+  input, select {
     width: 100%;
     background: var(--panel-alt);
     border: 1px solid var(--border);
@@ -423,6 +423,18 @@
     <button class="btn-ghost" id="disconnectBtn" style="width:100%; margin-top:16px; display:none;">
       Desconectar
     </button>
+
+    <div id="presencePanel" style="display:none; margin-top:28px;">
+      <div class="log-title">Minha presença</div>
+      <select id="presenceStatusSelect">
+        <option value="disponivel">Disponível</option>
+        <option value="ausente">Ausente</option>
+        <option value="reuniao">Em reunião</option>
+        <option value="ferias">Férias</option>
+      </select>
+      <input id="presenceNoteInput" placeholder="Nota opcional (ex: volto às 15h)" style="margin-top:8px;">
+      <button class="btn-ghost" id="setPresenceBtn" style="width:100%; margin-top:8px;">Atualizar presença</button>
+    </div>
 
     <div id="colleaguesPanel" style="display:none; margin-top:28px;">
       <div class="log-title">Colegas</div>
@@ -896,6 +908,7 @@
       startMissedCallsPolling();
       startMetricsPolling();
       fetchRecordings();
+      el('presencePanel').style.display = 'block';
       timerInterval = setInterval(tickTimerDisplay, 1000);
     });
     ua.on('registrationFailed', (e) => {
@@ -921,6 +934,7 @@
     el('colleaguesPanel').style.display = 'none';
     el('metricsPanel').style.display = 'none';
     el('opsPanelLink').style.display = 'none';
+    el('presencePanel').style.display = 'none';
     showView(null);
   });
 
@@ -1123,6 +1137,24 @@
 
   el('refreshRecordingsBtn').addEventListener('click', fetchRecordings);
   el('recordingsSearchBtn').addEventListener('click', fetchRecordings);
+
+  // ---------- Minha presença (ausente/reunião/férias) ----------
+  el('setPresenceBtn').addEventListener('click', () => {
+    const apiUrl = el('queueApiUrl').value.trim();
+    if (!apiUrl || !myExtension) return;
+
+    fetch(`${apiUrl}/api/presence/${myExtension}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        status: el('presenceStatusSelect').value,
+        note: el('presenceNoteInput').value,
+      }),
+    })
+      .then((res) => res.json())
+      .then(() => alert('Presença atualizada.'))
+      .catch(() => alert('Não foi possível atualizar a presença (API indisponível).'));
+  });
 
   // ---------- Presença dos colegas (BLF via SUBSCRIBE) ----------
   function startPresenceMonitoring(domain) {

@@ -25,6 +25,7 @@ REQUIRED_IDS = [
     "callLog", "colleaguesPanel", "colleaguesList",
     "remoteAudio", "queueApiUrl", "queueList",
     "recordingsList", "refreshRecordingsBtn", "recordingsSearchInput", "recordingsSearchBtn",
+    "presencePanel", "presenceStatusSelect", "presenceNoteInput", "setPresenceBtn",
     "lineSwitcher", "linePill0", "linePill1",
     "secondLineBanner", "secondLinePeer", "answerSecondLineBtn", "declineSecondLineBtn",
     "missedCallsList", "metricsPanel", "metricsGrid",
@@ -227,6 +228,16 @@ def test_recordings_search_sends_caller_number_filter():
     body = html[fn_start:fn_end]
     assert "caller_number=" in body
     assert "recordingsSearchInput" in body
+
+
+def test_presence_update_sends_own_extension_status_and_note():
+    html = load_html()
+    fn_start = html.index("el('setPresenceBtn').addEventListener")
+    fn_end = html.index("});", html.index("catch", fn_start))
+    body = html[fn_start:fn_end]
+    assert "/api/presence/${myExtension}" in body
+    assert "presenceStatusSelect" in body
+    assert "presenceNoteInput" in body
 
 
 def test_pickup_sends_own_extension_along_with_channel():

@@ -44,6 +44,20 @@ def test_fetches_quality_reports_filtered_to_poor_only():
     assert "renderQuality" in html
 
 
+def test_extensions_display_prioritizes_manual_presence_over_automatic_blf():
+    """
+    Se a telefonista marcou "férias" manualmente, isso precisa
+    aparecer em vez do estado automático do BLF (que provavelmente
+    mostraria "indisponível" ou algo sem contexto nenhum).
+    """
+    html = load_panel_html()
+    fn_start = html.index("function renderExtensions")
+    fn_end = html.index("}", html.index("dotClass = e.status_label", fn_start))
+    body = html[fn_start:fn_end]
+    assert "e.manual_status" in body
+    assert "manualStatusLabel" in body
+
+
 def test_polls_periodically_for_supervision_use_case():
     """
     É um painel de parede/supervisão - precisa se atualizar sozinho,

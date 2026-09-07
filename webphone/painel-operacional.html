@@ -170,7 +170,21 @@
       el('extensionsList').innerHTML = '<div class="empty">Nenhum ramal monitorado ainda.</div>';
       return;
     }
+    const manualStatusLabel = {
+      disponivel: 'Disponível', ausente: 'Ausente', reuniao: 'Em reunião', ferias: 'Férias',
+    };
     el('extensionsList').innerHTML = extensions.map((e) => {
+      // Presença manual (ausente/reunião/férias) tem prioridade visual
+      // sobre o estado automático do BLF - é uma decisão da pessoa,
+      // não só o telefone estar tocando ou não.
+      if (e.manual_status) {
+        const label = manualStatusLabel[e.manual_status] || e.manual_status;
+        const note = e.manual_note ? ` — ${e.manual_note}` : '';
+        return `<div class="item-row">
+          <span><span class="dot em-espera"></span>Ramal ${e.exten}</span>
+          <span class="mono">${label}${note}</span>
+        </div>`;
+      }
       const dotClass = e.status_label.replace(' ', '-');
       return `<div class="item-row">
         <span><span class="dot ${dotClass}"></span>Ramal ${e.exten}</span>

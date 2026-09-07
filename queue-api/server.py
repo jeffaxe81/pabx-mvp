@@ -36,6 +36,7 @@ from callbacks import (
     find_callback, next_pending_callback, mark_callback_calling, mark_callback_result,
 )
 from survey import parse_survey_event, SurveyStore, average_score, score_distribution, summarize_by_operator
+from presence import validate_presence_input, load_presence, set_presence, clear_presence, merge_presence_into_states
 from metrics import DailyMetrics
 from pickup import validate_pickup_request
 from extension_states import ExtensionStateTracker
@@ -120,6 +121,7 @@ CAMPAIGNS_PATH = os.environ.get("CAMPAIGNS_PATH", "/app/data/campaigns.json")
 CALLBACKS_PATH = os.environ.get("CALLBACKS_PATH", "/app/data/callbacks.json")
 CALLBACK_CONNECT_CONTEXT = os.environ.get("CALLBACK_CONNECT_CONTEXT", "callback-connect")
 SURVEY_PATH = os.environ.get("SURVEY_PATH", "/app/data/survey.jsonl")
+PRESENCE_PATH = os.environ.get("PRESENCE_PATH", "/app/data/presence.json")
 
 state = QueueStateTracker()
 missed_calls_log = MissedCallsLog()
@@ -280,7 +282,10 @@ class Handler(BaseHTTPRequestHandler):
         elif self.path.startswith("/api/metrics/today"):
             self._send_json(200, daily_metrics.snapshot())
         elif self.path.startswith("/api/extension-states"):
-            self._send_json(200, {"extensions": extension_states.snapshot()})
+            merged = merge_presence_into_states(extension_states.snapshot(), load_presence(PRESENCE_PATH))
+            self._send_json(200, {"extensions": merged})
+        elif self.path.startswith("/api/presence"):
+            self._send_json(200, {"presence": load_presence(PRESENCE_PATH)})
         elif self.path.startswith("/api/reports"):
             self._handle_reports()
         elif self.path.startswith("/api/campaigns/"):
@@ -366,8 +371,38 @@ class Handler(BaseHTTPRequestHandler):
             self._handle_dial_next_contact()
         elif self.path == "/api/callbacks/dial-next":
             self._handle_dial_next_callback()
+        elif self.path.startswith("/api/presence/"):
+            self._handle_set_presence()
         else:
             self._send_json(404, {"error": "not found"})
+
+    def do_DELETE(self):
+        if self.path.startswith("/api/presence/"):
+            self._handle_clear_presence()
+        else:
+            self._send_json(404, {"error": "not found"})
+
+    def _handle_set_presence(self):
+        extension = self.path[len("/api/presence/"):]
+        length = int(self.headers.get("Content-Length", 0))
+        try:
+            data = json.loads(self.rfile.read(length) or b"{}")
+        except json.JSONDecodeError:
+            self._send_json(400, {"error": "JSON invalido"})
+            return
+
+        ok, error, cleaned = validate_presence_input(data)
+        if not ok:
+            self._send_json(400, {"error": error})
+            return
+
+        entry = set_presence(PRESENCE_PATH, extension, cleaned["status"], cleaned["note"])
+        self._send_json(200, {"extension": extension, **entry})
+
+    def _handle_clear_presence(self):
+        extension = self.path[len("/api/presence/"):]
+        ok = clear_presence(PRESENCE_PATH, extension)
+        self._send_json(200, {"ok": ok})
 
     def _handle_pickup(self):
         length = int(self.headers.get("Content-Length", 0))
