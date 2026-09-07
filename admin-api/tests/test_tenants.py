@@ -1,6 +1,7 @@
 from tenants import (
     validate_tenant_creation_input, load_tenants, save_tenants,
     render_tenant_pjsip, render_tenant_queues, render_tenant_extensions, render_tenant_voicemail,
+    render_tenant_parking,
 )
 
 VALID_INPUT = {"tenant_id": "t3", "did": "5511900003333", "display_name": "Empresa C"}
@@ -148,3 +149,18 @@ def test_render_voicemail_creates_telephonist_mailboxes():
     assert "t3-recepcao => 1234" in content
     assert "t3-recepcao-2 => 1234" in content
     assert "#include voicemail_dynamic_t3.conf" in content
+
+
+# ---------- render_tenant_parking ----------
+
+def test_render_parking_creates_lot_scoped_to_tenant_context():
+    content = render_tenant_parking("t3")
+    assert "[parkinglot-t3]" in content
+    assert "context = t3-internal" in content
+    assert "parkext = 75" in content
+    assert "parkpos = 76-95" in content
+
+
+def test_render_parking_rings_back_to_origin_when_unretrieved():
+    content = render_tenant_parking("t3")
+    assert "comebacktoorigin = yes" in content

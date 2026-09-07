@@ -195,3 +195,19 @@ def render_tenant_voicemail(tenant_id: str) -> str:
 {tenant_id}-recepcao-2 => 1234,{tenant_id.upper()} Recepcao Web 2
 #include voicemail_dynamic_{tenant_id}.conf
 """
+
+
+def render_tenant_parking(tenant_id: str) -> str:
+    """
+    Vaga de estacionamento de chamada (backlog #41) - mesmo padrão de
+    número (75/76-95) usado em t1/t2, isolado no próprio contexto
+    interno do tenant.
+    """
+    return f"""{AUTO_GENERATED_HEADER}[parkinglot-{tenant_id}]
+context = {tenant_id}-internal
+parkext = 75
+parkpos = 76-95
+parkinghints = yes
+comebacktoorigin = yes
+parkedmusicclass = default
+"""

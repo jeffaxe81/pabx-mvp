@@ -19,7 +19,7 @@ REQUIRED_IDS = [
     "answerBtn", "declineBtn",
     "activePeer", "activeState", "callTimer",
     "muteBtn", "holdBtn", "hangupBtn",
-    "transferTarget", "transferBtn", "consultBtn",
+    "transferTarget", "transferBtn", "parkBtn", "consultBtn",
     "consultHeldPeer", "consultTargetPeer", "consultTargetState",
     "cancelConsultBtn", "completeConsultBtn",
     "callLog", "colleaguesPanel", "colleaguesList",
@@ -286,3 +286,16 @@ def test_ringtone_stops_on_answer_and_on_decline():
 
     decline_calls = html.count("stopRingtone(); session.terminate();")
     assert decline_calls == 2  # declineBtn e declineSecondLineBtn
+
+
+def test_park_button_does_blind_transfer_to_parking_extension():
+    """
+    Backlog #41: estacionar é uma transferência cega pra vaga "75"
+    (ver asterisk/res_parking.conf) - mesma técnica do transferBtn,
+    reaproveitada, não um mecanismo novo.
+    """
+    html = load_html()
+    fn_start = html.index("el('parkBtn').addEventListener")
+    fn_end = html.index("});", fn_start)
+    body = html[fn_start:fn_end]
+    assert "session.refer(`sip:75@" in body

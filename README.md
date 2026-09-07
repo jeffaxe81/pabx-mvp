@@ -333,6 +333,11 @@ chamada/escuta-sussurro-intercalação, conferência ad-hoc, motivo de
 pausa de agente, overflow entre filas, SLA de fila) que seguem como
 próximos itens do backlog.
 
+**E estacionamento de chamada**: usando o módulo nativo `res_parking`
+do Asterisk, com vaga isolada por tenant (inclusive nos criados pelo
+wizard) e retorno automático se ninguém recuperar — ver
+`docs/manual-41-estacionamento-chamada.md`.
+
 Para ajustar quais ramais aparecem na lista de colegas, edite o array
 `COLLEAGUES` no início do `<script>` em `webphone/index.html`. Cada
 ramal monitorado precisa ter um `hint` correspondente em
@@ -357,7 +362,7 @@ cd ../queue-api
 python3 -m pytest tests/ -v
 ```
 
-642 testes estáticos no total, em 7 suítes (`tests/`, `queue-api/tests/`,
+653 testes estáticos no total, em 7 suítes (`tests/`, `queue-api/tests/`,
 `admin-api/tests/`, `asterisk/scripts/tests/`, `backup/tests/`,
 `ai-worker/tests/`, `asterisk/agi/tests/`) — nenhuma delas sobe o
 Asterisk, Whisper ou Ollama de verdade. Detalhes em `tests/README.md`.

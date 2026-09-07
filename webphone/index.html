@@ -509,6 +509,11 @@
         <button class="btn-ghost" id="transferBtn">Transferir</button>
       </div>
       <div class="transfer-row">
+        <button class="btn-ghost" id="parkBtn" style="width:100%;" title="Estacionar a chamada numa vaga (75) - qualquer ramal pode recuperar depois">
+          Estacionar chamada
+        </button>
+      </div>
+      <div class="transfer-row">
         <button class="btn-ghost" id="consultBtn" style="width:100%;">
           Consultar antes de transferir
         </button>
@@ -1425,6 +1430,17 @@
     const domain = el('wssUrl').value.replace('wss://', '').replace('ws://', '').split(/[:/]/)[0];
     session.refer(`sip:${target}@${domain}`);
     el('transferTarget').value = '';
+  });
+
+  // ---------- Estacionamento de chamada (backlog #41) ----------
+  // Transferência cega pra vaga "75" (ver asterisk/res_parking.conf) -
+  // qualquer ramal do mesmo tenant recupera depois discando 76-95.
+  el('parkBtn').addEventListener('click', () => {
+    const session = activeSession();
+    if (!session) return;
+    const domain = el('wssUrl').value.replace('wss://', '').replace('ws://', '').split(/[:/]/)[0];
+    session.refer(`sip:75@${domain}`);
+    alert('Chamada estacionada. Qualquer ramal pode recuperar discando a vaga informada (76-95) - anuncie o número pro colega.');
   });
 
   // ---------- Transferência assistida (consulta) ----------

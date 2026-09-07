@@ -38,16 +38,18 @@ class AMIClient:
         return blocks[0] if blocks else {}
 
     def reload_pjsip_and_dialplan(self):
-        """Recarrega PJSIP, dialplan, voicemail e filas sem derrubar chamadas em andamento."""
+        """Recarrega PJSIP, dialplan, voicemail, filas e estacionamento sem derrubar chamadas em andamento."""
         pjsip_response = self._send_action({"Action": "Command", "Command": "pjsip reload"})
         dialplan_response = self._send_action({"Action": "Command", "Command": "dialplan reload"})
         voicemail_response = self._send_action({"Action": "Command", "Command": "voicemail reload"})
         queue_response = self._send_action({"Action": "Command", "Command": "queue reload all"})
+        parking_response = self._send_action({"Action": "Command", "Command": "parking reload"})
         return {
             "pjsip": pjsip_response.get("Response"),
             "dialplan": dialplan_response.get("Response"),
             "voicemail": voicemail_response.get("Response"),
             "queue": queue_response.get("Response"),
+            "parking": parking_response.get("Response"),
         }
 
     def block_number(self, number: str, tenant: str = "t1"):

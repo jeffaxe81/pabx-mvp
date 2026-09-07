@@ -45,6 +45,7 @@ configurar, como testar manualmente, e limitações conhecidas.
 38. [Multi-tenant completo](manual-38-multi-tenant-completo.md)
 39. [Wizard de preparação de ambiente por tenant](manual-39-wizard-tenant.md)
 40. [Aviso de gravação / conformidade LGPD](manual-40-aviso-gravacao-lgpd.md)
+41. [Estacionamento de chamada](manual-41-estacionamento-chamada.md)
 
 ## Regra de manutenção
 

@@ -321,7 +321,9 @@ identificando lacunas reais. Gaps encontrados, viraram novo backlog:
 - #40: ~~Aviso de gravacao / conformidade LGPD~~ - IMPLEMENTADO (risco
   de conformidade mais critico encontrado - sistema gravava sem
   avisar o cliente). Ver docs/manual-40.
-- #41: Estacionamento de chamada (Park/Unpark) - PENDENTE
+- #41: ~~Estacionamento de chamada (Park/Unpark)~~ - IMPLEMENTADO
+  (res_parking nativo do Asterisk, vaga isolada por tenant, retorno
+  automatico se nao recuperada). Ver docs/manual-41.
 - #42: Monitoramento de chamada (escuta silenciosa/sussurro/intercalacao, ChanSpy) - PENDENTE
 - #43: Sala de conferencia ad-hoc (ConfBridge, diferente de grupo de toque) - PENDENTE
 - #44: Motivo de pausa do agente - PENDENTE

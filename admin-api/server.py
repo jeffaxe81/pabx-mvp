@@ -28,6 +28,7 @@ from vip import validate_vip_input
 from tenants import (
     load_tenants, save_tenants, validate_tenant_creation_input,
     render_tenant_pjsip, render_tenant_queues, render_tenant_extensions, render_tenant_voicemail,
+    render_tenant_parking,
 )
 from users import load_users, save_users, find_user, add_user, update_user, delete_user, public_user
 from totp import generate_secret, verify_totp, build_provisioning_uri
@@ -393,6 +394,7 @@ class Handler(BaseHTTPRequestHandler):
             ("queues_tenants", "", render_tenant_queues),
             ("extensions_tenants", "", render_tenant_extensions),
             ("voicemail_tenants", "", render_tenant_voicemail),
+            ("parking_tenants", "", render_tenant_parking),
         ):
             target_dir = Path(ASTERISK_CONF_DIR, subdir)
             target_dir.mkdir(parents=True, exist_ok=True)

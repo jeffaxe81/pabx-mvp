@@ -364,3 +364,15 @@ def test_tenants_path_configured_for_admin_api():
     compose = load_compose()
     env = compose["services"]["admin-api"].get("environment", {})
     assert "TENANTS_PATH" in env
+
+
+def test_res_parking_conf_and_tenant_directory_mounted():
+    """
+    Backlog #41: sem esses dois mounts, o estacionamento de chamada
+    não existiria dentro do container do Asterisk, e tenants criados
+    pelo wizard nunca ganhariam vaga própria.
+    """
+    compose = load_compose()
+    asterisk_volumes = compose["services"]["asterisk"].get("volumes", [])
+    assert any("res_parking.conf:" in v for v in asterisk_volumes)
+    assert any("./asterisk/parking_tenants:" in v for v in asterisk_volumes)
