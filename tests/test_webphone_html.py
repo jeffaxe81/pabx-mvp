@@ -26,6 +26,7 @@ REQUIRED_IDS = [
     "remoteAudio", "queueApiUrl", "queueList",
     "recordingsList", "refreshRecordingsBtn", "recordingsSearchInput", "recordingsSearchBtn",
     "presencePanel", "presenceStatusSelect", "presenceNoteInput", "setPresenceBtn",
+    "pausePanel", "pauseReasonSelect", "pauseBtn", "unpauseBtn",
     "lineSwitcher", "linePill0", "linePill1",
     "secondLineBanner", "secondLinePeer", "answerSecondLineBtn", "declineSecondLineBtn",
     "missedCallsList", "metricsPanel", "metricsGrid",
@@ -299,3 +300,24 @@ def test_park_button_does_blind_transfer_to_parking_extension():
     fn_end = html.index("});", fn_start)
     body = html[fn_start:fn_end]
     assert "session.refer(`sip:75@" in body
+
+
+# ---------- Pausa da fila (backlog #44) ----------
+
+def test_pause_button_sends_reason_and_toggles_unpause_button():
+    html = load_html()
+    fn_start = html.index("function sendPauseRequest")
+    fn_end = html.index("el('pauseBtn').addEventListener")
+    body = html[fn_start:fn_end]
+    assert "/api/queue/pause" in body
+    assert "extension: myExtension" in body
+    assert "'unpauseBtn').style.display" in body
+
+
+def test_unpause_sends_empty_reason():
+    """Despausar não deve exigir nem enviar um motivo - só pausar precisa disso."""
+    html = load_html()
+    fn_start = html.index("el('unpauseBtn').addEventListener")
+    fn_end = html.index("});", fn_start)
+    body = html[fn_start:fn_end]
+    assert "sendPauseRequest(false, '')" in body

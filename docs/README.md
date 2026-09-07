@@ -48,6 +48,7 @@ configurar, como testar manualmente, e limitações conhecidas.
 41. [Estacionamento de chamada](manual-41-estacionamento-chamada.md)
 42. [Monitoramento de chamada](manual-42-monitoramento-chamada.md)
 43. [Sala de conferência ad-hoc](manual-43-sala-conferencia.md)
+44. [Motivo de pausa do agente](manual-44-motivo-pausa-agente.md)
 
 ## Regra de manutenção
 

@@ -129,3 +129,31 @@ def test_pickup_and_click_to_call_defaults_include_both_tenants():
     """
     source = load_source()
     assert "t2-recepcao" in source
+
+
+def test_pause_request_validates_before_calling_ami():
+    """
+    Backlog #44: validar (motivo obrigatório ao pausar, ramal
+    presente, tipo correto) precisa acontecer ANTES do Action
+    QueuePause de verdade - senão a AMI receberia requisição inválida
+    igual assim mesmo.
+    """
+    source = load_source()
+    fn_start = source.index("def _handle_set_pause")
+    fn_end = source.index("\n\n    def ", fn_start) if "\n\n    def " in source[fn_start:] else len(source)
+    body = source[fn_start:fn_end]
+    validate_pos = body.index("validate_pause_request(")
+    ami_call_pos = body.index("pause_member(")
+    assert validate_pos < ami_call_pos
+
+
+def test_extension_states_endpoint_merges_pause_reason():
+    """
+    Sem essa mesclagem, o painel operacional nunca mostraria o motivo
+    de pausa - só o estado automático livre/ocupado/tocando.
+    """
+    source = load_source()
+    fn_start = source.index('"/api/extension-states"')
+    fn_end = source.index("elif", fn_start)
+    body = source[fn_start:fn_end]
+    assert "merge_pause_into_states(" in body

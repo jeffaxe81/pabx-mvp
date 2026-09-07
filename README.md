@@ -349,6 +349,11 @@ toque, aqui várias pessoas conversam ao mesmo tempo de verdade, com
 isolamento por tenant garantido pelo próprio nome da sala — ver
 `docs/manual-43-sala-conferencia.md`.
 
+**E motivo de pausa do agente**: `QueuePause` nativo do Asterisk, com
+o painel de supervisão mostrando o motivo exato (não só
+"indisponível"), prioridade máxima de exibição por ser o estado mais
+operacional — ver `docs/manual-44-motivo-pausa-agente.md`.
+
 Para ajustar quais ramais aparecem na lista de colegas, edite o array
 `COLLEAGUES` no início do `<script>` em `webphone/index.html`. Cada
 ramal monitorado precisa ter um `hint` correspondente em
@@ -373,7 +378,7 @@ cd ../queue-api
 python3 -m pytest tests/ -v
 ```
 
-681 testes estáticos no total, em 7 suítes (`tests/`, `queue-api/tests/`,
+705 testes estáticos no total, em 7 suítes (`tests/`, `queue-api/tests/`,
 `admin-api/tests/`, `asterisk/scripts/tests/`, `backup/tests/`,
 `ai-worker/tests/`, `asterisk/agi/tests/`) — nenhuma delas sobe o
 Asterisk, Whisper ou Ollama de verdade. Detalhes em `tests/README.md`.

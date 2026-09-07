@@ -436,6 +436,19 @@
       <button class="btn-ghost" id="setPresenceBtn" style="width:100%; margin-top:8px;">Atualizar presença</button>
     </div>
 
+    <div id="pausePanel" style="display:none; margin-top:28px;">
+      <div class="log-title">Pausa da fila</div>
+      <select id="pauseReasonSelect">
+        <option value="Almoço">Almoço</option>
+        <option value="Banheiro">Banheiro</option>
+        <option value="Reunião">Reunião</option>
+        <option value="Treinamento">Treinamento</option>
+        <option value="Outro">Outro</option>
+      </select>
+      <button class="btn-ghost" id="pauseBtn" style="width:100%; margin-top:8px;">Pausar</button>
+      <button class="btn-ghost" id="unpauseBtn" style="width:100%; margin-top:8px; display:none;">Voltar da pausa</button>
+    </div>
+
     <div id="colleaguesPanel" style="display:none; margin-top:28px;">
       <div class="log-title">Colegas</div>
       <div id="colleaguesList"></div>
@@ -914,6 +927,7 @@
       startMetricsPolling();
       fetchRecordings();
       el('presencePanel').style.display = 'block';
+      el('pausePanel').style.display = 'block';
       timerInterval = setInterval(tickTimerDisplay, 1000);
     });
     ua.on('registrationFailed', (e) => {
@@ -940,6 +954,7 @@
     el('metricsPanel').style.display = 'none';
     el('opsPanelLink').style.display = 'none';
     el('presencePanel').style.display = 'none';
+    el('pausePanel').style.display = 'none';
     showView(null);
   });
 
@@ -1159,6 +1174,32 @@
       .then((res) => res.json())
       .then(() => alert('Presença atualizada.'))
       .catch(() => alert('Não foi possível atualizar a presença (API indisponível).'));
+  });
+
+  // ---------- Pausa da fila (backlog #44) ----------
+  function sendPauseRequest(paused, reason) {
+    const apiUrl = el('queueApiUrl').value.trim();
+    if (!apiUrl || !myExtension) return;
+
+    fetch(`${apiUrl}/api/queue/pause`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ extension: myExtension, paused, reason }),
+    })
+      .then((res) => res.json())
+      .then(() => {
+        el('pauseBtn').style.display = paused ? 'none' : 'block';
+        el('unpauseBtn').style.display = paused ? 'block' : 'none';
+      })
+      .catch(() => alert('Não foi possível atualizar a pausa (API indisponível).'));
+  }
+
+  el('pauseBtn').addEventListener('click', () => {
+    sendPauseRequest(true, el('pauseReasonSelect').value);
+  });
+
+  el('unpauseBtn').addEventListener('click', () => {
+    sendPauseRequest(false, '');
   });
 
   // ---------- Presença dos colegas (BLF via SUBSCRIBE) ----------

@@ -72,6 +72,19 @@ class AMIClient:
             "Action": "DBPut", "Family": "blocklist", "Key": number, "Val": "1",
         })
 
+    def pause_member(self, interface: str, paused: bool, reason: str = "") -> dict:
+        """
+        Motivo de pausa do agente (backlog #44) - ação nativa
+        QueuePause do Asterisk. Sem 'Queue' informado, pausa o membro
+        em TODAS as filas que ele participa (comportamento padrão do
+        Asterisk) - coerente com o conceito de "o agente está em
+        pausa", não "pausado só numa fila específica".
+        """
+        action = {"Action": "QueuePause", "Interface": interface, "Paused": "true" if paused else "false"}
+        if reason:
+            action["Reason"] = reason
+        return self.send_action(action)
+
     def start_event_loop(self):
         """Roda em thread separada, lendo eventos continuamente."""
         self._running = True

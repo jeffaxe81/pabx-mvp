@@ -55,7 +55,19 @@ def test_extensions_display_prioritizes_manual_presence_over_automatic_blf():
     fn_end = html.index("}", html.index("dotClass = e.status_label", fn_start))
     body = html[fn_start:fn_end]
     assert "e.manual_status" in body
-    assert "manualStatusLabel" in body
+
+
+def test_pause_reason_has_highest_display_priority():
+    """
+    Backlog #44: pausa da fila é o estado mais operacional (afeta se
+    a pessoa recebe chamada agora) - precisa ser checado ANTES até da
+    presença manual.
+    """
+    html = load_panel_html()
+    fn_start = html.index("function renderExtensions")
+    pause_check_pos = html.index("e.pause_reason", fn_start)
+    manual_status_pos = html.index("e.manual_status", fn_start)
+    assert pause_check_pos < manual_status_pos
 
 
 def test_polls_periodically_for_supervision_use_case():

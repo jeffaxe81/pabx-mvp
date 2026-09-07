@@ -331,7 +331,9 @@ identificando lacunas reais. Gaps encontrados, viraram novo backlog:
 - #43: ~~Sala de conferencia ad-hoc (ConfBridge)~~ - IMPLEMENTADO
   (perfis compartilhados, isolamento por tenant via nome da sala
   dinamico, ex: sala-t1-0001 vs sala-t2-0001). Ver docs/manual-43.
-- #44: Motivo de pausa do agente - PENDENTE
+- #44: ~~Motivo de pausa do agente~~ - IMPLEMENTADO (QueuePause
+  nativo via AMI, prioridade maxima de exibicao no painel
+  operacional). Ver docs/manual-44.
 - #45: Overflow/transbordo entre filas por tempo de espera - PENDENTE
 - #46: SLA de fila (% atendido em N segundos) - PENDENTE
 

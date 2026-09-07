@@ -37,6 +37,7 @@ from callbacks import (
 )
 from survey import parse_survey_event, SurveyStore, average_score, score_distribution, summarize_by_operator
 from presence import validate_presence_input, load_presence, set_presence, clear_presence, merge_presence_into_states
+from agent_pause import validate_pause_request, AgentPauseStore, merge_pause_into_states
 from metrics import DailyMetrics
 from pickup import validate_pickup_request
 from extension_states import ExtensionStateTracker
@@ -127,6 +128,7 @@ state = QueueStateTracker()
 missed_calls_log = MissedCallsLog()
 daily_metrics = DailyMetrics()
 extension_states = ExtensionStateTracker()
+agent_pause_store = AgentPauseStore()
 call_log_store = CallLogStore(CALL_LOG_PATH)
 rate_tracker = CallRateTracker()
 fraud_alerts_log = FraudAlertsLog()
@@ -139,6 +141,7 @@ def handle_ami_event(event: dict):
     state.apply_event(event)
     daily_metrics.apply_cdr_event(event)
     extension_states.apply_event(event)
+    agent_pause_store.apply_event(event)
 
     quality = parse_quality_event(event)
     if quality:
@@ -283,6 +286,7 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json(200, daily_metrics.snapshot())
         elif self.path.startswith("/api/extension-states"):
             merged = merge_presence_into_states(extension_states.snapshot(), load_presence(PRESENCE_PATH))
+            merged = merge_pause_into_states(merged, agent_pause_store.snapshot())
             self._send_json(200, {"extensions": merged})
         elif self.path.startswith("/api/presence"):
             self._send_json(200, {"presence": load_presence(PRESENCE_PATH)})
@@ -375,8 +379,41 @@ class Handler(BaseHTTPRequestHandler):
             self._handle_dial_next_callback()
         elif self.path.startswith("/api/presence/"):
             self._handle_set_presence()
+        elif self.path == "/api/queue/pause":
+            self._handle_set_pause()
         else:
             self._send_json(404, {"error": "not found"})
+
+    def _handle_set_pause(self):
+        """
+        Motivo de pausa do agente (backlog #44) - autoatendimento,
+        mesmo princípio da presença manual (manual 34): o próprio
+        agente pausa a si mesmo, sem checagem extra de "é você mesmo
+        quem está discando" (mesma limitação já aceita nos outros
+        endpoints deste serviço).
+        """
+        length = int(self.headers.get("Content-Length", 0))
+        try:
+            data = json.loads(self.rfile.read(length) or b"{}")
+        except json.JSONDecodeError:
+            self._send_json(400, {"error": "JSON inválido"})
+            return
+
+        ok, error, cleaned = validate_pause_request(data)
+        if not ok:
+            self._send_json(400, {"error": error})
+            return
+
+        if ami is None:
+            self._send_json(503, {"error": "AMI nao conectado"})
+            return
+
+        interface = f"PJSIP/{cleaned['extension']}"
+        response = ami.pause_member(interface, cleaned["paused"], cleaned["reason"])
+        if response.get("Response") == "Success":
+            self._send_json(200, {"extension": cleaned["extension"], "paused": cleaned["paused"], "reason": cleaned["reason"]})
+        else:
+            self._send_json(502, {"error": "falha ao pausar/despausar", "detail": response})
 
     def do_DELETE(self):
         if self.path.startswith("/api/presence/"):
