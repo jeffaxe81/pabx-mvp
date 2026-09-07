@@ -307,3 +307,30 @@ extensions_tenants/*.conf, voicemail_tenants/*.conf) - criar um
 tenant novo NUNCA edita os arquivos estaticos de novo. Roteamento de
 entrada (from-tdm-gateway) passou a consultar AstDB dinamicamente
 pra DIDs nao mapeados manualmente. Ver docs/manual-39.
+
+
+## Auditoria de gaps contra framework de avaliação de PABX corporativo (fornecido pelo usuário)
+O usuário forneceu um framework detalhado de avaliação de PABX/contact
+center (baseado nos criterios usados pra avaliar produtos contra
+solucoes como as da Digitro Tecnologia). Esse framework NAO pode ser
+usado pra declarar equivalencia formal com a Digitro (exigiria acesso
+a documentacao proprietaria, licencas, versoes - nao disponivel).
+Foi usado como CHECKLIST DE AUDITORIA INTERNA do proprio projeto,
+identificando lacunas reais. Gaps encontrados, viraram novo backlog:
+
+- #40: ~~Aviso de gravacao / conformidade LGPD~~ - IMPLEMENTADO (risco
+  de conformidade mais critico encontrado - sistema gravava sem
+  avisar o cliente). Ver docs/manual-40.
+- #41: Estacionamento de chamada (Park/Unpark) - PENDENTE
+- #42: Monitoramento de chamada (escuta silenciosa/sussurro/intercalacao, ChanSpy) - PENDENTE
+- #43: Sala de conferencia ad-hoc (ConfBridge, diferente de grupo de toque) - PENDENTE
+- #44: Motivo de pausa do agente - PENDENTE
+- #45: Overflow/transbordo entre filas por tempo de espera - PENDENTE
+- #46: SLA de fila (% atendido em N segundos) - PENDENTE
+
+Outras lacunas identificadas na auditoria, nao viraram itens de
+backlog ainda (fora do escopo imediato, ou exigiriam decisao adicional
+do usuario, ex: integracao omnichannel/WhatsApp/chat e recursos
+completos de videoconferencia): anonimizacao de dados sensiveis em
+gravacao/transcricao, rate limiting em tentativas de codigo 2FA,
+lista branca formal de discagem, selecao de rota por menor custo.

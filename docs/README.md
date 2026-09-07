@@ -44,6 +44,7 @@ configurar, como testar manualmente, e limitações conhecidas.
 37. [Atendente virtual com IA](manual-37-atendente-virtual.md)
 38. [Multi-tenant completo](manual-38-multi-tenant-completo.md)
 39. [Wizard de preparação de ambiente por tenant](manual-39-wizard-tenant.md)
+40. [Aviso de gravação / conformidade LGPD](manual-40-aviso-gravacao-lgpd.md)
 
 ## Regra de manutenção
 

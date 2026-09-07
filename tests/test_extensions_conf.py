@@ -605,3 +605,36 @@ def test_extensions_conf_includes_wizard_created_tenants_via_wildcard():
     """
     content = EXTENSIONS_CONF.read_text(encoding="utf-8")
     assert "#include extensions_tenants/*.conf" in content
+
+
+# ---------- Aviso de gravação / conformidade LGPD (backlog #40) ----------
+
+def test_recording_consent_announcement_plays_before_every_recorded_call():
+    """
+    LGPD exige aviso/consentimento pra gravação de chamada. Todo
+    ponto que grava (fila, ramais diretos da telefonista) precisa
+    tocar o aviso ANTES de conectar - nos dois tenants, já que
+    "colocar tudo pra multi-tenant" inclui conformidade também.
+    """
+    blocks = blocks_as_dict(load_ext_blocks())
+    for context_name in ("t1-internal", "t2-internal"):
+        text = blocks[context_name].replace(" ", "")
+        assert text.count("Playback(custom/aviso-gravacao)") == 3, (
+            f"{context_name} deveria ter o aviso nos 3 pontos gravados (1000/1010/1011)"
+        )
+
+
+def test_recording_consent_announcement_plays_before_recording_starts():
+    """
+    O aviso precisa vir ANTES do MixMonitor/Queue começar a gravar de
+    verdade - avisar depois que já gravou não cumpre o propósito.
+    """
+    blocks = blocks_as_dict(load_ext_blocks())
+    text = blocks["t1-internal"].replace(" ", "")
+
+    exten_start = text.index("exten=>1010,1,")
+    exten_end = text.index("exten=>", exten_start + 1)
+    block_text = text[exten_start:exten_end]
+    playback_pos = block_text.index("Playback(custom/aviso-gravacao)")
+    mixmonitor_pos = block_text.index("MixMonitor(")
+    assert playback_pos < mixmonitor_pos

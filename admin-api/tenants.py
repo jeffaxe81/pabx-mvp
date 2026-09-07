@@ -126,7 +126,9 @@ def render_tenant_extensions(tenant_id: str) -> str:
     ramais que forem criados depois pelo painel de administração).
     """
     return f"""{AUTO_GENERATED_HEADER}[{tenant_id}-internal]
-exten => 1000,1,Set(CHANNEL(hangup_handler_push)=qualidade-chamada,s,1)
+exten => 1000,1,Answer()
+ same => n,Playback(custom/aviso-gravacao)
+ same => n,Set(CHANNEL(hangup_handler_push)=qualidade-chamada,s,1)
  same => n,Set(TENANT=${{IF($["${{TENANT}}" = ""]?{tenant_id}:${{TENANT}})}})
  same => n,Set(FILA_IDIOMA=${{IF($["${{FILA_IDIOMA}}" = ""]?fila-${{TENANT}}:${{FILA_IDIOMA}})}})
  same => n,Queue(${{FILA_IDIOMA}},c)
@@ -134,13 +136,17 @@ exten => 1000,1,Set(CHANNEL(hangup_handler_push)=qualidade-chamada,s,1)
  same => n,VoiceMail(${{TENANT}}-1001@${{TENANT}},u)
  same => n,Hangup()
 
-exten => 1010,1,Set(CHANNEL(hangup_handler_push)=qualidade-chamada,s,1)
+exten => 1010,1,Answer()
+ same => n,Playback(custom/aviso-gravacao)
+ same => n,Set(CHANNEL(hangup_handler_push)=qualidade-chamada,s,1)
  same => n,MixMonitor(/var/spool/asterisk/monitor/${{STRFTIME(${{EPOCH}},,%Y%m%d-%H%M%S)}}-${{CALLERID(num)}}-{tenant_id}-1010.wav,b)
  same => n,Dial(PJSIP/{tenant_id}-recepcao,20,g)
  same => n,GotoIf($["${{DIALSTATUS}}" = "ANSWER"]?pesquisa-satisfacao,s,1)
  same => n,Goto({tenant_id}-internal,1000,1)
 
-exten => 1011,1,Set(CHANNEL(hangup_handler_push)=qualidade-chamada,s,1)
+exten => 1011,1,Answer()
+ same => n,Playback(custom/aviso-gravacao)
+ same => n,Set(CHANNEL(hangup_handler_push)=qualidade-chamada,s,1)
  same => n,MixMonitor(/var/spool/asterisk/monitor/${{STRFTIME(${{EPOCH}},,%Y%m%d-%H%M%S)}}-${{CALLERID(num)}}-{tenant_id}-1011.wav,b)
  same => n,Dial(PJSIP/{tenant_id}-recepcao-2,20,g)
  same => n,GotoIf($["${{DIALSTATUS}}" = "ANSWER"]?pesquisa-satisfacao,s,1)

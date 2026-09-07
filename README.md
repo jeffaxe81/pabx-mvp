@@ -323,6 +323,16 @@ filas, dialplan completo e mapeamento de DID pra um tenant novo (t3,
 t4...) sem editar nenhum `.conf` na mão — usando `#include` com
 wildcard nos arquivos estáticos — ver `docs/manual-39-wizard-tenant.md`.
 
+**E, a partir de uma auditoria de gaps contra um framework de avaliação
+de PABX corporativo**: aviso de gravação em conformidade com a LGPD,
+tocando antes de qualquer chamada ser gravada, nos dois tenants e em
+qualquer tenant criado pelo wizard a partir de agora — ver
+`docs/manual-40-aviso-gravacao-lgpd.md`. Essa auditoria identificou
+outras lacunas reais (estacionamento de chamada, monitoramento de
+chamada/escuta-sussurro-intercalação, conferência ad-hoc, motivo de
+pausa de agente, overflow entre filas, SLA de fila) que seguem como
+próximos itens do backlog.
+
 Para ajustar quais ramais aparecem na lista de colegas, edite o array
 `COLLEAGUES` no início do `<script>` em `webphone/index.html`. Cada
 ramal monitorado precisa ter um `hint` correspondente em
@@ -347,7 +357,7 @@ cd ../queue-api
 python3 -m pytest tests/ -v
 ```
 
-639 testes estáticos no total, em 7 suítes (`tests/`, `queue-api/tests/`,
+642 testes estáticos no total, em 7 suítes (`tests/`, `queue-api/tests/`,
 `admin-api/tests/`, `asterisk/scripts/tests/`, `backup/tests/`,
 `ai-worker/tests/`, `asterisk/agi/tests/`) — nenhuma delas sobe o
 Asterisk, Whisper ou Ollama de verdade. Detalhes em `tests/README.md`.

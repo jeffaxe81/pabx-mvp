@@ -124,6 +124,16 @@ def test_render_extensions_uses_tenant_specific_blocklist_family():
     assert "DB(blocklist-t3/" in content
 
 
+def test_render_extensions_plays_recording_consent_announcement():
+    """
+    Backlog #40 (conformidade LGPD): todo ponto que grava a chamada
+    precisa avisar o cliente antes - senão o tenant novo já nasceria
+    fora de conformidade, mesmo que t1/t2 estejam certos.
+    """
+    content = render_tenant_extensions("t3")
+    assert content.count("Playback(custom/aviso-gravacao)") == 3  # 1000, 1010, 1011
+
+
 def test_render_extensions_includes_dynamic_ramal_files():
     content = render_tenant_extensions("t3")
     assert "#include extensions_dynamic_dial-t3.conf" in content

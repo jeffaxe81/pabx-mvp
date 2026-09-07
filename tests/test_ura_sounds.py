@@ -13,6 +13,7 @@ EXPECTED_FILES = [
     "menu-callback.wav", "menu-satisfacao.wav",
     "menu-idioma.wav", "menu-principal-pt.wav", "menu-principal-en.wav", "menu-principal-es.wav",
     "menu-atendente-virtual.wav",
+    "aviso-gravacao.wav",
 ]
 
 
