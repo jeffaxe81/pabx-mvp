@@ -4,6 +4,7 @@ Um manual por funcionalidade implementada, na ordem em que foram
 construídas. Cada manual explica: o que a funcionalidade faz, como
 configurar, como testar manualmente, e limitações conhecidas.
 
+0. [Roteiro de implantação (primeiros passos em servidor real)](manual-00-roteiro-implantacao.md)
 1. [Core: ramais e chamadas internas](manual-01-core-ramais.md)
 2. [Criptografia (TLS + SRTP)](manual-02-criptografia.md)
 3. [Multi-tenant](manual-03-multi-tenant.md)

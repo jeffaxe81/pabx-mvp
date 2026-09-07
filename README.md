@@ -331,7 +331,7 @@ cd ../queue-api
 python3 -m pytest tests/ -v
 ```
 
-571 testes estáticos no total, em 7 suítes (`tests/`, `queue-api/tests/`,
+576 testes estáticos no total, em 7 suítes (`tests/`, `queue-api/tests/`,
 `admin-api/tests/`, `asterisk/scripts/tests/`, `backup/tests/`,
 `ai-worker/tests/`, `asterisk/agi/tests/`) — nenhuma delas sobe o
 Asterisk, Whisper ou Ollama de verdade. Detalhes em `tests/README.md`.
