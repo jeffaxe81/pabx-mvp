@@ -14,6 +14,7 @@ REQUIRED_IDS = [
     "formTitle", "formName", "formNumber", "formDisplayName", "formPassword",
     "saveBtn", "cancelEditBtn", "formError",
     "blocklistTableBody", "blocklistEmptyHint", "blocklistInput", "addBlockBtn", "blocklistError",
+    "vipFormCard", "vipTableBody", "vipEmptyHint", "vipNumberInput", "vipTargetInput", "addVipBtn", "vipError",
     "myRoleBadge", "usersFormCard", "usersTableBody",
     "userNameInput", "userRoleSelect", "userPasswordInput", "saveUserBtn",
     "cancelUserEditBtn", "userFormError",
@@ -75,6 +76,13 @@ def test_holiday_mode_toggle_present():
     assert 'id="holidayModeBtn"' in html
     assert "/api/config/modo-feriado" in html
     assert "loadHolidayMode()" in html
+
+
+def test_vip_section_exists_and_manages_target_extension():
+    html = load_html()
+    assert "/api/vip" in html
+    assert "loadVips()" in html
+    assert "target_extension" in html
 
 
 def test_users_section_exists_and_hidden_by_default():

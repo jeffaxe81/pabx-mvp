@@ -282,6 +282,11 @@ linha depois que o atendente desliga (via opção `c`/`g` do
 Asterisk) e responde uma nota de 1 a 5, associada ao atendente que
 participou da chamada — ver `docs/manual-32-pesquisa-satisfacao.md`.
 
+**E transferência inteligente por regra**: cliente VIP identificado
+pelo número roteia direto pro ramal escolhido (prioridade máxima), e
+retorno automático de verdade pra fila geral quando ninguém atende —
+ver `docs/manual-33-transferencia-inteligente.md`.
+
 Para ajustar quais ramais aparecem na lista de colegas, edite o array
 `COLLEAGUES` no início do `<script>` em `webphone/index.html`. Cada
 ramal monitorado precisa ter um `hint` correspondente em
@@ -306,7 +311,7 @@ cd ../queue-api
 python3 -m pytest tests/ -v
 ```
 
-463 testes estáticos no total, em 5 suítes (`tests/`, `queue-api/tests/`,
+473 testes estáticos no total, em 5 suítes (`tests/`, `queue-api/tests/`,
 `admin-api/tests/`, `asterisk/scripts/tests/`, `backup/tests/`) —
 nenhuma delas sobe o Asterisk de verdade. Detalhes em `tests/README.md`.
 

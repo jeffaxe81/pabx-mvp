@@ -23,6 +23,7 @@ from store import add_extension, update_extension, delete_extension, load_store
 from conf_generator import render_all
 from ami_client import AMIClient
 from blocklist import validate_blocklist_number
+from vip import validate_vip_input
 from users import load_users, save_users, find_user, add_user, update_user, delete_user, public_user
 from totp import generate_secret, verify_totp, build_provisioning_uri
 
@@ -160,6 +161,10 @@ class Handler(BaseHTTPRequestHandler):
             if not self._require_role({"admin", "supervisor"}):
                 return
             self._handle_list_blocklist()
+        elif self.path.startswith("/api/vip"):
+            if not self._require_role({"admin", "supervisor"}):
+                return
+            self._handle_list_vip()
         elif self.path.startswith("/api/config/modo-feriado"):
             if not self._require_role({"admin", "supervisor"}):
                 return
@@ -180,6 +185,17 @@ class Handler(BaseHTTPRequestHandler):
             client.connect_and_login()
             numbers = client.list_blocked_numbers()
             self._send_json(200, {"numbers": numbers})
+        except Exception as exc:  # noqa: BLE001
+            self._send_json(502, {"error": f"falha ao consultar AMI: {exc}"})
+        finally:
+            client.close()
+
+    def _handle_list_vip(self):
+        client = AMIClient(AMI_HOST, AMI_PORT, AMI_USERNAME, AMI_SECRET)
+        try:
+            client.connect_and_login()
+            vips = client.list_vips()
+            self._send_json(200, {"vips": vips})
         except Exception as exc:  # noqa: BLE001
             self._send_json(502, {"error": f"falha ao consultar AMI: {exc}"})
         finally:
@@ -218,6 +234,8 @@ class Handler(BaseHTTPRequestHandler):
             self._handle_create_extension()
         elif self.path == "/api/blocklist":
             self._handle_add_to_blocklist()
+        elif self.path == "/api/vip":
+            self._handle_add_vip()
         elif self.path == "/api/config/modo-feriado":
             self._handle_set_holiday_mode()
         elif self.path == "/api/users":
@@ -346,6 +364,32 @@ class Handler(BaseHTTPRequestHandler):
                 self._send_json(201, {"number": number})
             else:
                 self._send_json(502, {"error": "falha ao bloquear", "detail": response})
+        except Exception as exc:  # noqa: BLE001
+            self._send_json(502, {"error": f"falha ao consultar AMI: {exc}"})
+        finally:
+            client.close()
+
+    def _handle_add_vip(self):
+        if not self._require_role({"admin"}):
+            return
+        data = self._read_json_body()
+        if data is None:
+            self._send_json(400, {"error": "JSON inválido"})
+            return
+
+        ok, error, cleaned = validate_vip_input(data)
+        if not ok:
+            self._send_json(400, {"error": error})
+            return
+
+        client = AMIClient(AMI_HOST, AMI_PORT, AMI_USERNAME, AMI_SECRET)
+        try:
+            client.connect_and_login()
+            response = client.set_vip(cleaned["number"], cleaned["target_extension"])
+            if response.get("Response") == "Success":
+                self._send_json(201, cleaned)
+            else:
+                self._send_json(502, {"error": "falha ao cadastrar VIP", "detail": response})
         except Exception as exc:  # noqa: BLE001
             self._send_json(502, {"error": f"falha ao consultar AMI: {exc}"})
         finally:
@@ -484,6 +528,8 @@ class Handler(BaseHTTPRequestHandler):
             self._handle_delete_extension()
         elif self.path.startswith("/api/blocklist/"):
             self._handle_remove_from_blocklist()
+        elif self.path.startswith("/api/vip/"):
+            self._handle_remove_vip()
         elif self.path.startswith("/api/users/"):
             self._handle_delete_user()
         else:
@@ -516,6 +562,21 @@ class Handler(BaseHTTPRequestHandler):
         try:
             client.connect_and_login()
             client.unblock_number(number)
+            self._send_json(200, {"ok": True})
+        except Exception as exc:  # noqa: BLE001
+            self._send_json(502, {"error": f"falha ao consultar AMI: {exc}"})
+        finally:
+            client.close()
+
+    def _handle_remove_vip(self):
+        if not self._require_role({"admin"}):
+            return
+
+        number = self.path[len("/api/vip/"):]
+        client = AMIClient(AMI_HOST, AMI_PORT, AMI_USERNAME, AMI_SECRET)
+        try:
+            client.connect_and_login()
+            client.remove_vip(number)
             self._send_json(200, {"ok": True})
         except Exception as exc:  # noqa: BLE001
             self._send_json(502, {"error": f"falha ao consultar AMI: {exc}"})

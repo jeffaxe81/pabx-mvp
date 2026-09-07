@@ -193,7 +193,9 @@ PWA) não estão listados aqui de novo — só o que falta ou está parcial.
 27. ~~Pesquisa de satisfação pós-atendimento~~ — IMPLEMENTADO (opção
     c/g do Asterisk mantém cliente na linha, nota 1-5 associada ao
     atendente via DIALEDPEERNAME), ver docs/manual-32
-28. Transferência inteligente por regra (horário/cliente/assunto)
+28. ~~Transferência inteligente por regra~~ — IMPLEMENTADO (cliente
+    VIP via AstDB com prioridade máxima, retorno automático real via
+    DIALSTATUS/QUEUESTATUS), ver docs/manual-33
 29. Presença corporativa avançada (ausente/reunião/férias) com
     sincronização de calendário
 30. Atendimento multilíngue

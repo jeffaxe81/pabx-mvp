@@ -71,7 +71,46 @@ class AMIClient:
         response = self._send_action({
             "Action": "DBGet", "Family": "config", "Key": "modo-feriado",
         })
-        return response.get("Response") == "Success"    def list_blocked_numbers(self):
+        return response.get("Response") == "Success"
+
+    def set_vip(self, number: str, target_extension: str):
+        """Associa um número de cliente a um ramal de destino direto (AstDB família 'vip')."""
+        return self._send_action({
+            "Action": "DBPut", "Family": "vip", "Key": number, "Val": target_extension,
+        })
+
+    def remove_vip(self, number: str):
+        return self._send_action({
+            "Action": "DBDel", "Family": "vip", "Key": number,
+        })
+
+    def list_vips(self):
+        """
+        Igual a list_blocked_numbers, mas precisa capturar Key E Val -
+        o destino de cada cliente VIP é o que importa, não só o número.
+        """
+        with self._lock:
+            self._sock.sendall(build_action({
+                "Action": "DBGetTree", "Family": "vip",
+            }).encode("utf-8"))
+            self._sock.settimeout(2.0)
+            data = b""
+            try:
+                while True:
+                    chunk = self._sock.recv(4096)
+                    if not chunk:
+                        break
+                    data += chunk
+            except socket.timeout:
+                pass
+            finally:
+                self._sock.settimeout(None)
+
+        blocks = parse_ami_blocks(data.decode("utf-8", errors="replace"))
+        return [
+            {"number": b["Key"].split("/")[-1], "target_extension": b.get("Val", "")}
+            for b in blocks if b.get("Key")
+        ]    def list_blocked_numbers(self):
         """
         DBGetTree retorna uma Action ID com múltiplos eventos
         DBGetTreeEntry - simplificado aqui: lê tudo que vier do socket

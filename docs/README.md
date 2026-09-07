@@ -36,6 +36,7 @@ configurar, como testar manualmente, e limitações conhecidas.
 30. [Discador automático / campanhas](manual-30-discador-campanhas.md)
 31. [Chamada de retorno / callback](manual-31-callback.md)
 32. [Pesquisa de satisfação pós-atendimento](manual-32-pesquisa-satisfacao.md)
+33. [Transferência inteligente por regra](manual-33-transferencia-inteligente.md)
 
 ## Regra de manutenção
 

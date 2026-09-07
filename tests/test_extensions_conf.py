@@ -170,6 +170,41 @@ def test_customer_stays_on_line_after_agent_hangs_up():
     assert "Dial(PJSIP/t1-recepcao-2,20,g)" in pickup_text
 
 
+def test_no_answer_falls_back_automatically_instead_of_giving_up():
+    """
+    Backlog #28 ("transferência inteligente... retorno automático se
+    ninguém atender"): se o ramal direto (1010/1011/pickup) NÃO foi
+    atendido, a chamada precisa voltar pra fila geral (1000) - não
+    pode simplesmente ir pra pesquisa de satisfação de uma conversa
+    que nunca aconteceu.
+    """
+    blocks = blocks_as_dict(load_ext_blocks())
+
+    for context_name, dial_line in [
+        ("t1-internal", "Dial(PJSIP/t1-recepcao,20,g)"),
+        ("t1-internal", "Dial(PJSIP/t1-recepcao-2,20,g)"),
+        ("pickup-target", "Dial(PJSIP/t1-recepcao,20,g)"),
+        ("pickup-target", "Dial(PJSIP/t1-recepcao-2,20,g)"),
+    ]:
+        text = blocks[context_name].replace(" ", "")
+        dial_pos = text.index(dial_line)
+        answer_check_pos = text.index('DIALSTATUS}"="ANSWER"', dial_pos)
+        fallback_pos = text.index("Goto(t1-internal,1000,1)", answer_check_pos)
+        assert dial_pos < answer_check_pos < fallback_pos
+
+
+def test_queue_only_surveys_if_actually_answered():
+    """
+    Mesma lógica pro Queue(): só pesquisa satisfação se
+    QUEUESTATUS=CONTINUE (agente atendeu e desligou) - senão cai na
+    caixa de recado, não numa pesquisa de conversa inexistente.
+    """
+    blocks = blocks_as_dict(load_ext_blocks())
+    text = blocks["t1-internal"].replace(" ", "")
+    assert 'QUEUESTATUS}"="CONTINUE"' in text
+    assert "VoiceMail(" in text
+
+
 def test_survey_context_reads_digit_and_sends_user_event_with_operator():
     blocks = blocks_as_dict(load_ext_blocks())
     text = blocks["pesquisa-satisfacao"].replace(" ", "")
@@ -246,6 +281,24 @@ def test_ura_checks_holiday_mode_before_business_hours():
     holiday_check_pos = text.index("DB(config/modo-feriado")
     time_check_pos = text.index("GotoIfTime(")
     assert holiday_check_pos < time_check_pos
+
+
+def test_vip_check_has_priority_over_holiday_and_business_hours():
+    """
+    Cliente VIP (backlog #28) precisa ser checado ANTES até do modo
+    feriado - é a regra de maior prioridade de todas.
+    """
+    blocks = blocks_as_dict(load_ext_blocks())
+    text = blocks["ura-principal"].replace(" ", "")
+    vip_check_pos = text.index("DB(vip/")
+    holiday_check_pos = text.index("DB(config/modo-feriado")
+    assert vip_check_pos < holiday_check_pos
+
+
+def test_vip_route_uses_dynamic_extension_from_astdb():
+    blocks = blocks_as_dict(load_ext_blocks())
+    text = blocks["ura-principal"].replace(" ", "")
+    assert "Goto(t1-internal,${VIP_DESTINO},1)" in text
 
 
 def test_ura_routes_digit_1_and_2_differently():

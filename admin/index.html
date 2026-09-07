@@ -163,6 +163,31 @@
     <div class="error-msg" id="blocklistError"></div>
   </div>
 
+  <div class="form-card" id="vipFormCard" style="margin-top:24px;">
+    <h2>Clientes VIP (transferência inteligente)</h2>
+    <p style="font-size:13px; color:var(--text-muted); margin:0 0 12px;">
+      Chamadas desses números vão direto pro ramal escolhido, sem
+      passar pela URA nem pela fila geral.
+    </p>
+    <table>
+      <thead><tr><th>Número</th><th>Ramal de destino</th><th></th></tr></thead>
+      <tbody id="vipTableBody"></tbody>
+    </table>
+    <div class="empty-hint" id="vipEmptyHint" style="display:none;">Nenhum cliente VIP cadastrado.</div>
+    <div class="form-row" style="margin-top:14px;">
+      <div>
+        <label for="vipNumberInput">Número do cliente</label>
+        <input id="vipNumberInput" placeholder="11999998888">
+      </div>
+      <div>
+        <label for="vipTargetInput">Ramal de destino</label>
+        <input id="vipTargetInput" placeholder="1010">
+      </div>
+    </div>
+    <button class="btn-primary" id="addVipBtn" style="width:auto;">Cadastrar VIP</button>
+    <div class="error-msg" id="vipError"></div>
+  </div>
+
   <div class="form-card" style="margin-top:24px;">
     <h2>Autenticação em dois fatores (2FA)</h2>
     <p style="font-size:13px; color:var(--text-muted); margin:0 0 12px;" id="totpStatusText">
@@ -255,6 +280,7 @@
     applyRolePermissions();
     loadExtensions();
     loadBlocklist();
+    loadVips();
     loadHolidayMode();
     loadTotpStatus();
     if (myRole === 'admin') loadUsers();
@@ -417,6 +443,48 @@
       .catch((err) => alert(err.message));
   }
 
+  // ---------- Clientes VIP (transferência inteligente) ----------
+  function loadVips() {
+    apiFetch('/api/vip').then((data) => renderVips(data.vips || []));
+  }
+
+  function renderVips(vips) {
+    el('vipEmptyHint').style.display = vips.length === 0 ? 'block' : 'none';
+    el('vipTableBody').innerHTML = vips.map((v) => `
+      <tr>
+        <td class="mono">${v.number}</td>
+        <td class="mono">${v.target_extension}</td>
+        <td class="actions"><button class="btn-danger" data-remove-vip="${v.number}">Remover</button></td>
+      </tr>`).join('');
+
+    document.querySelectorAll('[data-remove-vip]').forEach((btn) => {
+      btn.addEventListener('click', () => removeVip(btn.dataset.removeVip));
+    });
+  }
+
+  el('addVipBtn').addEventListener('click', () => {
+    el('vipError').textContent = '';
+    apiFetch('/api/vip', {
+      method: 'POST',
+      body: JSON.stringify({
+        number: el('vipNumberInput').value,
+        target_extension: el('vipTargetInput').value,
+      }),
+    })
+      .then(() => {
+        el('vipNumberInput').value = '';
+        el('vipTargetInput').value = '';
+        loadVips();
+      })
+      .catch((err) => { el('vipError').textContent = err.message; });
+  });
+
+  function removeVip(number) {
+    apiFetch(`/api/vip/${number}`, { method: 'DELETE' })
+      .then(loadVips)
+      .catch((err) => alert(err.message));
+  }
+
   // ---------- Modo feriado (URA) ----------
   let holidayModeEnabled = false;
 
@@ -450,6 +518,7 @@
     const isAdmin = myRole === 'admin';
     el('extensionFormCard').style.display = isAdmin ? 'block' : 'none';
     el('blocklistFormCard').style.display = isAdmin ? 'block' : 'none';
+    el('vipFormCard').style.display = isAdmin ? 'block' : 'none';
     el('usersFormCard').style.display = isAdmin ? 'block' : 'none';
     // A tabela de ramais/lista de bloqueio continua visível (leitura)
     // pro supervisor - só os formulários de edição somem.

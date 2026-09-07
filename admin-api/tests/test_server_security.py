@@ -51,6 +51,8 @@ def test_role_checks_happen_before_any_mutation():
         ("_handle_delete_extension", {"admin"}, "delete_extension("),
         ("_handle_add_to_blocklist", {"admin"}, "block_number("),
         ("_handle_remove_from_blocklist", {"admin"}, "unblock_number("),
+        ("_handle_add_vip", {"admin"}, "set_vip("),
+        ("_handle_remove_vip", {"admin"}, "remove_vip("),
         ("_handle_set_holiday_mode", {"admin", "supervisor"}, "set_holiday_mode("),
         ("_handle_create_user", {"admin"}, "add_user("),
         ("_handle_update_user", {"admin"}, "update_user("),
@@ -80,6 +82,7 @@ def test_get_routes_require_appropriate_role():
     for path_fragment, expected_roles in [
         ("/api/extensions", {"admin", "supervisor"}),
         ("/api/blocklist", {"admin", "supervisor"}),
+        ("/api/vip", {"admin", "supervisor"}),
         ("/api/config/modo-feriado", {"admin", "supervisor"}),
         ("/api/users", {"admin"}),
     ]:
