@@ -180,3 +180,60 @@ def test_verify_totp_login_checks_pending_role_sentinel():
     source = load_source()
     body = get_function_body(source, "_handle_verify_totp_login")
     assert "TOTP_PENDING_ROLE" in body
+
+
+# ---------- Multi-tenant (backlog #38) ----------
+
+def test_tenant_is_validated_before_any_astdb_mutation():
+    """
+    Backlog #38: bloqueio/VIP/feriado agora são famílias AstDB por
+    tenant (blocklist-{tenant}, vip-{tenant}, config-{tenant}) - um
+    tenant inválido/desconhecido não pode criar uma família nova
+    silenciosamente, precisa ser rejeitado ANTES de qualquer chamada
+    à AMI.
+    """
+    source = load_source()
+
+    checks = [
+        ("_handle_add_to_blocklist", "block_number("),
+        ("_handle_remove_from_blocklist", "unblock_number("),
+        ("_handle_add_vip", "set_vip("),
+        ("_handle_remove_vip", "remove_vip("),
+        ("_handle_set_holiday_mode", "set_holiday_mode("),
+    ]
+
+    for fn_name, mutation_call in checks:
+        body = get_function_body(source, fn_name)
+        assert "validate_tenant(" in body, f"{fn_name} não valida o tenant"
+        tenant_check_pos = body.index("validate_tenant(")
+        mutation_pos = body.index(mutation_call)
+        assert tenant_check_pos < mutation_pos, (
+            f"{fn_name} muta o AstDB antes de validar o tenant"
+        )
+
+
+def test_unknown_tenant_is_rejected_not_silently_defaulted():
+    """
+    validate_tenant() precisa recusar um tenant fora da lista
+    conhecida (VALID_TENANTS) - se aceitasse qualquer string, alguém
+    poderia criar famílias AstDB arbitrárias (blocklist-t99, por
+    exemplo) que o dialplan nunca consultaria, dando falsa sensação
+    de que o bloqueio funcionou.
+    """
+    source = load_source()
+    fn_body = get_function_body(source, "validate_tenant")
+    assert "VALID_TENANTS" in fn_body
+    assert "in VALID_TENANTS" in fn_body
+
+
+def test_extension_listing_filters_by_tenant_query_param():
+    """
+    Sem esse filtro, o painel sempre mostraria ramais de TODOS os
+    tenants juntos, independente do tenant selecionado na interface.
+    """
+    source = load_source()
+    do_get_body = get_function_body(source, "do_GET")
+    extensions_branch_start = do_get_body.index('"/api/extensions"')
+    extensions_branch = do_get_body[extensions_branch_start:extensions_branch_start + 400]
+    assert "tenant_filter" in extensions_branch
+    assert 'e.get("tenant"' in extensions_branch

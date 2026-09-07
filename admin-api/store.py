@@ -15,6 +15,13 @@ from pathlib import Path
 EXTENSION_NUMBER_RANGE = range(1100, 1200)  # faixa reservada pro painel
 NAME_RE = re.compile(r"^[a-z0-9-]{3,40}$")
 
+# Multi-tenant (backlog #38) - mesma lista de tenants conhecidos do
+# server.py (duplicada aqui de propósito, mesmo padrão de pequenas
+# duplicações já usado no projeto pra manter cada módulo independente
+# - ver ami_protocol.py compartilhado entre admin-api/queue-api).
+VALID_TENANTS = {"t1", "t2"}
+DEFAULT_TENANT = "t1"
+
 
 def load_store(path) -> list:
     path = Path(path)
@@ -39,6 +46,10 @@ def validate_extension_input(data: dict, existing: list, editing_name: str = Non
     if any(e["name"] == name for e in existing if e["name"] != editing_name):
         return False, f"já existe um ramal chamado '{name}'", None
 
+    tenant = (data.get("tenant") or DEFAULT_TENANT).strip()
+    if tenant not in VALID_TENANTS:
+        return False, f"tenant inválido - use um de: {sorted(VALID_TENANTS)}", None
+
     try:
         number = int(data.get("number"))
     except (TypeError, ValueError):
@@ -47,8 +58,10 @@ def validate_extension_input(data: dict, existing: list, editing_name: str = Non
     if number not in EXTENSION_NUMBER_RANGE:
         return False, f"número deve estar entre {EXTENSION_NUMBER_RANGE.start} e {EXTENSION_NUMBER_RANGE.stop - 1}", None
 
-    if any(e["number"] == number for e in existing if e["name"] != editing_name):
-        return False, f"já existe um ramal com o número {number}", None
+    # Números podem repetir ENTRE tenants (contextos isolados) - só
+    # precisa ser único dentro do mesmo tenant.
+    if any(e["number"] == number and e.get("tenant", DEFAULT_TENANT) == tenant for e in existing if e["name"] != editing_name):
+        return False, f"já existe um ramal com o número {number} no tenant {tenant}", None
 
     display_name = (data.get("display_name") or name).strip()
     if not display_name:
@@ -63,7 +76,7 @@ def validate_extension_input(data: dict, existing: list, editing_name: str = Non
         "display_name": display_name,
         "password": password,
         "email": email,
-        "tenant": "t1",
+        "tenant": tenant,
     }
 
 

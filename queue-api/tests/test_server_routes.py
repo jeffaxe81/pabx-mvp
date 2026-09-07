@@ -119,3 +119,13 @@ def test_click_to_call_checks_ami_connected():
     fn_end = source.index("\n\n", source.index("falha ao originar chamada", fn_start))
     body = source[fn_start:fn_end]
     assert "if ami is None:" in body
+
+
+def test_pickup_and_click_to_call_defaults_include_both_tenants():
+    """
+    Backlog #38 (multi-tenant completo): pickup dirigido e
+    click-to-call precisam funcionar pra telefonistas de QUALQUER
+    tenant por padrão - não só o tenant 1.
+    """
+    source = load_source()
+    assert "t2-recepcao" in source

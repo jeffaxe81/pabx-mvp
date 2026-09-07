@@ -20,6 +20,7 @@ REQUIRED_IDS = [
     "cancelUserEditBtn", "userFormError",
     "totpSetupBtn", "totpSetupBlock", "totpSecretDisplay", "totpConfirmInput", "totpConfirmBtn",
     "totpDisableBlock", "totpDisablePasswordInput", "totpDisableBtn", "totpConfigError",
+    "tenantSelect", "tenantLabel",
 ]
 
 
@@ -143,3 +144,50 @@ def test_totp_disable_sends_password_confirmation():
     body = html[disable_start:disable_end]
     assert "/api/totp/disable" in body
     assert "totpDisablePasswordInput" in body
+
+
+# ---------- Multi-tenant (backlog #38) ----------
+
+def test_tenant_selector_offers_both_tenants():
+    html = load_html()
+    assert 'value="t1"' in html
+    assert 'value="t2"' in html
+
+
+def test_tenant_change_reloads_all_tenant_scoped_data():
+    """
+    Trocar de tenant precisa recarregar TUDO que é específico de
+    tenant - ramais, bloqueio, VIP e feriado - senão a tela mostraria
+    dados do tenant errado depois de trocar.
+    """
+    html = load_html()
+    fn_start = html.index("el('tenantSelect').addEventListener")
+    fn_end = html.index("});", fn_start)
+    body = html[fn_start:fn_end]
+    assert "currentTenant = e.target.value" in body
+    assert "loadExtensions()" in body
+    assert "loadBlocklist()" in body
+    assert "loadVips()" in body
+    assert "loadHolidayMode()" in body
+
+
+def test_extensions_blocklist_vip_and_holiday_requests_include_tenant():
+    """
+    Backlog #38: toda consulta/mutação de dado por tenant precisa
+    mandar o tenant certo - senão o painel sempre mostraria/mudaria o
+    tenant 1 independente do que estivesse selecionado.
+    """
+    html = load_html()
+    assert "/api/extensions?tenant=${currentTenant}" in html
+    assert "/api/blocklist?tenant=${currentTenant}" in html
+    assert "/api/vip?tenant=${currentTenant}" in html
+    assert "/api/config/modo-feriado?tenant=${currentTenant}" in html
+    assert "tenant: currentTenant" in html
+
+
+def test_new_extension_form_tags_created_ramal_with_current_tenant():
+    html = load_html()
+    fn_start = html.index("el('saveBtn').addEventListener")
+    fn_end = html.index("});", html.index("catch", fn_start))
+    body = html[fn_start:fn_end]
+    assert "tenant: currentTenant" in body

@@ -19,13 +19,14 @@ def render_pjsip_dynamic(extensions: list) -> str:
     blocks = [AUTO_GENERATED_HEADER]
     for ext in extensions:
         name = ext["name"]
+        tenant = ext.get("tenant", "t1")
         blocks.append(f"""[{name}](endpoint-secure)
-context=t1-internal
-subscribe_context=t1-hints
+context={tenant}-internal
+subscribe_context={tenant}-hints
 auth={name}
 aors={name}
 callerid={ext['display_name']} <{ext['number']}>
-mailboxes={name}@t1
+mailboxes={name}@{tenant}
 
 [{name}]
 type=auth
@@ -42,6 +43,7 @@ remove_existing=yes
 
 
 def render_extensions_dynamic_dial(extensions: list) -> str:
+    """Recebe já filtrado pra UM tenant - ver render_all()."""
     lines = [AUTO_GENERATED_HEADER]
     for ext in extensions:
         lines.append(
@@ -54,6 +56,7 @@ def render_extensions_dynamic_dial(extensions: list) -> str:
 
 
 def render_extensions_dynamic_hints(extensions: list) -> str:
+    """Recebe já filtrado pra UM tenant - ver render_all()."""
     lines = [AUTO_GENERATED_HEADER]
     for ext in extensions:
         lines.append(f"exten => {ext['number']},hint,PJSIP/{ext['name']}")
@@ -61,6 +64,7 @@ def render_extensions_dynamic_hints(extensions: list) -> str:
 
 
 def render_voicemail_dynamic(extensions: list) -> str:
+    """Recebe já filtrado pra UM tenant - ver render_all()."""
     lines = [AUTO_GENERATED_HEADER]
     for ext in extensions:
         email = ext.get("email", "")
@@ -69,10 +73,23 @@ def render_voicemail_dynamic(extensions: list) -> str:
 
 
 def render_all(extensions: list) -> dict:
-    """Retorna {nome_do_arquivo: conteudo} pros 4 arquivos dinâmicos."""
-    return {
-        "pjsip_dynamic.conf": render_pjsip_dynamic(extensions),
-        "extensions_dynamic_dial.conf": render_extensions_dynamic_dial(extensions),
-        "extensions_dynamic_hints.conf": render_extensions_dynamic_hints(extensions),
-        "voicemail_dynamic_t1.conf": render_voicemail_dynamic(extensions),
-    }
+    """
+    Retorna {nome_do_arquivo: conteudo} pros arquivos dinâmicos.
+    pjsip_dynamic.conf é um arquivo só, compartilhado entre tenants
+    (cada endpoint já carrega seu próprio context=/mailboxes= com o
+    tenant certo). Já dial/hints/voicemail PRECISAM ser um arquivo por
+    tenant (backlog #38) - eles são incluídos DENTRO dos contextos
+    [t1-internal]/[t2-internal] etc., então um arquivo compartilhado
+    colocaria ramal do tenant 2 dentro do dialplan do tenant 1.
+    """
+    by_tenant = {}
+    for ext in extensions:
+        by_tenant.setdefault(ext.get("tenant", "t1"), []).append(ext)
+
+    files = {"pjsip_dynamic.conf": render_pjsip_dynamic(extensions)}
+    for tenant in ("t1", "t2"):
+        tenant_extensions = by_tenant.get(tenant, [])
+        files[f"extensions_dynamic_dial-{tenant}.conf"] = render_extensions_dynamic_dial(tenant_extensions)
+        files[f"extensions_dynamic_hints-{tenant}.conf"] = render_extensions_dynamic_hints(tenant_extensions)
+        files[f"voicemail_dynamic_{tenant}.conf"] = render_voicemail_dynamic(tenant_extensions)
+    return files

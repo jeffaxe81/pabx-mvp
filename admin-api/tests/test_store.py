@@ -113,3 +113,35 @@ def test_delete_extension_rejects_unknown_name(tmp_path):
     path = tmp_path / "store.json"
     ok, error = delete_extension(path, "nao-existe")
     assert ok is False
+
+
+# ---------- Multi-tenant (backlog #38) ----------
+
+def test_validate_accepts_explicit_tenant():
+    ok, error, cleaned = validate_extension_input({**VALID_INPUT, "tenant": "t2"}, existing=[])
+    assert ok is True
+    assert cleaned["tenant"] == "t2"
+
+
+def test_validate_rejects_unknown_tenant():
+    ok, error, _ = validate_extension_input({**VALID_INPUT, "tenant": "t99"}, existing=[])
+    assert ok is False
+    assert "tenant" in error
+
+
+def test_same_number_allowed_across_different_tenants():
+    """
+    Números podem repetir ENTRE tenants (contextos isolados no
+    dialplan) - só precisam ser únicos dentro do mesmo tenant.
+    """
+    existing = [{"name": "vendas-1", "number": 1112, "tenant": "t1"}]
+    ok, error, cleaned = validate_extension_input({**VALID_INPUT, "tenant": "t2"}, existing)
+    assert ok is True
+    assert cleaned["tenant"] == "t2"
+
+
+def test_same_number_rejected_within_same_tenant():
+    existing = [{"name": "vendas-1", "number": 1112, "tenant": "t1"}]
+    ok, error, _ = validate_extension_input({**VALID_INPUT, "tenant": "t1"}, existing)
+    assert ok is False
+    assert "tenant t1" in error

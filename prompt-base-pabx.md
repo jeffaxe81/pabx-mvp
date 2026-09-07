@@ -279,3 +279,16 @@ Manuais já existentes: `docs/manual-01-core-ramais.md` até
 - Preservar a separação por tenant já existente
 - Nenhuma funcionalidade nova é considerada concluída sem teste
   automatizado + README atualizado + manual em `docs/`
+
+
+## Item #38 (pedido explícito do usuário, fora da numeração original do backlog): Multi-tenant completo
+~~Multi-tenant completo~~ — IMPLEMENTADO. Todas as funcionalidades
+construídas depois do manual 03 (fila, URA, gravação, callback,
+satisfação, transferência inteligente, grupos de toque, discagem,
+presença, multilíngue, painel de administração) agora funcionam pra
+múltiplos tenants de verdade, via variável ${TENANT} parametrizada
+(não duplicação de contexto). Encontrou e corrigiu 2 bugs de sintaxe
+reais pré-existentes (ami_client.py, queue-api/server.py) - nenhum
+teste pegava porque os testes de segurança liam o código como texto,
+nunca importavam de verdade. Corrigido com test_module_importability.py
+em todas as 7 suítes. Ver docs/manual-38.

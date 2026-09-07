@@ -81,12 +81,16 @@ def test_pickup_target_context_dials_receptionist():
 def test_admin_panel_dynamic_extensions_are_included():
     """
     Sem esses #include, os ramais criados pelo painel de administração
-    (backlog #10) nunca aparecem no dialplan de verdade, mesmo que o
-    admin-api tenha gerado o arquivo certinho.
+    (backlog #10/#38) nunca aparecem no dialplan de verdade, mesmo que
+    o admin-api tenha gerado o arquivo certinho. Um arquivo por tenant
+    (backlog #38) - senão ramal do tenant 2 vazaria pro dialplan do
+    tenant 1.
     """
     blocks = blocks_as_dict(load_ext_blocks())
-    assert "#include extensions_dynamic_dial.conf" in blocks["t1-internal"]
-    assert "#include extensions_dynamic_hints.conf" in blocks["t1-hints"]
+    assert "#include extensions_dynamic_dial-t1.conf" in blocks["t1-internal"]
+    assert "#include extensions_dynamic_hints-t1.conf" in blocks["t1-hints"]
+    assert "#include extensions_dynamic_dial-t2.conf" in blocks["t2-internal"]
+    assert "#include extensions_dynamic_hints-t2.conf" in blocks["t2-hints"]
 
 
 def test_direct_operator_extensions_are_recorded():
@@ -148,10 +152,16 @@ def test_callback_request_context_sends_user_event_with_caller_id():
     assert "CallerIDNum=${CALLERID(num)}" in text
 
 
-def test_callback_connect_context_dials_receptionist():
+def test_callback_connect_context_dials_tenant_specific_receptionist():
+    """
+    Backlog #38 (multi-tenant completo): callback-connect precisa
+    discar pro atendente do TENANT certo (via ${TENANT}, passado pelo
+    Originate do queue-api), não sempre pro tenant 1 fixo.
+    """
     blocks = blocks_as_dict(load_ext_blocks())
     text = blocks["callback-connect"].replace(" ", "")
-    assert "Dial(PJSIP/t1-recepcao" in text
+    assert "Dial(PJSIP/${TENANT}-recepcao" in text
+    assert 'Set(TENANT=${IF($["${TENANT}"=""]?t1:${TENANT})})' in text
 
 
 def test_customer_stays_on_line_after_agent_hangs_up():
@@ -235,15 +245,27 @@ def test_click_to_call_context_dials_via_tdm_gateway():
 def test_outbound_calls_check_blocklist_before_dialing():
     """
     Chamada de saída (backlog #14) precisa checar a lista de bloqueio
-    (AstDB) ANTES de discar - senão o número bloqueado pelo painel de
-    administração continua discando normalmente.
+    (AstDB, por tenant - backlog #38) ANTES de discar - senão o
+    número bloqueado pelo painel de administração continua discando
+    normalmente.
     """
     blocks = blocks_as_dict(load_ext_blocks())
     text = blocks["t1-internal"].replace(" ", "")
     exten_pos = text.index("exten=>_0.,1,")
-    blocklist_check_pos = text.index("DB(blocklist/", exten_pos)
+    blocklist_check_pos = text.index("DB(blocklist-t1/", exten_pos)
     dial_pos = text.index("Dial(PJSIP/${DESTINO}@gateway-tdm,30)", exten_pos)
     assert exten_pos < blocklist_check_pos < dial_pos
+
+
+def test_tenant2_outbound_calls_use_independent_blocklist():
+    """
+    Backlog #38: bloquear um número no tenant 1 não pode afetar o
+    tenant 2 - cada um precisa da própria família AstDB.
+    """
+    blocks = blocks_as_dict(load_ext_blocks())
+    text = blocks["t2-internal"].replace(" ", "")
+    assert "DB(blocklist-t2/" in text
+    assert "DB(blocklist-t1/" not in text
 
 
 def test_blocked_number_route_uses_congestion_not_normal_dial():
@@ -273,15 +295,15 @@ def test_alternate_route_uses_second_trunk():
 
 def test_ura_checks_holiday_mode_before_business_hours():
     """
-    O modo feriado (ligado manualmente pelo painel) precisa ter
-    prioridade sobre o horário comercial normal - senão "feriado numa
-    segunda de manhã" tocaria o menu de horário comercial mesmo assim.
-    Isso agora vive em [rotear-horario], depois da seleção de idioma
-    (backlog #30).
+    O modo feriado (ligado manualmente pelo painel, por tenant -
+    backlog #38) precisa ter prioridade sobre o horário comercial
+    normal - senão "feriado numa segunda de manhã" tocaria o menu de
+    horário comercial mesmo assim. Isso agora vive em
+    [rotear-horario], depois da seleção de idioma (backlog #30).
     """
     blocks = blocks_as_dict(load_ext_blocks())
     text = blocks["rotear-horario"].replace(" ", "")
-    holiday_check_pos = text.index("DB(config/modo-feriado")
+    holiday_check_pos = text.index("DB(config-${TENANT}/modo-feriado")
     time_check_pos = text.index("GotoIfTime(")
     assert holiday_check_pos < time_check_pos
 
@@ -291,48 +313,64 @@ def test_vip_check_has_priority_over_language_selection():
     Cliente VIP (backlog #28) precisa ser checado ANTES até da
     seleção de idioma (backlog #30) - é a regra de maior prioridade
     de todas, não faz sentido perguntar idioma pra quem já tem rota
-    direta definida.
+    direta definida. Lista de VIP é por tenant (backlog #38).
     """
     blocks = blocks_as_dict(load_ext_blocks())
     text = blocks["ura-principal"].replace(" ", "")
-    vip_check_pos = text.index("DB(vip/")
+    vip_check_pos = text.index("DB(vip-${TENANT}/")
     language_check_pos = text.index("Background(custom/menu-idioma)")
     assert vip_check_pos < language_check_pos
 
 
-def test_vip_route_uses_dynamic_extension_from_astdb():
+def test_vip_route_uses_dynamic_extension_and_tenant_from_astdb():
+    """
+    Backlog #38: o destino final precisa respeitar o TENANT da
+    chamada, não sempre cair em t1-internal.
+    """
     blocks = blocks_as_dict(load_ext_blocks())
     text = blocks["ura-principal"].replace(" ", "")
-    assert "Goto(t1-internal,${VIP_DESTINO},1)" in text
+    assert "Goto(${TENANT}-internal,${VIP_DESTINO},1)" in text
 
 
 def test_ura_routes_digit_1_and_2_differently():
+    """
+    Backlog #38: os dois destinos usam ${TENANT} - a URA é um
+    contexto único e compartilhado entre tenants, não existe uma
+    URA duplicada por tenant.
+    """
     blocks = blocks_as_dict(load_ext_blocks())
     text = blocks["horario-comercial"].replace(" ", "")
-    assert "exten=>1,1,Goto(t1-internal,1000,1)" in text
-    assert "exten=>2,1,Goto(t1-internal,1010,1)" in text
+    assert "exten=>1,1,Goto(${TENANT}-internal,1000,1)" in text
+    assert "exten=>2,1,Goto(${TENANT}-internal,1010,1)" in text
 
 
 def test_after_hours_and_holiday_contexts_go_to_voicemail():
     blocks = blocks_as_dict(load_ext_blocks())
     for context_name in ("fora-horario", "feriado"):
         text = blocks[context_name].replace(" ", "")
-        assert "VoiceMail(" in text
+        assert "VoiceMail(${TENANT}-1001@${TENANT}" in text
         assert "Background(custom/" in text
 
 
 def test_ura_test_extension_exists_for_internal_testing():
+    """Cada tenant tem sua própria extensão de teste (700) que define ${TENANT} antes de entrar na URA compartilhada."""
     blocks = blocks_as_dict(load_ext_blocks())
-    text = blocks["t1-internal"].replace(" ", "")
-    assert "exten=>700,1,Goto(ura-principal,s,1)" in text
+    t1_text = blocks["t1-internal"].replace(" ", "")
+    assert "exten=>700,1,Set(TENANT=t1)" in t1_text
+    t2_text = blocks["t2-internal"].replace(" ", "")
+    assert "exten=>700,1,Set(TENANT=t2)" in t2_text
 
 
 def test_language_selection_offers_three_languages():
+    """
+    Backlog #38: cada idioma monta a fila do TENANT certo
+    (fila-${TENANT}[-idioma]) - contexto único, compartilhado.
+    """
     blocks = blocks_as_dict(load_ext_blocks())
     text = blocks["selecionar-idioma"].replace(" ", "")
-    assert "exten=>pt,1,Set(FILA_IDIOMA=fila-t1)" in text
-    assert "exten=>en,1,Set(FILA_IDIOMA=fila-t1-en)" in text
-    assert "exten=>es,1,Set(FILA_IDIOMA=fila-t1-es)" in text
+    assert "exten=>pt,1,Set(FILA_IDIOMA=fila-${TENANT})" in text
+    assert "exten=>en,1,Set(FILA_IDIOMA=fila-${TENANT}-en)" in text
+    assert "exten=>es,1,Set(FILA_IDIOMA=fila-${TENANT}-es)" in text
 
 
 def test_language_selection_sets_language_specific_menu_audio():
@@ -349,24 +387,32 @@ def test_business_hours_menu_uses_selected_language_audio():
     assert "Background(${MENU_PRINCIPAL})" in text
 
 
-def test_direct_dial_to_1000_defaults_to_portuguese_queue():
+def test_direct_dial_to_1000_defaults_to_tenant_specific_portuguese_queue():
     """
     Ramal 1000 discado diretamente (sem passar pela URA - ex: ramal
-    interno ou teste) precisa cair na fila em português por padrão,
-    já que ${FILA_IDIOMA} nunca foi definido nesse caminho.
+    interno ou teste) precisa cair na fila em português do PRÓPRIO
+    tenant por padrão (backlog #38) - t1-internal cai em fila-t1,
+    t2-internal cai em fila-t2, nunca cruzando tenants.
     """
     blocks = blocks_as_dict(load_ext_blocks())
-    text = blocks["t1-internal"].replace(" ", "")
-    exten_start = text.index("exten=>1000,1,")
-    exten_end = text.index("exten=>", exten_start + 1)
-    block_text = text[exten_start:exten_end]
-    assert 'FILA_IDIOMA=${IF($["${FILA_IDIOMA}"=""]?fila-t1' in block_text
+
+    for context_name, tenant in (("t1-internal", "t1"), ("t2-internal", "t2")):
+        text = blocks[context_name].replace(" ", "")
+        exten_start = text.index("exten=>1000,1,")
+        exten_end = text.index("exten=>", exten_start + 1)
+        block_text = text[exten_start:exten_end]
+        expected_tenant_default = 'TENANT=${IF($["${TENANT}"=""]?' + tenant + ':${TENANT})})'
+        assert expected_tenant_default in block_text
+        assert 'FILA_IDIOMA=${IF($["${FILA_IDIOMA}"=""]?fila-${TENANT}' in block_text
 
 
 def test_virtual_attendant_test_extension_exists():
+    """Cada tenant define ${TENANT} antes de entrar no atendente virtual compartilhado (backlog #38)."""
     blocks = blocks_as_dict(load_ext_blocks())
-    text = blocks["t1-internal"].replace(" ", "")
-    assert "exten=>650,1,Goto(atendente-virtual,s,1)" in text
+    t1_text = blocks["t1-internal"].replace(" ", "")
+    assert "exten=>650,1,Set(TENANT=t1)" in t1_text
+    t2_text = blocks["t2-internal"].replace(" ", "")
+    assert "exten=>650,1,Set(TENANT=t2)" in t2_text
 
 
 def test_virtual_attendant_runs_agi_and_routes_by_intent():
@@ -380,12 +426,13 @@ def test_virtual_attendant_falls_back_to_general_queue_when_agi_sets_nothing():
     """
     Se o AGI não conseguir definir ${INTENT_DESTINO} por qualquer
     motivo (ai-worker fora do ar, IA desligada, etc.), a chamada
-    precisa cair na fila geral - nunca travar sem destino nenhum.
+    precisa cair na fila geral do TENANT certo - nunca travar sem
+    destino nenhum, e nunca cair no tenant errado (backlog #38).
     """
     blocks = blocks_as_dict(load_ext_blocks())
     text = blocks["atendente-virtual"].replace(" ", "")
     assert 'GotoIf($["${INTENT_DESTINO}"!=""]?rotear,1)' in text
-    assert "Goto(t1-internal,1000,1)" in text
+    assert "Goto(${TENANT}-internal,1000,1)" in text
 
 
 def test_simultaneous_ring_group_dials_all_members_at_once():
@@ -461,3 +508,73 @@ def test_tenants_do_not_share_extension_numbers_in_same_context():
         assert len(extens) == len(set(extens)), (
             f"Números de ramal duplicados no contexto {context_name}: {extens}"
         )
+
+
+# ---------- Multi-tenant completo (backlog #38) ----------
+
+def test_tenant2_has_queue_entry_point_mirroring_tenant1():
+    """
+    Tenant 2 precisa ter a mesma entrada de fila que o tenant 1 -
+    senão "multi-tenant" seria só isolamento de ramal comum, sem
+    nenhuma das funcionalidades avançadas construídas depois.
+    """
+    blocks = blocks_as_dict(load_ext_blocks())
+    text = blocks["t2-internal"].replace(" ", "")
+    assert "exten=>1000,1," in text
+    assert "Queue(${FILA_IDIOMA},c)" in text
+    assert 'QUEUESTATUS}"="CONTINUE"' in text
+
+
+def test_tenant2_has_direct_operator_extensions_with_survey_and_fallback():
+    blocks = blocks_as_dict(load_ext_blocks())
+    text = blocks["t2-internal"].replace(" ", "")
+    assert "Dial(PJSIP/t2-recepcao,20,g)" in text
+    assert "Dial(PJSIP/t2-recepcao-2,20,g)" in text
+    assert "Goto(t2-internal,1000,1)" in text  # retorno automático (backlog #28) também no tenant 2
+
+
+def test_tenant2_has_test_extensions_for_ura_queue_and_virtual_attendant():
+    blocks = blocks_as_dict(load_ext_blocks())
+    text = blocks["t2-internal"].replace(" ", "")
+    assert "exten=>800,1,Queue(fila-t2)" in text
+    assert "exten=>700,1,Set(TENANT=t2)" in text
+    assert "exten=>650,1,Set(TENANT=t2)" in text
+
+
+def test_pickup_target_has_entries_for_both_tenants():
+    """
+    Backlog #38: pickup dirigido (manual 08/14) precisa funcionar pra
+    telefonistas de QUALQUER tenant, não só do tenant 1.
+    """
+    blocks = blocks_as_dict(load_ext_blocks())
+    text = blocks["pickup-target"].replace(" ", "")
+    for operator in ("t1-recepcao", "t1-recepcao-2", "t2-recepcao", "t2-recepcao-2"):
+        assert f"exten=>{operator},1," in text
+
+
+def test_t2_hints_mirror_t1_hints_structure():
+    blocks = blocks_as_dict(load_ext_blocks())
+    text = blocks["t2-hints"].replace(" ", "")
+    assert "1000,hint,PJSIP/t2-recepcao&PJSIP/t2-recepcao-2" in text
+    assert "1010,hint,PJSIP/t2-recepcao" in text
+    assert "1011,hint,PJSIP/t2-recepcao-2" in text
+
+
+def test_from_tdm_gateway_sets_tenant_before_entering_shared_contexts():
+    """
+    ${TENANT} precisa ser definido ANTES de entrar em qualquer
+    contexto compartilhado (URA, atendente virtual) - senão essas
+    variáveis ficam vazias e tudo cai no valor padrão (t1) mesmo pra
+    chamadas que deveriam ser do tenant 2.
+    """
+    blocks = blocks_as_dict(load_ext_blocks())
+    text = blocks["from-tdm-gateway"].replace(" ", "")
+    t1_pos = text.index("exten=>5511900001111,1,")
+    t1_set_pos = text.index("Set(TENANT=t1)", t1_pos)
+    t1_goto_pos = text.index("Goto(t1-internal,1001,1)", t1_pos)
+    assert t1_pos < t1_set_pos < t1_goto_pos
+
+    t2_pos = text.index("exten=>5511900002222,1,")
+    t2_set_pos = text.index("Set(TENANT=t2)", t2_pos)
+    t2_goto_pos = text.index("Goto(t2-internal,1001,1)", t2_pos)
+    assert t2_pos < t2_set_pos < t2_goto_pos

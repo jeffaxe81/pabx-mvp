@@ -61,15 +61,46 @@ def test_voicemail_dynamic_works_without_email():
     assert "recepcao-3 => 1234,Recepção 3," in content
 
 
-def test_render_all_returns_all_four_files():
+def test_render_all_returns_files_per_tenant():
+    """
+    Backlog #38: dial/hints/voicemail viram um arquivo por tenant
+    (t1 e t2) - só pjsip_dynamic.conf continua compartilhado, porque
+    cada endpoint já carrega o próprio context= com o tenant certo.
+    """
     files = render_all(SAMPLE)
     assert set(files.keys()) == {
         "pjsip_dynamic.conf",
-        "extensions_dynamic_dial.conf",
-        "extensions_dynamic_hints.conf",
+        "extensions_dynamic_dial-t1.conf",
+        "extensions_dynamic_dial-t2.conf",
+        "extensions_dynamic_hints-t1.conf",
+        "extensions_dynamic_hints-t2.conf",
         "voicemail_dynamic_t1.conf",
+        "voicemail_dynamic_t2.conf",
     }
-    assert all(isinstance(content, str) and content for content in files.values())
+    assert all(isinstance(content, str) for content in files.values())
+
+
+def test_render_all_places_each_extension_in_its_own_tenant_file():
+    t2_sample = [{**SAMPLE[0], "name": "vendas-t2-1", "tenant": "t2"}]
+    files = render_all(SAMPLE + t2_sample)
+
+    assert "recepcao-3" in files["extensions_dynamic_dial-t1.conf"]
+    assert "recepcao-3" not in files["extensions_dynamic_dial-t2.conf"]
+    assert "vendas-t2-1" in files["extensions_dynamic_dial-t2.conf"]
+    assert "vendas-t2-1" not in files["extensions_dynamic_dial-t1.conf"]
+
+
+def test_pjsip_dynamic_uses_extension_own_tenant_context():
+    """
+    Backlog #38: um ramal criado com tenant=t2 precisa gerar
+    context=t2-internal - senão o painel só serviria pra criar ramal
+    do tenant 1, mesmo aceitando o campo tenant.
+    """
+    t2_extension = [{**SAMPLE[0], "tenant": "t2"}]
+    content = render_pjsip_dynamic(t2_extension)
+    assert "context=t2-internal" in content
+    assert "subscribe_context=t2-hints" in content
+    assert "mailboxes=recepcao-3@t2" in content
 
 
 def test_multiple_extensions_all_appear():

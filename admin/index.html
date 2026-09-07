@@ -27,7 +27,7 @@
 
   label { display: block; font-size: 12px; color: var(--text-muted); margin: 14px 0 5px; }
   label:first-of-type { margin-top: 0; }
-  input {
+  input, select {
     width: 100%; background: var(--panel-alt); border: 1px solid var(--border);
     color: var(--text); padding: 9px 10px; border-radius: 4px; font-size: 14px;
   }
@@ -89,8 +89,13 @@
 
 <div class="app-screen" id="appScreen">
   <div class="app-header">
-    <h1>Ramais (tenant 1)</h1>
+    <h1>Ramais <span id="tenantLabel" style="color:var(--text-muted); font-weight:400;">(tenant 1)</span></h1>
     <div style="display:flex; align-items:center; gap:10px;">
+      <label for="tenantSelect" style="font-size:11px; color:var(--text-muted); margin:0;">Tenant:</label>
+      <select id="tenantSelect" style="width:auto; padding:6px 8px;">
+        <option value="t1">Tenant 1</option>
+        <option value="t2">Tenant 2</option>
+      </select>
       <span id="myRoleBadge" style="font-size:11px; color:var(--text-muted); text-transform:uppercase;"></span>
       <button class="btn-ghost" id="logoutBtn">Sair</button>
     </div>
@@ -253,6 +258,7 @@
   let token = null;
   let editingName = null;
   let myRole = null;
+  let currentTenant = 't1';
 
   function apiFetch(path, options = {}) {
     return fetch(path, {
@@ -332,7 +338,7 @@
   });
 
   function loadExtensions() {
-    apiFetch('/api/extensions').then((data) => renderTable(data.extensions || []));
+    apiFetch(`/api/extensions?tenant=${currentTenant}`).then((data) => renderTable(data.extensions || []));
   }
 
   function renderTable(extensions) {
@@ -391,6 +397,7 @@
       display_name: el('formDisplayName').value,
       email: el('formEmail').value,
       password: el('formPassword').value || undefined,
+      tenant: currentTenant,
     };
 
     const request = editingName
@@ -411,7 +418,7 @@
 
   // ---------- Lista de bloqueio (discagem externa) ----------
   function loadBlocklist() {
-    apiFetch('/api/blocklist').then((data) => renderBlocklist(data.numbers || []));
+    apiFetch(`/api/blocklist?tenant=${currentTenant}`).then((data) => renderBlocklist(data.numbers || []));
   }
 
   function renderBlocklist(numbers) {
@@ -431,21 +438,21 @@
     el('blocklistError').textContent = '';
     apiFetch('/api/blocklist', {
       method: 'POST',
-      body: JSON.stringify({ number: el('blocklistInput').value }),
+      body: JSON.stringify({ number: el('blocklistInput').value, tenant: currentTenant }),
     })
       .then(() => { el('blocklistInput').value = ''; loadBlocklist(); })
       .catch((err) => { el('blocklistError').textContent = err.message; });
   });
 
   function unblockNumber(number) {
-    apiFetch(`/api/blocklist/${number}`, { method: 'DELETE' })
+    apiFetch(`/api/blocklist/${number}?tenant=${currentTenant}`, { method: 'DELETE' })
       .then(loadBlocklist)
       .catch((err) => alert(err.message));
   }
 
   // ---------- Clientes VIP (transferência inteligente) ----------
   function loadVips() {
-    apiFetch('/api/vip').then((data) => renderVips(data.vips || []));
+    apiFetch(`/api/vip?tenant=${currentTenant}`).then((data) => renderVips(data.vips || []));
   }
 
   function renderVips(vips) {
@@ -469,6 +476,7 @@
       body: JSON.stringify({
         number: el('vipNumberInput').value,
         target_extension: el('vipTargetInput').value,
+        tenant: currentTenant,
       }),
     })
       .then(() => {
@@ -480,7 +488,7 @@
   });
 
   function removeVip(number) {
-    apiFetch(`/api/vip/${number}`, { method: 'DELETE' })
+    apiFetch(`/api/vip/${number}?tenant=${currentTenant}`, { method: 'DELETE' })
       .then(loadVips)
       .catch((err) => alert(err.message));
   }
@@ -489,7 +497,7 @@
   let holidayModeEnabled = false;
 
   function loadHolidayMode() {
-    apiFetch('/api/config/modo-feriado').then((data) => {
+    apiFetch(`/api/config/modo-feriado?tenant=${currentTenant}`).then((data) => {
       holidayModeEnabled = !!data.enabled;
       renderHolidayModeBtn();
     });
@@ -504,11 +512,21 @@
   el('holidayModeBtn').addEventListener('click', () => {
     apiFetch('/api/config/modo-feriado', {
       method: 'POST',
-      body: JSON.stringify({ enabled: !holidayModeEnabled }),
+      body: JSON.stringify({ enabled: !holidayModeEnabled, tenant: currentTenant }),
     }).then((data) => {
       holidayModeEnabled = data.enabled;
       renderHolidayModeBtn();
     }).catch((err) => alert(err.message));
+  });
+
+  // ---------- Seletor de tenant (backlog #38) ----------
+  el('tenantSelect').addEventListener('change', (e) => {
+    currentTenant = e.target.value;
+    el('tenantLabel').textContent = `(tenant ${currentTenant.slice(1)})`;
+    loadExtensions();
+    loadBlocklist();
+    loadVips();
+    loadHolidayMode();
   });
 
   // ---------- Permissões por papel ----------

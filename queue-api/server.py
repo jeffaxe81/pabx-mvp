@@ -51,7 +51,7 @@ AMI_USERNAME = os.environ.get("AMI_USERNAME", "queue-api")
 AMI_SECRET = os.environ.get("AMI_SECRET", "troque_esta_senha_ami")
 PICKUP_CONTEXT = os.environ.get("PICKUP_CONTEXT", "pickup-target")
 PICKUP_ALLOWED_EXTENSIONS = [
-    e.strip() for e in os.environ.get("PICKUP_ALLOWED_EXTENSIONS", "t1-recepcao,t1-recepcao-2").split(",") if e.strip()
+    e.strip() for e in os.environ.get("PICKUP_ALLOWED_EXTENSIONS", "t1-recepcao,t1-recepcao-2,t2-recepcao,t2-recepcao-2").split(",") if e.strip()
 ]
 HTTP_PORT = int(os.environ.get("HTTP_PORT", "8090"))
 RECORDINGS_DIR = os.environ.get("RECORDINGS_DIR", "/app/recordings")
@@ -107,7 +107,7 @@ CLICK_TO_CALL_CONTEXT = os.environ.get("CLICK_TO_CALL_CONTEXT", "click-to-call")
 CLICK_TO_CALL_CONFIG = {
     "api_key": os.environ.get("CLICK_TO_CALL_API_KEY", ""),
     "allowed_extensions": [
-        e.strip() for e in os.environ.get("CLICK_TO_CALL_ALLOWED_EXTENSIONS", "t1-recepcao").split(",") if e.strip()
+        e.strip() for e in os.environ.get("CLICK_TO_CALL_ALLOWED_EXTENSIONS", "t1-recepcao,t2-recepcao").split(",") if e.strip()
     ],
 }
 
@@ -318,7 +318,9 @@ class Handler(BaseHTTPRequestHandler):
                 "average": average_score(records),
                 "count": len(records),
                 "distribution": score_distribution(records),
-            })    def _handle_reports(self):
+            })
+
+    def _handle_reports(self):
         query = parse_qs(urlparse(self.path).query)
         start = query.get("start", [None])[0]
         end = query.get("end", [None])[0]

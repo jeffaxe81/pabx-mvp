@@ -42,6 +42,7 @@ configurar, como testar manualmente, e limitações conhecidas.
 35. [Atendimento multilíngue](manual-35-multilingue.md)
 36. [Transcrição, resumo automático e análise de sentimento](manual-36-transcricao-resumo-sentimento.md)
 37. [Atendente virtual com IA](manual-37-atendente-virtual.md)
+38. [Multi-tenant completo](manual-38-multi-tenant-completo.md)
 
 ## Regra de manutenção
 

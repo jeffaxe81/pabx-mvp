@@ -307,6 +307,17 @@ disponíveis no ambiente onde foi construído) — ver os avisos de
 honestidade técnica logo no início de `docs/manual-36-transcricao-resumo-sentimento.md`
 e `docs/manual-37-atendente-virtual.md`.
 
+**E, por fim, multi-tenant completo**: toda funcionalidade construída
+depois do manual 03 (fila, URA, gravação, callback, satisfação,
+transferência inteligente, grupos de toque, discagem, presença,
+multilíngue, painel de administração) agora funciona pra múltiplos
+tenants de verdade, não só o tenant 1 — usando uma variável
+`${TENANT}` parametrizada em vez de duplicar contexto por contexto.
+Esse trabalho também encontrou e corrigiu dois bugs de sintaxe reais
+pré-existentes (`ami_client.py` e `queue-api/server.py`), fechados com
+um novo teste de importabilidade em todas as suítes — ver
+`docs/manual-38-multi-tenant-completo.md`.
+
 Para ajustar quais ramais aparecem na lista de colegas, edite o array
 `COLLEAGUES` no início do `<script>` em `webphone/index.html`. Cada
 ramal monitorado precisa ter um `hint` correspondente em
@@ -331,7 +342,7 @@ cd ../queue-api
 python3 -m pytest tests/ -v
 ```
 
-576 testes estáticos no total, em 7 suítes (`tests/`, `queue-api/tests/`,
+606 testes estáticos no total, em 7 suítes (`tests/`, `queue-api/tests/`,
 `admin-api/tests/`, `asterisk/scripts/tests/`, `backup/tests/`,
 `ai-worker/tests/`, `asterisk/agi/tests/`) — nenhuma delas sobe o
 Asterisk, Whisper ou Ollama de verdade. Detalhes em `tests/README.md`.

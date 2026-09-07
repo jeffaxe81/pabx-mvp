@@ -17,6 +17,7 @@ import json
 import os
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from urllib.parse import urlparse, parse_qs
 
 from auth import hash_password, verify_password, SessionStore
 from store import add_extension, update_extension, delete_extension, load_store
@@ -29,6 +30,19 @@ from totp import generate_secret, verify_totp, build_provisioning_uri
 
 HTTP_PORT = int(os.environ.get("HTTP_PORT", "8091"))
 STORE_PATH = os.environ.get("STORE_PATH", "/app/data/extensions_store.json")
+
+# Multi-tenant (backlog #38): tenants conhecidos - qualquer requisição
+# de bloqueio/VIP/feriado que informar um tenant fora dessa lista é
+# rejeitada, em vez de criar silenciosamente uma família AstDB nova
+# pra um tenant que não existe de verdade no dialplan.
+VALID_TENANTS = {"t1", "t2"}
+DEFAULT_TENANT = "t1"
+
+
+def validate_tenant(raw_tenant: str):
+    """Retorna o tenant se for válido, ou None. Vazio/ausente vira o padrão (t1)."""
+    tenant = (raw_tenant or DEFAULT_TENANT).strip()
+    return tenant if tenant in VALID_TENANTS else None
 USERS_PATH = os.environ.get("USERS_PATH", "/app/data/users.json")
 ASTERISK_CONF_DIR = os.environ.get("ASTERISK_CONF_DIR", "/app/asterisk-conf")
 STATIC_DIR = Path(os.environ.get("STATIC_DIR", "/app/static"))
@@ -79,7 +93,7 @@ def ensure_bootstrap_admin():
 
 
 def regenerate_and_reload():
-    """Regera os 4 arquivos dinâmicos e pede pro Asterisk recarregar."""
+    """Regera os arquivos dinâmicos (um por tenant pra dial/hints/voicemail, ver manual 38) e pede pro Asterisk recarregar."""
     extensions = load_store(STORE_PATH)
     files = render_all(extensions)
     for filename, content in files.items():
@@ -155,7 +169,11 @@ class Handler(BaseHTTPRequestHandler):
         if self.path.startswith("/api/extensions"):
             if not self._require_role({"admin", "supervisor"}):
                 return
-            extensions = [public_view(e) for e in load_store(STORE_PATH)]
+            tenant_filter = parse_qs(urlparse(self.path).query).get("tenant", [None])[0]
+            extensions = [
+                public_view(e) for e in load_store(STORE_PATH)
+                if not tenant_filter or e.get("tenant", DEFAULT_TENANT) == tenant_filter
+            ]
             self._send_json(200, {"extensions": extensions})
         elif self.path.startswith("/api/blocklist"):
             if not self._require_role({"admin", "supervisor"}):
@@ -180,33 +198,45 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json(404, {"error": "not found"})
 
     def _handle_list_blocklist(self):
+        tenant = validate_tenant(parse_qs(urlparse(self.path).query).get("tenant", [None])[0])
+        if not tenant:
+            self._send_json(400, {"error": f"tenant inválido - use um de: {sorted(VALID_TENANTS)}"})
+            return
         client = AMIClient(AMI_HOST, AMI_PORT, AMI_USERNAME, AMI_SECRET)
         try:
             client.connect_and_login()
-            numbers = client.list_blocked_numbers()
-            self._send_json(200, {"numbers": numbers})
+            numbers = client.list_blocked_numbers(tenant)
+            self._send_json(200, {"numbers": numbers, "tenant": tenant})
         except Exception as exc:  # noqa: BLE001
             self._send_json(502, {"error": f"falha ao consultar AMI: {exc}"})
         finally:
             client.close()
 
     def _handle_list_vip(self):
+        tenant = validate_tenant(parse_qs(urlparse(self.path).query).get("tenant", [None])[0])
+        if not tenant:
+            self._send_json(400, {"error": f"tenant inválido - use um de: {sorted(VALID_TENANTS)}"})
+            return
         client = AMIClient(AMI_HOST, AMI_PORT, AMI_USERNAME, AMI_SECRET)
         try:
             client.connect_and_login()
-            vips = client.list_vips()
-            self._send_json(200, {"vips": vips})
+            vips = client.list_vips(tenant)
+            self._send_json(200, {"vips": vips, "tenant": tenant})
         except Exception as exc:  # noqa: BLE001
             self._send_json(502, {"error": f"falha ao consultar AMI: {exc}"})
         finally:
             client.close()
 
     def _handle_get_holiday_mode(self):
+        tenant = validate_tenant(parse_qs(urlparse(self.path).query).get("tenant", [None])[0])
+        if not tenant:
+            self._send_json(400, {"error": f"tenant inválido - use um de: {sorted(VALID_TENANTS)}"})
+            return
         client = AMIClient(AMI_HOST, AMI_PORT, AMI_USERNAME, AMI_SECRET)
         try:
             client.connect_and_login()
-            enabled = client.get_holiday_mode()
-            self._send_json(200, {"enabled": enabled})
+            enabled = client.get_holiday_mode(tenant)
+            self._send_json(200, {"enabled": enabled, "tenant": tenant})
         except Exception as exc:  # noqa: BLE001
             self._send_json(502, {"error": f"falha ao consultar AMI: {exc}"})
         finally:
@@ -332,12 +362,16 @@ class Handler(BaseHTTPRequestHandler):
         if data is None or "enabled" not in data:
             self._send_json(400, {"error": "campo 'enabled' obrigatório"})
             return
+        tenant = validate_tenant(data.get("tenant"))
+        if not tenant:
+            self._send_json(400, {"error": f"tenant inválido - use um de: {sorted(VALID_TENANTS)}"})
+            return
 
         client = AMIClient(AMI_HOST, AMI_PORT, AMI_USERNAME, AMI_SECRET)
         try:
             client.connect_and_login()
-            client.set_holiday_mode(bool(data["enabled"]))
-            self._send_json(200, {"enabled": bool(data["enabled"])})
+            client.set_holiday_mode(bool(data["enabled"]), tenant)
+            self._send_json(200, {"enabled": bool(data["enabled"]), "tenant": tenant})
         except Exception as exc:  # noqa: BLE001
             self._send_json(502, {"error": f"falha ao consultar AMI: {exc}"})
         finally:
@@ -355,13 +389,17 @@ class Handler(BaseHTTPRequestHandler):
         if not number:
             self._send_json(400, {"error": "número inválido"})
             return
+        tenant = validate_tenant(data.get("tenant"))
+        if not tenant:
+            self._send_json(400, {"error": f"tenant inválido - use um de: {sorted(VALID_TENANTS)}"})
+            return
 
         client = AMIClient(AMI_HOST, AMI_PORT, AMI_USERNAME, AMI_SECRET)
         try:
             client.connect_and_login()
-            response = client.block_number(number)
+            response = client.block_number(number, tenant)
             if response.get("Response") == "Success":
-                self._send_json(201, {"number": number})
+                self._send_json(201, {"number": number, "tenant": tenant})
             else:
                 self._send_json(502, {"error": "falha ao bloquear", "detail": response})
         except Exception as exc:  # noqa: BLE001
@@ -381,13 +419,17 @@ class Handler(BaseHTTPRequestHandler):
         if not ok:
             self._send_json(400, {"error": error})
             return
+        tenant = validate_tenant(data.get("tenant"))
+        if not tenant:
+            self._send_json(400, {"error": f"tenant inválido - use um de: {sorted(VALID_TENANTS)}"})
+            return
 
         client = AMIClient(AMI_HOST, AMI_PORT, AMI_USERNAME, AMI_SECRET)
         try:
             client.connect_and_login()
-            response = client.set_vip(cleaned["number"], cleaned["target_extension"])
+            response = client.set_vip(cleaned["number"], cleaned["target_extension"], tenant)
             if response.get("Response") == "Success":
-                self._send_json(201, cleaned)
+                self._send_json(201, {**cleaned, "tenant": tenant})
             else:
                 self._send_json(502, {"error": "falha ao cadastrar VIP", "detail": response})
         except Exception as exc:  # noqa: BLE001
@@ -557,11 +599,17 @@ class Handler(BaseHTTPRequestHandler):
         if not self._require_role({"admin"}):
             return
 
-        number = self.path[len("/api/blocklist/"):]
+        path, _, query = self.path.partition("?")
+        number = path[len("/api/blocklist/"):]
+        tenant = validate_tenant(parse_qs(query).get("tenant", [None])[0])
+        if not tenant:
+            self._send_json(400, {"error": f"tenant inválido - use um de: {sorted(VALID_TENANTS)}"})
+            return
+
         client = AMIClient(AMI_HOST, AMI_PORT, AMI_USERNAME, AMI_SECRET)
         try:
             client.connect_and_login()
-            client.unblock_number(number)
+            client.unblock_number(number, tenant)
             self._send_json(200, {"ok": True})
         except Exception as exc:  # noqa: BLE001
             self._send_json(502, {"error": f"falha ao consultar AMI: {exc}"})
@@ -572,11 +620,17 @@ class Handler(BaseHTTPRequestHandler):
         if not self._require_role({"admin"}):
             return
 
-        number = self.path[len("/api/vip/"):]
+        path, _, query = self.path.partition("?")
+        number = path[len("/api/vip/"):]
+        tenant = validate_tenant(parse_qs(query).get("tenant", [None])[0])
+        if not tenant:
+            self._send_json(400, {"error": f"tenant inválido - use um de: {sorted(VALID_TENANTS)}"})
+            return
+
         client = AMIClient(AMI_HOST, AMI_PORT, AMI_USERNAME, AMI_SECRET)
         try:
             client.connect_and_login()
-            client.remove_vip(number)
+            client.remove_vip(number, tenant)
             self._send_json(200, {"ok": True})
         except Exception as exc:  # noqa: BLE001
             self._send_json(502, {"error": f"falha ao consultar AMI: {exc}"})

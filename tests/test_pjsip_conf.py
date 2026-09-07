@@ -39,9 +39,28 @@ def test_tls_transport_has_certificates():
 def test_expected_endpoints_present():
     blocks = load_blocks()
     endpoint_names = {b["name"] for b in blocks_by_type(blocks, "endpoint")}
-    expected = {"t1-1001", "t1-1002", "t1-recepcao", "t1-recepcao-2", "t2-1001", "gateway-tdm", "gateway-tdm-2"}
+    expected = {
+        "t1-1001", "t1-1002", "t1-recepcao", "t1-recepcao-2",
+        "t2-1001", "t2-recepcao", "t2-recepcao-2",
+        "gateway-tdm", "gateway-tdm-2",
+    }
     missing = expected - endpoint_names
     assert not missing, f"Endpoints esperados ausentes: {missing}"
+
+
+def test_tenant2_telephonist_endpoints_use_webrtc_template():
+    """
+    Backlog #38 (multi-tenant completo): as telefonistas web do
+    tenant 2 precisam existir com a mesma configuração WebRTC das do
+    tenant 1 - senão o console da telefonista não funcionaria pra
+    ninguém do tenant 2.
+    """
+    blocks = load_blocks()
+    endpoints = {b["name"]: b for b in blocks_by_type(blocks, "endpoint")}
+    for name in ("t2-recepcao", "t2-recepcao-2"):
+        block = endpoints[name]
+        assert get_key(block["text"], "context") == "t2-internal"
+        assert get_key_inherited(block, "webrtc", blocks) == "yes"
 
 
 def test_every_endpoint_has_matching_auth_and_aor():

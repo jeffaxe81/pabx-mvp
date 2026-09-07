@@ -32,3 +32,24 @@ def test_includes_admin_panel_dynamic_mailboxes():
     """
     content = VOICEMAIL_CONF.read_text(encoding="utf-8")
     assert "#include voicemail_dynamic_t1.conf" in content
+
+
+def test_tenant2_telephonist_mailboxes_present():
+    """
+    Backlog #38 (multi-tenant completo): as telefonistas web do
+    tenant 2 (t2-recepcao/t2-recepcao-2, referenciadas em pjsip.conf
+    via mailboxes=) precisam ter a caixa de voz de fato registrada
+    aqui - senão o MWI (luz de recado) delas nunca funcionaria.
+    """
+    content = VOICEMAIL_CONF.read_text(encoding="utf-8")
+    assert "[t2]" in content
+    assert "t2-recepcao => 1234" in content
+    assert "t2-recepcao-2 => 1234" in content
+    assert "#include voicemail_dynamic_t2.conf" in content
+
+
+def test_tenant1_telephonist_mailboxes_present():
+    """Mesma checagem pro tenant 1 - gap pré-existente fechado junto com o trabalho de multi-tenant."""
+    content = VOICEMAIL_CONF.read_text(encoding="utf-8")
+    assert "t1-recepcao => 1234" in content
+    assert "t1-recepcao-2 => 1234" in content
