@@ -328,7 +328,9 @@ identificando lacunas reais. Gaps encontrados, viraram novo backlog:
   IMPLEMENTADO (ChanSpy nativo, protegido por PIN admin-only por
   tenant, aviso explicito de implicacoes legais/trabalhistas no
   manual e na interface). Ver docs/manual-42.
-- #43: Sala de conferencia ad-hoc (ConfBridge, diferente de grupo de toque) - PENDENTE
+- #43: ~~Sala de conferencia ad-hoc (ConfBridge)~~ - IMPLEMENTADO
+  (perfis compartilhados, isolamento por tenant via nome da sala
+  dinamico, ex: sala-t1-0001 vs sala-t2-0001). Ver docs/manual-43.
 - #44: Motivo de pausa do agente - PENDENTE
 - #45: Overflow/transbordo entre filas por tempo de espera - PENDENTE
 - #46: SLA de fila (% atendido em N segundos) - PENDENTE

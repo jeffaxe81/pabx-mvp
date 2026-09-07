@@ -696,3 +696,30 @@ def test_invalid_monitoring_target_does_not_silently_spy_on_nothing():
     blocks = blocks_as_dict(load_ext_blocks())
     text = blocks["chamada-monitorada"].replace(" ", "")
     assert 'GotoIf($["${MONITOR_CHANNEL}"=""]?destino-invalido,1)' in text
+
+
+# ---------- Sala de conferência ad-hoc (backlog #43) ----------
+
+def test_both_tenants_have_conference_room_dial_pattern():
+    blocks = blocks_as_dict(load_ext_blocks())
+    for context_name, tenant in (("t1-internal", "t1"), ("t2-internal", "t2")):
+        text = blocks[context_name].replace(" ", "")
+        assert f"exten=>_40XXXX,1,Set(TENANT={tenant})" in text
+
+
+def test_conference_room_name_embeds_tenant_for_isolation():
+    """
+    Sem o ${TENANT} no nome da sala, dois tenants discando o mesmo
+    número de sala cairiam na MESMA conferência - vazamento grave de
+    isolamento entre empresas diferentes.
+    """
+    blocks = blocks_as_dict(load_ext_blocks())
+    for context_name in ("t1-internal", "t2-internal"):
+        text = blocks[context_name].replace(" ", "")
+        assert "ConfBridge(sala-${TENANT}-${EXTEN:2}," in text
+
+
+def test_conference_room_uses_the_configured_profiles():
+    blocks = blocks_as_dict(load_ext_blocks())
+    text = blocks["t1-internal"].replace(" ", "")
+    assert "ConfBridge(sala-${TENANT}-${EXTEN:2},default_bridge,default_user,default_menu)" in text

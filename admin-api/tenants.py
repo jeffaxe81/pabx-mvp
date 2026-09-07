@@ -177,6 +177,11 @@ exten => 700,1,Set(TENANT={tenant_id})
 exten => 650,1,Set(TENANT={tenant_id})
  same => n,Goto(atendente-virtual,s,1)
 
+; Sala de conferência ad-hoc (backlog #43) - mesmo esquema de t1/t2
+exten => _40XXXX,1,Set(TENANT={tenant_id})
+ same => n,Answer()
+ same => n,ConfBridge(sala-${{TENANT}}-${{EXTEN:2}},default_bridge,default_user,default_menu)
+
 ; Ramais gerenciados pelo painel de administração (backlog #10/#38) -
 ; gerado pelo admin-api, não editar na mão.
 #include extensions_dynamic_dial-{tenant_id}.conf

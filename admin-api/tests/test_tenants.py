@@ -135,6 +135,13 @@ def test_render_extensions_plays_recording_consent_announcement():
     assert content.count("Playback(custom/aviso-gravacao)") == 3  # 1000, 1010, 1011
 
 
+def test_render_extensions_includes_conference_room_pattern():
+    """Backlog #43: tenant novo já nasce com sala de conferência ad-hoc própria."""
+    content = render_tenant_extensions("t3")
+    assert "exten => _40XXXX,1,Set(TENANT=t3)" in content
+    assert "ConfBridge(sala-${TENANT}-${EXTEN:2}" in content
+
+
 def test_render_extensions_includes_dynamic_ramal_files():
     content = render_tenant_extensions("t3")
     assert "#include extensions_dynamic_dial-t3.conf" in content

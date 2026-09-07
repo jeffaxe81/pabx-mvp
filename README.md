@@ -344,6 +344,11 @@ explícito sobre implicações legais e trabalhistas — vigilância de
 conversa de terceiros exige mais do que só ser tecnicamente possível.
 Ver `docs/manual-42-monitoramento-chamada.md`.
 
+**E sala de conferência ad-hoc** (`ConfBridge`): diferente do grupo de
+toque, aqui várias pessoas conversam ao mesmo tempo de verdade, com
+isolamento por tenant garantido pelo próprio nome da sala — ver
+`docs/manual-43-sala-conferencia.md`.
+
 Para ajustar quais ramais aparecem na lista de colegas, edite o array
 `COLLEAGUES` no início do `<script>` em `webphone/index.html`. Cada
 ramal monitorado precisa ter um `hint` correspondente em
@@ -368,7 +373,7 @@ cd ../queue-api
 python3 -m pytest tests/ -v
 ```
 
-671 testes estáticos no total, em 7 suítes (`tests/`, `queue-api/tests/`,
+681 testes estáticos no total, em 7 suítes (`tests/`, `queue-api/tests/`,
 `admin-api/tests/`, `asterisk/scripts/tests/`, `backup/tests/`,
 `ai-worker/tests/`, `asterisk/agi/tests/`) — nenhuma delas sobe o
 Asterisk, Whisper ou Ollama de verdade. Detalhes em `tests/README.md`.

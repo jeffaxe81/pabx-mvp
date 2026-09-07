@@ -376,3 +376,10 @@ def test_res_parking_conf_and_tenant_directory_mounted():
     asterisk_volumes = compose["services"]["asterisk"].get("volumes", [])
     assert any("res_parking.conf:" in v for v in asterisk_volumes)
     assert any("./asterisk/parking_tenants:" in v for v in asterisk_volumes)
+
+
+def test_confbridge_conf_mounted():
+    """Backlog #43: sem isso, ConfBridge() no dialplan nunca encontraria os perfis de sala."""
+    compose = load_compose()
+    asterisk_volumes = compose["services"]["asterisk"].get("volumes", [])
+    assert any("confbridge.conf:" in v for v in asterisk_volumes)

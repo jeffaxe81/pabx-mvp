@@ -47,6 +47,7 @@ configurar, como testar manualmente, e limitações conhecidas.
 40. [Aviso de gravação / conformidade LGPD](manual-40-aviso-gravacao-lgpd.md)
 41. [Estacionamento de chamada](manual-41-estacionamento-chamada.md)
 42. [Monitoramento de chamada](manual-42-monitoramento-chamada.md)
+43. [Sala de conferência ad-hoc](manual-43-sala-conferencia.md)
 
 ## Regra de manutenção
 

@@ -27,6 +27,7 @@ services:
       - ./asterisk/extensions_tenants:/etc/asterisk/extensions_tenants
       - ./asterisk/voicemail_tenants:/etc/asterisk/voicemail_tenants
       - ./asterisk/res_parking.conf:/etc/asterisk/res_parking.conf
+      - ./asterisk/confbridge.conf:/etc/asterisk/confbridge.conf
       - ./asterisk/parking_tenants:/etc/asterisk/parking_tenants
       - ./asterisk/rtp.conf:/etc/asterisk/rtp.conf
       - ./asterisk/http.conf:/etc/asterisk/http.conf
