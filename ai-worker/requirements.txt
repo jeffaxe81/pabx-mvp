@@ -1,1 +1,11 @@
 pywhispercpp==1.2.0
+piper-tts==1.2.0
+
+# XTTS-v2 (Coqui) é OPCIONAL - motor de TTS com licença Coqui Public
+# Model License, que PROÍBE uso comercial sem licença paga da Coqui
+# (empresa que encerrou operações em 2024, sem caminho claro pra obter
+# essa licença hoje). Só descomente a linha abaixo e reconstrua a
+# imagem se seu uso for genuinamente não-comercial - ver
+# docs/manual-48 antes de decidir. Também é uma dependência pesada
+# (PyTorch + modelos grandes) - deixa a imagem consideravelmente maior.
+# coqui-tts==0.24.2

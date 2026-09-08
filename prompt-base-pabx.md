@@ -365,13 +365,20 @@ faster-whisper para whisper.cpp (via pywhispercpp), mais leve pra
 hardware restrito, mesma licenca MIT dos pesos do modelo Whisper nos
 dois lados. ~~Migracao~~ - IMPLEMENTADA. Ver docs/manual-47.
 
-## Proximo passo pendente: TTS (Piper como padrao + XTTS opcional nao-comercial)
-Ainda nao implementado - arquitetura desacoplada proposta (mesmo
-padrao de llm_client.py isolando o motor): Piper (MIT, comercialmente
-seguro) como padrao ativado, XTTS-v2 como motor opcional desligado
-por padrao com aviso explicito de uso nao-comercial. Usar isso pra
-gerar audio dinamico de saudacao no wizard de tenant (manual 39) em
-vez de gravacao manual - proximo item lógico do backlog.
+## Item #48: TTS (Piper padrao + XTTS opcional nao-comercial) - IMPLEMENTADO (fase 1: URA)
+~~TTS~~ - IMPLEMENTADO. Usuario priorizou uso na URA primeiro (depois
+atendente virtual, ainda pendente). Arquitetura: ai-worker/tts_service.py
+(validacao pura) + piper_engine.py (padrao, MIT) + xtts_engine.py
+(opcional, TTS_XTTS_ENABLED separado de AI_FEATURES_ENABLED, nunca
+liberado junto). ai-worker escreve .wav DIRETO em asterisk/sounds/custom
+(volume compartilhado) - Playback(custom/nome) no dialplan ja encontra.
+admin-api proxyeia POST /api/sounds/generate (admin-only) pro ai-worker.
+Painel tem secao "Gerar audio por texto (TTS)", nome de arquivo
+opcional (permite regenerar exatamente menu-principal-pt por texto),
+escolher XTTS exige confirmacao extra na UI. Ver docs/manual-48.
+
+PENDENTE: integracao com resposta falada do atendente virtual (manual
+37) - fase 2, nao implementada ainda.
 
 Outras lacunas identificadas na auditoria, nao viraram itens de
 backlog ainda (fora do escopo imediato, ou exigiriam decisao adicional

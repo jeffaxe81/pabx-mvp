@@ -52,6 +52,7 @@ configurar, como testar manualmente, e limitações conhecidas.
 45. [Overflow entre filas](manual-45-overflow-filas.md)
 46. [SLA de fila](manual-46-sla-fila.md)
 47. [Migração faster-whisper → whisper.cpp](manual-47-migracao-whisper-cpp.md)
+48. [Síntese de voz / TTS (Piper padrão, XTTS opcional)](manual-48-tts-piper-xtts.md)
 
 ## Regra de manutenção
 

@@ -295,3 +295,14 @@ def test_monitoring_pin_value_never_returned_to_browser():
     source = load_source()
     assert "is_monitoring_configured(" in source
     assert '"configured":' in source
+
+
+def test_generate_sound_requires_admin_role():
+    """
+    Gerar áudio pro dialplan (backlog #48) é uma ação de conteúdo
+    público (todo cliente que ligar vai ouvir) - mais parecido com
+    criar ramal do que com uma leitura qualquer, admin-only.
+    """
+    source = load_source()
+    body = get_function_body(source, "_handle_generate_sound")
+    assert '_require_role({"admin"})' in body

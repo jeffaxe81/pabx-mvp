@@ -75,3 +75,44 @@ def test_scan_loop_processes_one_recording_at_a_time():
     fn_end = source.index("\n\ndef scan_loop", fn_start)
     body = source[fn_start:fn_end]
     assert "pending[0]" in body
+
+
+# ---------- TTS (backlog #48) ----------
+
+def test_tts_endpoint_checks_ai_features_flag_before_synthesizing():
+    source = load_source()
+    fn_start = source.index("def _handle_tts")
+    fn_end = source.index("\n\n    def ", fn_start) if "\n\n    def " in source[fn_start:] else len(source)
+    body = source[fn_start:fn_end]
+    flag_pos = body.index("if not AI_FEATURES_ENABLED:")
+    synth_pos = body.index("engine_module.synthesize(")
+    assert flag_pos < synth_pos
+
+
+def test_tts_endpoint_validates_before_calling_any_engine():
+    source = load_source()
+    fn_start = source.index("def _handle_tts")
+    fn_end = source.index("\n\n    def ", fn_start) if "\n\n    def " in source[fn_start:] else len(source)
+    body = source[fn_start:fn_end]
+    validate_pos = body.index("validate_tts_request(")
+    synth_pos = body.index("engine_module.synthesize(")
+    assert validate_pos < synth_pos
+
+
+def test_xtts_has_its_own_separate_flag_from_ai_features():
+    """
+    Backlog #48: XTTS precisa de uma flag PRÓPRIA (TTS_XTTS_ENABLED),
+    separada de AI_FEATURES_ENABLED - ligar a IA em geral não pode
+    liberar automaticamente um motor com risco de licenciamento
+    comercial (Coqui Public Model License).
+    """
+    source = load_source()
+    assert 'os.environ.get("TTS_XTTS_ENABLED", "false")' in source
+
+
+def test_tts_dispatches_to_correct_engine_module():
+    source = load_source()
+    fn_start = source.index("def _handle_tts")
+    fn_end = source.index("\n\n    def ", fn_start) if "\n\n    def " in source[fn_start:] else len(source)
+    body = source[fn_start:fn_end]
+    assert "piper_engine if cleaned[\"engine\"] == ENGINE_PIPER else xtts_engine" in body

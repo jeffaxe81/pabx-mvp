@@ -389,3 +389,26 @@ def test_sla_threshold_configured_for_queue_api():
     compose = load_compose()
     env = compose["services"]["queue-api"].get("environment", {})
     assert "SLA_THRESHOLD_SECONDS" in env
+
+
+def test_tts_sounds_directory_shared_between_ai_worker_and_asterisk():
+    """
+    Backlog #48: sem esse mount compartilhado, o ai-worker geraria
+    áudio que o Asterisk nunca veria - Playback(custom/...) no
+    dialplan não encontraria o arquivo.
+    """
+    compose = load_compose()
+    ai_worker_volumes = compose["services"]["ai-worker"].get("volumes", [])
+    assert any("./asterisk/sounds/custom:" in v for v in ai_worker_volumes)
+
+
+def test_xtts_flag_separate_and_disabled_by_default():
+    compose = load_compose()
+    env = compose["services"]["ai-worker"].get("environment", {})
+    assert env.get("TTS_XTTS_ENABLED") == "false"
+
+
+def test_admin_api_knows_where_to_reach_ai_worker_for_tts():
+    compose = load_compose()
+    env = compose["services"]["admin-api"].get("environment", {})
+    assert "AI_WORKER_URL" in env

@@ -315,6 +315,45 @@
     <button class="btn-danger" id="disableMonitoringBtn" style="width:auto; margin-left:8px;">Desativar monitoramento</button>
     <div class="error-msg" id="monitoringPinError"></div>
   </div>
+
+  <div class="form-card" id="ttsCard" style="margin-top:24px; display:none;">
+    <h2>Gerar áudio por texto (TTS)</h2>
+    <p style="font-size:13px; color:var(--text-muted); margin:0 0 12px;">
+      Digite o texto de um anúncio da URA e gere o áudio na hora, sem
+      precisar de locutor/estúdio. Motor padrão (Piper) é seguro pra
+      uso comercial. XTTS-v2 é opcional e vem desligado por padrão -
+      licença não-comercial (Coqui Public Model License), só ative se
+      seu uso não for comercial (ver manual 48).
+    </p>
+    <div class="form-row">
+      <div>
+        <label for="ttsFilenameInput">Nome do arquivo (opcional - deixe vazio pra um nome aleatório)</label>
+        <input id="ttsFilenameInput" placeholder="menu-principal-pt">
+      </div>
+      <div>
+        <label for="ttsLanguageSelect">Idioma</label>
+        <select id="ttsLanguageSelect">
+          <option value="pt">Português</option>
+          <option value="en">Inglês</option>
+          <option value="es">Espanhol</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div>
+        <label for="ttsEngineSelect">Motor</label>
+        <select id="ttsEngineSelect">
+          <option value="piper">Piper (padrão, uso comercial seguro)</option>
+          <option value="xtts">XTTS-v2 (uso não-comercial apenas)</option>
+        </select>
+      </div>
+    </div>
+    <label for="ttsTextInput">Texto do anúncio</label>
+    <textarea id="ttsTextInput" rows="4" style="width:100%; background:var(--panel-alt); border:1px solid var(--border); color:var(--text); padding:9px 10px; border-radius:4px; font-size:14px; font-family:inherit;" placeholder="Bem-vindo à empresa. Aguarde, você será atendido em instantes."></textarea>
+    <button class="btn-primary" id="generateTtsBtn" style="width:auto; margin-top:12px;">Gerar áudio</button>
+    <div id="ttsResult" style="display:none; margin-top:14px; font-size:13px;"></div>
+    <div class="error-msg" id="ttsError"></div>
+  </div>
 </div>
 
 <script>
@@ -610,6 +649,7 @@
     el('usersFormCard').style.display = isAdmin ? 'block' : 'none';
     el('tenantWizardCard').style.display = isAdmin ? 'block' : 'none';
     el('monitoringPinCard').style.display = isAdmin ? 'block' : 'none';
+    el('ttsCard').style.display = isAdmin ? 'block' : 'none';
     // A tabela de ramais/lista de bloqueio continua visível (leitura)
     // pro supervisor - só os formulários de edição somem.
   }
@@ -825,6 +865,33 @@
     apiFetch(`/api/monitoring-pin?tenant=${currentTenant}`, { method: 'DELETE' })
       .then(loadMonitoringStatus)
       .catch((err) => { el('monitoringPinError').textContent = err.message; });
+  });
+
+  // ---------- Gerar áudio por texto / TTS (backlog #48) ----------
+  el('generateTtsBtn').addEventListener('click', () => {
+    el('ttsError').textContent = '';
+    el('ttsResult').style.display = 'none';
+
+    const engine = el('ttsEngineSelect').value;
+    if (engine === 'xtts' && !confirm(
+      'XTTS-v2 tem licença NÃO-COMERCIAL (Coqui Public Model License). ' +
+      'Só continue se seu uso não for comercial. Confirma?'
+    )) return;
+
+    apiFetch('/api/sounds/generate', {
+      method: 'POST',
+      body: JSON.stringify({
+        text: el('ttsTextInput').value,
+        language: el('ttsLanguageSelect').value,
+        engine,
+        filename: el('ttsFilenameInput').value.trim() || undefined,
+      }),
+    })
+      .then((data) => {
+        el('ttsResult').style.display = 'block';
+        el('ttsResult').textContent = `Áudio gerado: ${data.filename} (motor ${data.engine}, idioma ${data.language}). Já disponível pro dialplan em custom/${data.filename.replace('.wav', '')}.`;
+      })
+      .catch((err) => { el('ttsError').textContent = err.message; });
   });
 })();
 </script>

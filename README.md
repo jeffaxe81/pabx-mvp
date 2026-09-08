@@ -363,6 +363,15 @@ transborda automaticamente pra fila geral do tenant — ver
 gaps identificados na auditoria contra o framework de avaliação de
 PABX corporativo (itens #40-46) — ver `docs/manual-46-sla-fila.md`.
 
+**E síntese de voz (TTS)**: motor de transcrição migrado pra
+`whisper.cpp` (mais leve, sem GPU) — ver
+`docs/manual-47-migracao-whisper-cpp.md`. TTS ganhou dois motores
+desacoplados: Piper (padrão, MIT, seguro comercialmente) e XTTS-v2
+(opcional, desligado por padrão — licença não-comercial da Coqui,
+empresa que encerrou operações em 2024). Admin gera áudio de anúncios
+da URA digitando o texto, sem precisar de locutor — ver
+`docs/manual-48-tts-piper-xtts.md`.
+
 Para ajustar quais ramais aparecem na lista de colegas, edite o array
 `COLLEAGUES` no início do `<script>` em `webphone/index.html`. Cada
 ramal monitorado precisa ter um `hint` correspondente em
@@ -387,7 +396,7 @@ cd ../queue-api
 python3 -m pytest tests/ -v
 ```
 
-733 testes estáticos no total, em 7 suítes (`tests/`, `queue-api/tests/`,
+758 testes estáticos no total, em 7 suítes (`tests/`, `queue-api/tests/`,
 `admin-api/tests/`, `asterisk/scripts/tests/`, `backup/tests/`,
 `ai-worker/tests/`, `asterisk/agi/tests/`) — nenhuma delas sobe o
 Asterisk, Whisper ou Ollama de verdade. Detalhes em `tests/README.md`.

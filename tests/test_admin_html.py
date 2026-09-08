@@ -25,6 +25,7 @@ REQUIRED_IDS = [
     "wizardTenantIdInput", "wizardDidInput", "wizardDisplayNameInput", "wizardReviewBtn",
     "wizardReviewList", "wizardConfirmBtn", "wizardBackBtn", "tenantWizardResult", "tenantWizardError",
     "monitoringPinCard", "monitoringStatusText", "monitoringPinInput", "setMonitoringPinBtn", "disableMonitoringBtn", "monitoringPinError",
+    "ttsCard", "ttsFilenameInput", "ttsLanguageSelect", "ttsEngineSelect", "ttsTextInput", "generateTtsBtn", "ttsResult", "ttsError",
 ]
 
 
@@ -280,3 +281,48 @@ def test_monitoring_requests_include_current_tenant():
     html = load_html()
     assert "/api/monitoring-pin?tenant=${currentTenant}" in html
     assert "tenant: currentTenant" in html
+
+
+# ---------- Gerar áudio por texto / TTS (backlog #48) ----------
+
+def test_tts_card_hidden_from_supervisor():
+    html = load_html()
+    fn_start = html.index("function applyRolePermissions")
+    fn_end = html.index("}", html.index("continua visível", fn_start))
+    body = html[fn_start:fn_end]
+    assert "ttsCard" in body
+
+
+def test_tts_section_warns_about_xtts_licensing():
+    """
+    XTTS-v2 tem licença não-comercial - a interface precisa deixar
+    isso claro, não só oferecer o motor como uma opção qualquer.
+    """
+    html = load_html()
+    section_start = html.index('id="ttsCard"')
+    section_end = html.index('id="ttsError"', section_start)
+    section_html = html[section_start:section_end]
+    assert "não-comercial" in section_html.lower() or "nao-comercial" in section_html.lower()
+
+
+def test_selecting_xtts_requires_extra_confirmation():
+    """
+    Escolher XTTS não pode ser um clique só - precisa de uma
+    confirmação extra, já que é uma decisão com risco de
+    licenciamento se usada comercialmente por engano.
+    """
+    html = load_html()
+    fn_start = html.index("el('generateTtsBtn').addEventListener")
+    fn_end = html.index("});", html.index("catch", fn_start))
+    body = html[fn_start:fn_end]
+    assert "xtts" in body
+    assert "confirm(" in body
+
+
+def test_tts_generate_posts_to_sounds_endpoint():
+    html = load_html()
+    fn_start = html.index("el('generateTtsBtn').addEventListener")
+    fn_end = html.index("});", html.index("catch", fn_start))
+    body = html[fn_start:fn_end]
+    assert "/api/sounds/generate" in body
+    assert "method: 'POST'" in body

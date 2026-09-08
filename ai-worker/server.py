@@ -13,6 +13,7 @@ competem por recursos sozinhos).
 import json
 import os
 import threading
+import uuid
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -24,6 +25,9 @@ from recordings_scanner import list_unprocessed_recordings
 from intent_classifier import build_intent_prompt, parse_intent_response, intent_to_extension
 from transcription import transcribe_audio
 from llm_client import generate as llm_generate
+from tts_service import validate_tts_request, ENGINE_PIPER, ENGINE_XTTS
+import piper_engine
+import xtts_engine
 
 HTTP_PORT = int(os.environ.get("HTTP_PORT", "8092"))
 RECORDINGS_DIR = os.environ.get("RECORDINGS_DIR", "/app/recordings")
@@ -38,6 +42,14 @@ WHISPER_MODEL_SIZE = os.environ.get("WHISPER_MODEL_SIZE", "base")
 # resto das integrações deste projeto.
 AI_FEATURES_ENABLED = os.environ.get("AI_FEATURES_ENABLED", "false").lower() == "true"
 SCAN_INTERVAL_SECONDS = int(os.environ.get("SCAN_INTERVAL_SECONDS", "60"))
+
+# TTS (backlog #48) - Piper é sempre disponível quando AI_FEATURES_ENABLED
+# está ligado (licença MIT, seguro comercialmente). XTTS-v2 tem uma
+# flag PRÓPRIA e separada, desligada por padrão - licença não-comercial
+# (Coqui Public Model License), ver piper_engine.py/xtts_engine.py e
+# docs/manual-48 antes de ativar.
+TTS_XTTS_ENABLED = os.environ.get("TTS_XTTS_ENABLED", "false").lower() == "true"
+SOUNDS_OUTPUT_DIR = os.environ.get("SOUNDS_OUTPUT_DIR", "/app/sounds-output")
 
 store = TranscriptStore(TRANSCRIPTS_PATH)
 
@@ -116,8 +128,47 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json(200, result)
         elif self.path == "/api/classify-intent":
             self._handle_classify_intent()
+        elif self.path == "/api/tts":
+            self._handle_tts()
         else:
             self._send_json(404, {"error": "not found"})
+
+    def _handle_tts(self):
+        """
+        Síntese de voz (backlog #48) - gera um arquivo .wav a partir
+        de texto digitado, em vez de precisar de locutor/estúdio.
+        Piper (padrão) sempre disponível quando AI_FEATURES_ENABLED
+        está ligado; XTTS-v2 exige TTS_XTTS_ENABLED também (ver aviso
+        de licenciamento em xtts_engine.py e docs/manual-48).
+        """
+        if not AI_FEATURES_ENABLED:
+            self._send_json(503, {"error": "recursos de IA desabilitados (AI_FEATURES_ENABLED=false)"})
+            return
+
+        length = int(self.headers.get("Content-Length", 0))
+        try:
+            data = json.loads(self.rfile.read(length) or b"{}")
+        except json.JSONDecodeError:
+            self._send_json(400, {"error": "JSON inválido"})
+            return
+
+        ok, error, cleaned = validate_tts_request(data, xtts_enabled=TTS_XTTS_ENABLED)
+        if not ok:
+            self._send_json(400, {"error": error})
+            return
+
+        filename = cleaned["filename"] or f"tts-{uuid.uuid4().hex}.wav"
+        output_path = Path(SOUNDS_OUTPUT_DIR) / filename
+        Path(SOUNDS_OUTPUT_DIR).mkdir(parents=True, exist_ok=True)
+
+        try:
+            engine_module = piper_engine if cleaned["engine"] == ENGINE_PIPER else xtts_engine
+            engine_module.synthesize(cleaned["text"], cleaned["language"], output_path)
+        except Exception as exc:  # noqa: BLE001
+            self._send_json(502, {"error": f"falha ao sintetizar áudio: {exc}"})
+            return
+
+        self._send_json(200, {"filename": filename, "engine": cleaned["engine"], "language": cleaned["language"]})
 
     def _handle_classify_intent(self):
         """

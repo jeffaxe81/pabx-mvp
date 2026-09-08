@@ -15,6 +15,8 @@ Endpoints:
 """
 import json
 import os
+import urllib.request
+import urllib.error
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs
@@ -64,6 +66,7 @@ ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "admin")
 ADMIN_PASSWORD_HASH = os.environ.get("ADMIN_PASSWORD_HASH", "")
 
 AMI_HOST = os.environ.get("AMI_HOST", "127.0.0.1")
+AI_WORKER_URL = os.environ.get("AI_WORKER_URL", "http://ai-worker:8092")
 AMI_PORT = int(os.environ.get("AMI_PORT", "5038"))
 AMI_USERNAME = os.environ.get("AMI_USERNAME", "admin-api")
 AMI_SECRET = os.environ.get("AMI_SECRET", "troque_esta_senha_ami")
@@ -299,6 +302,8 @@ class Handler(BaseHTTPRequestHandler):
             self._handle_create_user()
         elif self.path == "/api/tenants":
             self._handle_create_tenant()
+        elif self.path == "/api/sounds/generate":
+            self._handle_generate_sound()
         elif self.path == "/api/monitoring-pin":
             self._handle_set_monitoring_pin()
         elif self.path == "/api/login/verify-totp":
@@ -435,6 +440,39 @@ class Handler(BaseHTTPRequestHandler):
         existing.append(cleaned)
         save_tenants(TENANTS_PATH, existing)
         self._send_json(201, {"tenant": cleaned, "reload": reload_result})
+
+    def _handle_generate_sound(self):
+        """
+        Gera um áudio por texto (backlog #48) - proxy pro ai-worker,
+        que grava o .wav DIRETO na pasta de áudios do Asterisk
+        (volume compartilhado, ver docker-compose.yml). Não precisa
+        de reload nenhum: um Playback(custom/nome) no dialplan já
+        encontra o arquivo assim que ele existe no disco.
+        """
+        if not self._require_role({"admin"}):
+            return
+        data = self._read_json_body()
+        if data is None:
+            self._send_json(400, {"error": "JSON inválido"})
+            return
+
+        body = json.dumps(data).encode("utf-8")
+        request = urllib.request.Request(
+            f"{AI_WORKER_URL}/api/tts", data=body, method="POST",
+            headers={"Content-Type": "application/json"},
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=120) as response:
+                result = json.loads(response.read().decode("utf-8"))
+                self._send_json(200, result)
+        except urllib.error.HTTPError as exc:
+            try:
+                detail = json.loads(exc.read().decode("utf-8"))
+            except (json.JSONDecodeError, ValueError):
+                detail = {"error": str(exc)}
+            self._send_json(exc.code, detail)
+        except Exception as exc:  # noqa: BLE001
+            self._send_json(502, {"error": f"falha ao falar com o ai-worker: {exc}"})
 
     def _handle_set_monitoring_pin(self):
         """
