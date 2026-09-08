@@ -2,7 +2,7 @@ import pytest
 
 from store import (
     load_store, save_store, validate_extension_input,
-    add_extension, update_extension, delete_extension,
+    add_extension, update_extension, delete_extension, delete_extensions_by_tenant,
 )
 
 VALID_INPUT = {"name": "recepcao-3", "number": 1112, "display_name": "Recepção 3", "password": "senha-forte"}
@@ -145,3 +145,47 @@ def test_same_number_rejected_within_same_tenant():
     ok, error, _ = validate_extension_input({**VALID_INPUT, "tenant": "t1"}, existing)
     assert ok is False
     assert "tenant t1" in error
+
+
+# ---------- delete_extensions_by_tenant (backlog #54) ----------
+
+def test_delete_extensions_by_tenant_removes_only_matching_tenant(tmp_path):
+    path = tmp_path / "store.json"
+    save_store(path, [
+        {"name": "vendas-t3-1", "number": 1112, "tenant": "t3"},
+        {"name": "recepcao-3", "number": 1113, "tenant": "t1"},
+    ])
+
+    removed_count = delete_extensions_by_tenant(path, "t3")
+
+    assert removed_count == 1
+    remaining = load_store(path)
+    assert [e["name"] for e in remaining] == ["recepcao-3"]
+
+
+def test_delete_extensions_by_tenant_removes_multiple_at_once(tmp_path):
+    path = tmp_path / "store.json"
+    save_store(path, [
+        {"name": "vendas-t3-1", "number": 1112, "tenant": "t3"},
+        {"name": "suporte-t3-1", "number": 1113, "tenant": "t3"},
+    ])
+
+    removed_count = delete_extensions_by_tenant(path, "t3")
+
+    assert removed_count == 2
+    assert load_store(path) == []
+
+
+def test_delete_extensions_by_tenant_returns_zero_when_none_match(tmp_path):
+    path = tmp_path / "store.json"
+    save_store(path, [{"name": "recepcao-3", "number": 1112, "tenant": "t1"}])
+
+    removed_count = delete_extensions_by_tenant(path, "t3")
+
+    assert removed_count == 0
+    assert len(load_store(path)) == 1  # nada foi tocado
+
+
+def test_delete_extensions_by_tenant_handles_missing_store_file(tmp_path):
+    path = tmp_path / "nao-existe.json"
+    assert delete_extensions_by_tenant(path, "t3") == 0

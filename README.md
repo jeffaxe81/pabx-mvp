@@ -404,6 +404,12 @@ existente em `asterisk/sounds/custom/`, com nome, tamanho e data,
 atualizando automaticamente após gerar um áudio novo — ver
 `docs/manual-53-lista-audios.md`.
 
+**E, fechando outra lacuna documentada no próprio manual 52**:
+remover um tenant agora também limpa os ramais dinâmicos criados
+dentro dele (arquivos e registros), evitando ramais "fantasma"
+listados pra um tenant que não existe mais — ver
+`docs/manual-54-limpeza-ramais-orfaos.md`.
+
 Para ajustar quais ramais aparecem na lista de colegas, edite o array
 `COLLEAGUES` no início do `<script>` em `webphone/index.html`. Cada
 ramal monitorado precisa ter um `hint` correspondente em
@@ -428,7 +434,7 @@ cd ../queue-api
 python3 -m pytest tests/ -v
 ```
 
-823 testes estáticos no total, em 8 suítes (`tests/`, `queue-api/tests/`,
+829 testes estáticos no total, em 8 suítes (`tests/`, `queue-api/tests/`,
 `admin-api/tests/`, `asterisk/scripts/tests/`, `backup/tests/`,
 `ai-worker/tests/`, `asterisk/agi/tests/`, `scripts/tests/`) —
 nenhuma delas sobe o Asterisk, Whisper ou Ollama de verdade. Detalhes

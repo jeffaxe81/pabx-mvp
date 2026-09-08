@@ -58,6 +58,7 @@ configurar, como testar manualmente, e limitações conhecidas.
 51. [Verificação pós-deploy](manual-51-verificacao-pos-deploy.md)
 52. [Remoção de tenant pelo wizard](manual-52-remocao-tenant.md)
 53. [Lista de áudios existentes no painel](manual-53-lista-audios.md)
+54. [Limpeza de ramais órfãos ao remover tenant](manual-54-limpeza-ramais-orfaos.md)
 
 ## Regra de manutenção
 

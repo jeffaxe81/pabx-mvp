@@ -114,3 +114,18 @@ def delete_extension(path, name: str):
 
     save_store(path, filtered)
     return True, None
+
+
+def delete_extensions_by_tenant(path, tenant_id: str) -> int:
+    """
+    Remove TODOS os ramais dinâmicos de um tenant de uma vez (backlog
+    #54) - usado quando o tenant inteiro é removido pelo wizard
+    (manual 39/52), pra não deixar ramal órfão apontando pra um
+    contexto que não existe mais. Retorna quantos foram removidos.
+    """
+    existing = load_store(path)
+    remaining = [e for e in existing if e.get("tenant", DEFAULT_TENANT) != tenant_id]
+    removed_count = len(existing) - len(remaining)
+    if removed_count:
+        save_store(path, remaining)
+    return removed_count

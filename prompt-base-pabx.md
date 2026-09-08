@@ -469,3 +469,17 @@ de novo SEM direcao nova, considerar perguntar explicitamente que
 area ele quer que eu foque, em vez de continuar escolhendo pequenas
 lacunas sozinho indefinidamente - o projeto já esta maduro (53
 manuais) e pode ser hora de uma direcao mais deliberada do usuario.
+
+
+## Item #54: Limpeza de ramais orfaos ao remover tenant - IMPLEMENTADO
+Usuario confirmou explicitamente via ask_user_input: "Continuar
+fechando pequenas lacunas dos manuais (eu escolho)". Fechei a lacuna
+do proprio manual 52 (que eu escrevi na resposta anterior): ramais
+dinamicos criados dentro de um tenant nao eram limpos ao remover o
+tenant inteiro. store.py ganhou delete_extensions_by_tenant() (4
+testes), _handle_remove_tenant agora tambem apaga os 3 arquivos
+dinamicos de ramais (dial/hints/voicemail) e os registros orfaos no
+extensions_store.json. Interface informa quantos ramais foram
+limpos junto. Ver docs/manual-54.
+
+829 testes, 54 manuais, 8 suites - tudo passando e no GitHub.

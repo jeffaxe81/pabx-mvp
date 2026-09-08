@@ -22,7 +22,7 @@ from pathlib import Path
 from urllib.parse import urlparse, parse_qs
 
 from auth import hash_password, verify_password, SessionStore
-from store import add_extension, update_extension, delete_extension, load_store
+from store import add_extension, update_extension, delete_extension, load_store, delete_extensions_by_tenant
 from conf_generator import render_all
 from ami_client import AMIClient
 from blocklist import validate_blocklist_number
@@ -743,8 +743,11 @@ class Handler(BaseHTTPRequestHandler):
         """
         Remoção de tenant (backlog #52 - completa o que ficou pendente
         no manual 39). Desregistra o DID, apaga os 5 arquivos de
-        infraestrutura gerados pelo wizard, e recarrega o Asterisk.
-        Nunca remove t1/t2 (exemplos estáticos, ver validate_tenant_removal).
+        infraestrutura gerados pelo wizard, os 3 arquivos dinâmicos de
+        ramais criados pelo painel (backlog #54, fecha a limitação
+        documentada no manual 52), os ramais órfãos correspondentes no
+        extensions_store.json, e recarrega o Asterisk. Nunca remove
+        t1/t2 (exemplos estáticos, ver validate_tenant_removal).
         """
         if not self._require_role({"admin"}):
             return
@@ -760,6 +763,18 @@ class Handler(BaseHTTPRequestHandler):
             target_file = Path(ASTERISK_CONF_DIR, subdir, f"{record['tenant_id']}.conf")
             target_file.unlink(missing_ok=True)
 
+        # Ramais dinâmicos criados pelo painel dentro deste tenant
+        # (backlog #38) - sem isso, ficariam órfãos: os arquivos
+        # extensions_dynamic_dial-{tenant}.conf/hints/voicemail
+        # apontariam pra um contexto que não existe mais.
+        for filename in (
+            f"extensions_dynamic_dial-{record['tenant_id']}.conf",
+            f"extensions_dynamic_hints-{record['tenant_id']}.conf",
+            f"voicemail_dynamic_{record['tenant_id']}.conf",
+        ):
+            Path(ASTERISK_CONF_DIR, filename).unlink(missing_ok=True)
+        removed_extensions_count = delete_extensions_by_tenant(STORE_PATH, record["tenant_id"])
+
         client = AMIClient(AMI_HOST, AMI_PORT, AMI_USERNAME, AMI_SECRET)
         try:
             client.connect_and_login()
@@ -768,14 +783,20 @@ class Handler(BaseHTTPRequestHandler):
         except Exception as exc:  # noqa: BLE001
             remaining = [t for t in existing if t["tenant_id"] != record["tenant_id"]]
             save_tenants(TENANTS_PATH, remaining)
-            self._send_json(200, {"removed": record["tenant_id"], "reload_error": str(exc)})
+            self._send_json(200, {
+                "removed": record["tenant_id"], "removed_extensions": removed_extensions_count,
+                "reload_error": str(exc),
+            })
             return
         finally:
             client.close()
 
         remaining = [t for t in existing if t["tenant_id"] != record["tenant_id"]]
         save_tenants(TENANTS_PATH, remaining)
-        self._send_json(200, {"removed": record["tenant_id"], "reload": reload_result})
+        self._send_json(200, {
+            "removed": record["tenant_id"], "removed_extensions": removed_extensions_count,
+            "reload": reload_result,
+        })
 
     def _handle_disable_monitoring(self):
         if not self._require_role({"admin"}):

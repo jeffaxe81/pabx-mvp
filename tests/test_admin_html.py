@@ -356,6 +356,15 @@ def test_remove_tenant_calls_delete_endpoint():
     assert "method: 'DELETE'" in body
 
 
+def test_remove_tenant_reports_orphaned_extensions_cleaned_up():
+    """Backlog #54: o admin precisa saber quantos ramais dinâmicos também foram removidos, não só o tenant em si."""
+    html = load_html()
+    fn_start = html.index("function removeTenant")
+    fn_end = html.index("}\n\n", fn_start)
+    body = html[fn_start:fn_end]
+    assert "removed_extensions" in body
+
+
 # ---------- Lista de áudios existentes (backlog #53) ----------
 
 def test_sounds_loaded_on_login():

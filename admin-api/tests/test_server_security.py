@@ -346,3 +346,17 @@ def test_sounds_listing_requires_authentication():
     sounds_branch_start = do_get_body.index('"/api/sounds"')
     sounds_branch = do_get_body[sounds_branch_start:sounds_branch_start + 200]
     assert '_require_role({"admin", "supervisor"})' in sounds_branch
+
+
+def test_remove_tenant_also_cleans_up_dynamic_extensions_and_files():
+    """
+    Backlog #54 - fecha a limitação documentada no manual 52: ramais
+    dinâmicos criados pelo painel (backlog #38) dentro de um tenant
+    não podem ficar órfãos quando o tenant inteiro é removido.
+    """
+    source = load_source()
+    body = get_function_body(source, "_handle_remove_tenant")
+    assert "delete_extensions_by_tenant(" in body
+    assert "extensions_dynamic_dial-" in body
+    assert "extensions_dynamic_hints-" in body
+    assert "voicemail_dynamic_" in body
