@@ -110,8 +110,17 @@ def test_render_extensions_creates_internal_and_hints_contexts():
 
 def test_render_extensions_mirrors_queue_entry_pattern():
     content = render_tenant_extensions("t3")
-    assert "Queue(${FILA_IDIOMA},c)" in content
+    assert "Queue(${FILA_IDIOMA},c,,,${OVERFLOW_TIMEOUT_SECONDS})" in content
     assert 'QUEUESTATUS}" = "CONTINUE"' in content
+
+
+def test_render_extensions_supports_queue_overflow():
+    """Backlog #45: tenant novo já nasce com a mesma lógica de overflow entre filas de t1/t2."""
+    content = render_tenant_extensions("t3")
+    assert 'GotoIf($["${QUEUESTATUS}" = "TIMEOUT"]?fila-overflow,1)' in content
+    assert "exten => fila-overflow,1," in content
+    assert "exten => fazer-overflow,1," in content
+    assert "Goto(1000,1)" in content
 
 
 def test_render_extensions_has_automatic_fallback_on_no_answer():

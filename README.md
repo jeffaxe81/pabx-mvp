@@ -354,6 +354,11 @@ o painel de supervisão mostrando o motivo exato (não só
 "indisponível"), prioridade máxima de exibição por ser o estado mais
 operacional — ver `docs/manual-44-motivo-pausa-agente.md`.
 
+**E overflow entre filas**: se a fila de idioma específico (inglês/
+espanhol) não atender dentro de um tempo configurável, a chamada
+transborda automaticamente pra fila geral do tenant — ver
+`docs/manual-45-overflow-filas.md`.
+
 Para ajustar quais ramais aparecem na lista de colegas, edite o array
 `COLLEAGUES` no início do `<script>` em `webphone/index.html`. Cada
 ramal monitorado precisa ter um `hint` correspondente em
@@ -378,7 +383,7 @@ cd ../queue-api
 python3 -m pytest tests/ -v
 ```
 
-705 testes estáticos no total, em 7 suítes (`tests/`, `queue-api/tests/`,
+712 testes estáticos no total, em 7 suítes (`tests/`, `queue-api/tests/`,
 `admin-api/tests/`, `asterisk/scripts/tests/`, `backup/tests/`,
 `ai-worker/tests/`, `asterisk/agi/tests/`) — nenhuma delas sobe o
 Asterisk, Whisper ou Ollama de verdade. Detalhes em `tests/README.md`.

@@ -49,7 +49,7 @@ def test_receptionist_extension_1000_routes_to_web_endpoint():
     assert "exten=>1000,1," in text
     exten_start = text.index("exten=>1000,1,")
     exten_end = text.index("exten=>", exten_start + 1)
-    assert "Queue(${FILA_IDIOMA},c)" in text[exten_start:exten_end]
+    assert "Queue(${FILA_IDIOMA},c,,,${OVERFLOW_TIMEOUT_SECONDS})" in text[exten_start:exten_end]
 
 
 def test_unmatched_incoming_calls_go_into_the_ura():
@@ -172,7 +172,7 @@ def test_customer_stays_on_line_after_agent_hangs_up():
     """
     blocks = blocks_as_dict(load_ext_blocks())
     text = blocks["t1-internal"].replace(" ", "")
-    assert "Queue(${FILA_IDIOMA},c)" in text
+    assert "Queue(${FILA_IDIOMA},c,,,${OVERFLOW_TIMEOUT_SECONDS})" in text
     assert "Dial(PJSIP/t1-recepcao,20,g)" in text
     assert "Dial(PJSIP/t1-recepcao-2,20,g)" in text
 
@@ -521,7 +521,7 @@ def test_tenant2_has_queue_entry_point_mirroring_tenant1():
     blocks = blocks_as_dict(load_ext_blocks())
     text = blocks["t2-internal"].replace(" ", "")
     assert "exten=>1000,1," in text
-    assert "Queue(${FILA_IDIOMA},c)" in text
+    assert "Queue(${FILA_IDIOMA},c,,,${OVERFLOW_TIMEOUT_SECONDS})" in text
     assert 'QUEUESTATUS}"="CONTINUE"' in text
 
 
@@ -723,3 +723,76 @@ def test_conference_room_uses_the_configured_profiles():
     blocks = blocks_as_dict(load_ext_blocks())
     text = blocks["t1-internal"].replace(" ", "")
     assert "ConfBridge(sala-${TENANT}-${EXTEN:2},default_bridge,default_user,default_menu)" in text
+
+
+# ---------- Overflow entre filas (backlog #45) ----------
+
+def test_overflow_timeout_defined_globally():
+    blocks = blocks_as_dict(load_ext_blocks())
+    text = blocks["globals"].replace(" ", "")
+    assert "OVERFLOW_TIMEOUT_SECONDS=" in text
+
+
+def test_queue_passes_overflow_timeout_to_asterisk():
+    """
+    Sem o timeout no 5º parâmetro do Queue(), ${QUEUESTATUS} nunca
+    viraria "TIMEOUT" - a chamada ficaria esperando pra sempre na
+    fila de idioma específico, sem nunca transbordar.
+    """
+    blocks = blocks_as_dict(load_ext_blocks())
+    for context_name in ("t1-internal", "t2-internal"):
+        text = blocks[context_name].replace(" ", "")
+        assert "Queue(${FILA_IDIOMA},c,,,${OVERFLOW_TIMEOUT_SECONDS})" in text
+
+
+def test_overflow_only_computed_for_language_specific_queues():
+    """
+    A fila GERAL não pode ter overflow pra si mesma (loop infinito) -
+    só as filas de idioma (en/es) calculam um destino de overflow.
+    """
+    blocks = blocks_as_dict(load_ext_blocks())
+    expected = 'FILA_OVERFLOW=${IF($["${FILA_IDIOMA}"="fila-${TENANT}"]?:fila-${TENANT})})'
+    for context_name in ("t1-internal", "t2-internal"):
+        text = blocks[context_name].replace(" ", "")
+        assert expected in text
+
+
+def test_timeout_status_routes_to_overflow_not_voicemail_directly():
+    """
+    QUEUESTATUS=TIMEOUT precisa ser checado ANTES de cair na caixa de
+    recado - senão o overflow nunca teria chance de acontecer.
+    """
+    blocks = blocks_as_dict(load_ext_blocks())
+    for context_name in ("t1-internal", "t2-internal"):
+        text = blocks[context_name].replace(" ", "")
+        exten_start = text.index("exten=>1000,1,")
+        timeout_check_pos = text.index('QUEUESTATUS}"="TIMEOUT"]?fila-overflow,1', exten_start)
+        voicemail_pos = text.index("VoiceMail(", exten_start)
+        assert timeout_check_pos < voicemail_pos
+
+
+def test_overflow_falls_back_to_voicemail_when_no_overflow_queue_available():
+    """
+    Se a fila geral (que não tem overflow) também estourar o tempo, a
+    chamada precisa cair na caixa de recado - não pode ficar presa
+    tentando transbordar pra lugar nenhum.
+    """
+    blocks = blocks_as_dict(load_ext_blocks())
+    for context_name in ("t1-internal", "t2-internal"):
+        text = blocks[context_name].replace(" ", "")
+        overflow_check_start = text.index("exten=>fila-overflow,1,")
+        overflow_check_end = text.index("exten=>fazer-overflow,1,")
+        block_text = text[overflow_check_start:overflow_check_end]
+        assert 'GotoIf($["${FILA_OVERFLOW}"!=""]?fazer-overflow,1)' in block_text
+        assert "VoiceMail(" in block_text
+
+
+def test_overflow_switches_queue_and_retries():
+    blocks = blocks_as_dict(load_ext_blocks())
+    for context_name in ("t1-internal", "t2-internal"):
+        text = blocks[context_name].replace(" ", "")
+        overflow_start = text.index("exten=>fazer-overflow,1,")
+        overflow_end = text.index("exten=>", overflow_start + 1) if "exten=>" in text[overflow_start + 1:] else len(text)
+        block_text = text[overflow_start:overflow_end]
+        assert "Set(FILA_IDIOMA=${FILA_OVERFLOW})" in block_text
+        assert "Goto(1000,1)" in block_text

@@ -131,10 +131,22 @@ exten => 1000,1,Answer()
  same => n,Set(CHANNEL(hangup_handler_push)=qualidade-chamada,s,1)
  same => n,Set(TENANT=${{IF($["${{TENANT}}" = ""]?{tenant_id}:${{TENANT}})}})
  same => n,Set(FILA_IDIOMA=${{IF($["${{FILA_IDIOMA}}" = ""]?fila-${{TENANT}}:${{FILA_IDIOMA}})}})
- same => n,Queue(${{FILA_IDIOMA}},c)
+ same => n,Set(FILA_OVERFLOW=${{IF($["${{FILA_IDIOMA}}" = "fila-${{TENANT}}"]?:fila-${{TENANT}})}})
+ same => n,Queue(${{FILA_IDIOMA}},c,,,${{OVERFLOW_TIMEOUT_SECONDS}})
  same => n,GotoIf($["${{QUEUESTATUS}}" = "CONTINUE"]?pesquisa-satisfacao,s,1)
+ same => n,GotoIf($["${{QUEUESTATUS}}" = "TIMEOUT"]?fila-overflow,1)
  same => n,VoiceMail(${{TENANT}}-1001@${{TENANT}},u)
  same => n,Hangup()
+
+; Overflow entre filas (backlog #45) - mesmo esquema de t1/t2
+exten => fila-overflow,1,NoOp(Fila ${{FILA_IDIOMA}} sem resposta em ${{OVERFLOW_TIMEOUT_SECONDS}}s)
+ same => n,GotoIf($["${{FILA_OVERFLOW}}" != ""]?fazer-overflow,1)
+ same => n,VoiceMail(${{TENANT}}-1001@${{TENANT}},u)
+ same => n,Hangup()
+
+exten => fazer-overflow,1,NoOp(Transbordando de ${{FILA_IDIOMA}} pra ${{FILA_OVERFLOW}})
+ same => n,Set(FILA_IDIOMA=${{FILA_OVERFLOW}})
+ same => n,Goto(1000,1)
 
 exten => 1010,1,Answer()
  same => n,Playback(custom/aviso-gravacao)

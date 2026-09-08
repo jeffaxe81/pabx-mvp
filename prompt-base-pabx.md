@@ -334,7 +334,9 @@ identificando lacunas reais. Gaps encontrados, viraram novo backlog:
 - #44: ~~Motivo de pausa do agente~~ - IMPLEMENTADO (QueuePause
   nativo via AMI, prioridade maxima de exibicao no painel
   operacional). Ver docs/manual-44.
-- #45: Overflow/transbordo entre filas por tempo de espera - PENDENTE
+- #45: ~~Overflow entre filas~~ - IMPLEMENTADO (5o parametro nativo
+  do Queue(), filas de idioma transbordam pra fila geral apos
+  OVERFLOW_TIMEOUT_SECONDS, sem loop). Ver docs/manual-45.
 - #46: SLA de fila (% atendido em N segundos) - PENDENTE
 
 Outras lacunas identificadas na auditoria, nao viraram itens de
