@@ -541,3 +541,16 @@ ANTES da generica no do_GET, senao startswith() faria cair na rota
 errada. Ver docs/manual-58.
 
 876 testes, 58 manuais, 8 suites - tudo passando e no GitHub.
+
+
+## Item #59: Interface do historico de SLA no painel - IMPLEMENTADO
+Fechada a lacuna do proprio manual 58 ("sem interface no painel
+ainda"). Secao nova no painel operacional, renderSlaHistory() -
+mostra dias fechados (mais recente primeiro) com % de SLA por fila.
+Bug de teste real encontrado: "renderSla" e prefixo de
+"renderSlaHistory", e como a nova funcao ficou definida ANTES da
+antiga no arquivo, buscas por substring passaram a achar a funcao
+errada primeiro - corrigido tornando a busca mais especifica
+("function renderSla(" com parentese). Ver docs/manual-59.
+
+879 testes, 59 manuais, 8 suites - tudo passando e no GitHub.

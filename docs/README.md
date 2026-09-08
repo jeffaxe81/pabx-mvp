@@ -63,6 +63,7 @@ configurar, como testar manualmente, e limitações conhecidas.
 56. [Overflow entre filas configurável por tenant](manual-56-overflow-por-tenant.md)
 57. [Histórico de tempo em pausa por motivo](manual-57-historico-pausa.md)
 58. [Histórico de SLA por dia](manual-58-historico-sla.md)
+59. [Interface do histórico de SLA no painel](manual-59-interface-historico-sla.md)
 
 ## Regra de manutenção
 

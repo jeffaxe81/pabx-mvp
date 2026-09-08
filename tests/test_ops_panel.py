@@ -7,7 +7,7 @@ from pathlib import Path
 PANEL_HTML = Path(__file__).parent.parent / "webphone" / "painel-operacional.html"
 WEBPHONE_HTML = Path(__file__).parent.parent / "webphone" / "index.html"
 
-REQUIRED_IDS = ["metricsRow", "extensionsList", "queueList", "lastUpdate", "fraudAlertsList", "qualityList", "slaList", "pauseHistoryList"]
+REQUIRED_IDS = ["metricsRow", "extensionsList", "queueList", "lastUpdate", "fraudAlertsList", "qualityList", "slaList", "pauseHistoryList", "slaHistoryList"]
 
 
 def load_panel_html():
@@ -110,7 +110,7 @@ def test_sla_display_shows_percentage_threshold_and_raw_counts():
     três juntos.
     """
     html = load_panel_html()
-    fn_start = html.index("function renderSla")
+    fn_start = html.index("function renderSla(")
     fn_end = html.index("}\n\n", fn_start)
     body = html[fn_start:fn_end]
     assert "sla_percent" in body
@@ -121,7 +121,7 @@ def test_sla_display_shows_percentage_threshold_and_raw_counts():
 
 def test_sla_handles_empty_state_without_crashing():
     html = load_panel_html()
-    fn_start = html.index("function renderSla")
+    fn_start = html.index("function renderSla(")
     fn_end = html.index("}\n\n", fn_start)
     body = html[fn_start:fn_end]
     assert "queues.length === 0" in body
@@ -150,3 +150,27 @@ def test_pause_history_handles_empty_state_without_crashing():
     fn_end = html.index("}\n\n", fn_start) if "}\n\n" in html[fn_start:] else html.index("}\n})", fn_start)
     body = html[fn_start:fn_end]
     assert "byReason.length===0" in body.replace(" ", "")
+
+
+# ---------- Histórico de SLA no painel (backlog #59) ----------
+
+def test_sla_history_endpoint_is_fetched_and_rendered():
+    html = load_panel_html()
+    assert "/api/metrics/sla/history" in html
+    assert "renderSlaHistory(" in html
+
+
+def test_sla_history_sorted_most_recent_first():
+    html = load_panel_html()
+    fn_start = html.index("function renderSlaHistory")
+    fn_end = html.index("}\n\n", fn_start) if "}\n\n" in html[fn_start:] else html.index("}\n})", fn_start)
+    body = html[fn_start:fn_end]
+    assert ".sort(" in body
+
+
+def test_sla_history_handles_empty_state_without_crashing():
+    html = load_panel_html()
+    fn_start = html.index("function renderSlaHistory")
+    fn_end = html.index("}\n\n", fn_start) if "}\n\n" in html[fn_start:] else html.index("}\n})", fn_start)
+    body = html[fn_start:fn_end]
+    assert "dates.length===0" in body.replace(" ", "")

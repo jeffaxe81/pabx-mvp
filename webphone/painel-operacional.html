@@ -92,6 +92,11 @@
   <div id="pauseHistoryList"><div class="empty">Carregando...</div></div>
 </div>
 
+<div class="panel" style="margin-top: 16px;">
+  <h2>Histórico de SLA por dia</h2>
+  <div id="slaHistoryList"><div class="empty">Carregando...</div></div>
+</div>
+
 <script>
 (function () {
   'use strict';
@@ -111,7 +116,8 @@
       fetch(`${apiUrl}/api/quality?only_poor=true`).then((r) => r.json()).catch(() => null),
       fetch(`${apiUrl}/api/metrics/sla`).then((r) => r.json()).catch(() => null),
       fetch(`${apiUrl}/api/reports/pauses`).then((r) => r.json()).catch(() => null),
-    ]).then(([metrics, extensions, queue, fraud, quality, sla, pauses]) => {
+      fetch(`${apiUrl}/api/metrics/sla/history`).then((r) => r.json()).catch(() => null),
+    ]).then(([metrics, extensions, queue, fraud, quality, sla, pauses, slaHistory]) => {
       if (metrics) renderMetrics(metrics);
       if (extensions) renderExtensions(extensions.extensions || []);
       if (queue) renderQueue(queue.waiting || []);
@@ -119,8 +125,27 @@
       if (quality) renderQuality(quality.quality_reports || []);
       if (sla) renderSla(sla);
       if (pauses) renderPauseHistory(pauses);
+      if (slaHistory) renderSlaHistory(slaHistory);
       el('lastUpdate').textContent = `Atualizado às ${new Date().toLocaleTimeString('pt-BR')}`;
     });
+  }
+
+  function renderSlaHistory(slaHistory) {
+    // Backlog #59 - fecha a limitação documentada no manual 58 (sem
+    // interface no painel pra ver o histórico, só a API).
+    const dates = Object.entries(slaHistory.by_date || {}).sort((a, b) => b[0].localeCompare(a[0])); // mais recente primeiro
+    if (dates.length === 0) {
+      el('slaHistoryList').innerHTML = '<div class="empty">Nenhum dia fechado ainda (o histórico só é gravado à meia-noite).</div>';
+      return;
+    }
+    el('slaHistoryList').innerHTML = dates.map(([date, queues]) => {
+      const queueRows = Object.entries(queues).map(([queueName, stats]) => `
+        <div class="item-row">
+          <span style="padding-left:16px;">${queueName}</span>
+          <span class="mono">${stats.sla_percent}% (${stats.within_sla}/${stats.offered})</span>
+        </div>`).join('');
+      return `<div class="item-row" style="font-weight:600;"><span>${date}</span><span></span></div>${queueRows}`;
+    }).join('');
   }
 
   function renderPauseHistory(pauses) {
