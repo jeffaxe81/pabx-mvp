@@ -337,7 +337,17 @@ identificando lacunas reais. Gaps encontrados, viraram novo backlog:
 - #45: ~~Overflow entre filas~~ - IMPLEMENTADO (5o parametro nativo
   do Queue(), filas de idioma transbordam pra fila geral apos
   OVERFLOW_TIMEOUT_SECONDS, sem loop). Ver docs/manual-45.
-- #46: SLA de fila (% atendido em N segundos) - PENDENTE
+- #46: ~~SLA de fila (% atendido em N segundos)~~ - IMPLEMENTADO
+  (AgentConnect/QueueCallerAbandon nativos, abandono conta contra o
+  SLA mesmo com espera curta - bug real pego pelos proprios testes
+  antes de chegar perto de producao). Ver docs/manual-46.
+
+**AUDITORIA DE GAPS COMPLETA (itens #40-46)** - os 7 gaps identificados
+ao comparar o projeto contra o framework de avaliacao de PABX
+corporativo fornecido pelo usuario foram todos implementados: aviso
+de gravacao/LGPD, estacionamento de chamada, monitoramento de
+chamada, sala de conferencia ad-hoc, motivo de pausa do agente,
+overflow entre filas, SLA de fila.
 
 Outras lacunas identificadas na auditoria, nao viraram itens de
 backlog ainda (fora do escopo imediato, ou exigiriam decisao adicional

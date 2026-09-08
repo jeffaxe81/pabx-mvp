@@ -383,3 +383,9 @@ def test_confbridge_conf_mounted():
     compose = load_compose()
     asterisk_volumes = compose["services"]["asterisk"].get("volumes", [])
     assert any("confbridge.conf:" in v for v in asterisk_volumes)
+
+
+def test_sla_threshold_configured_for_queue_api():
+    compose = load_compose()
+    env = compose["services"]["queue-api"].get("environment", {})
+    assert "SLA_THRESHOLD_SECONDS" in env

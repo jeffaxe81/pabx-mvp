@@ -50,6 +50,7 @@ configurar, como testar manualmente, e limitações conhecidas.
 43. [Sala de conferência ad-hoc](manual-43-sala-conferencia.md)
 44. [Motivo de pausa do agente](manual-44-motivo-pausa-agente.md)
 45. [Overflow entre filas](manual-45-overflow-filas.md)
+46. [SLA de fila](manual-46-sla-fila.md)
 
 ## Regra de manutenção
 

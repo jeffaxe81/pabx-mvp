@@ -39,6 +39,7 @@ from survey import parse_survey_event, SurveyStore, average_score, score_distrib
 from presence import validate_presence_input, load_presence, set_presence, clear_presence, merge_presence_into_states
 from agent_pause import validate_pause_request, AgentPauseStore, merge_pause_into_states
 from metrics import DailyMetrics
+from queue_sla import QueueSLATracker
 from pickup import validate_pickup_request
 from extension_states import ExtensionStateTracker
 from reports import parse_cdr_for_report, CallLogStore, aggregate, group_by, extract_operator
@@ -55,6 +56,7 @@ PICKUP_ALLOWED_EXTENSIONS = [
     e.strip() for e in os.environ.get("PICKUP_ALLOWED_EXTENSIONS", "t1-recepcao,t1-recepcao-2,t2-recepcao,t2-recepcao-2").split(",") if e.strip()
 ]
 HTTP_PORT = int(os.environ.get("HTTP_PORT", "8090"))
+SLA_THRESHOLD_SECONDS = int(os.environ.get("SLA_THRESHOLD_SECONDS", "20"))
 RECORDINGS_DIR = os.environ.get("RECORDINGS_DIR", "/app/recordings")
 # Retenção de gravações (backlog #15) - 0 (padrão) = desabilitado.
 # Apagar gravação é irreversível, então isso é opt-in de propósito.
@@ -127,6 +129,7 @@ PRESENCE_PATH = os.environ.get("PRESENCE_PATH", "/app/data/presence.json")
 state = QueueStateTracker()
 missed_calls_log = MissedCallsLog()
 daily_metrics = DailyMetrics()
+queue_sla_tracker = QueueSLATracker(threshold_seconds=SLA_THRESHOLD_SECONDS)
 extension_states = ExtensionStateTracker()
 agent_pause_store = AgentPauseStore()
 call_log_store = CallLogStore(CALL_LOG_PATH)
@@ -140,6 +143,7 @@ def handle_ami_event(event: dict):
     """Callback único do AMI: alimenta fila, chamadas perdidas, métricas, estado dos ramais, relatórios, fraude e qualidade."""
     state.apply_event(event)
     daily_metrics.apply_cdr_event(event)
+    queue_sla_tracker.apply_event(event)
     extension_states.apply_event(event)
     agent_pause_store.apply_event(event)
 
@@ -284,6 +288,8 @@ class Handler(BaseHTTPRequestHandler):
             self._handle_quality_query()
         elif self.path.startswith("/api/metrics/today"):
             self._send_json(200, daily_metrics.snapshot())
+        elif self.path.startswith("/api/metrics/sla"):
+            self._send_json(200, {"threshold_seconds": SLA_THRESHOLD_SECONDS, "queues": queue_sla_tracker.snapshot()})
         elif self.path.startswith("/api/extension-states"):
             merged = merge_presence_into_states(extension_states.snapshot(), load_presence(PRESENCE_PATH))
             merged = merge_pause_into_states(merged, agent_pause_store.snapshot())

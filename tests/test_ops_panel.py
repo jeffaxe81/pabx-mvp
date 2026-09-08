@@ -7,7 +7,7 @@ from pathlib import Path
 PANEL_HTML = Path(__file__).parent.parent / "webphone" / "painel-operacional.html"
 WEBPHONE_HTML = Path(__file__).parent.parent / "webphone" / "index.html"
 
-REQUIRED_IDS = ["metricsRow", "extensionsList", "queueList", "lastUpdate", "fraudAlertsList", "qualityList"]
+REQUIRED_IDS = ["metricsRow", "extensionsList", "queueList", "lastUpdate", "fraudAlertsList", "qualityList", "slaList"]
 
 
 def load_panel_html():
@@ -93,3 +93,35 @@ def test_operator_console_links_to_the_ops_panel():
     html = WEBPHONE_HTML.read_text(encoding="utf-8")
     assert 'id="opsPanelLink"' in html
     assert "painel-operacional.html" in html
+
+
+# ---------- SLA de fila (backlog #46) ----------
+
+def test_sla_endpoint_is_fetched_and_rendered():
+    html = load_panel_html()
+    assert "/api/metrics/sla" in html
+    assert "renderSla(" in html
+
+
+def test_sla_display_shows_percentage_threshold_and_raw_counts():
+    """
+    Um percentual sozinho ("75%") não diz muito sem o contexto do
+    limiar e dos números absolutos - a interface precisa mostrar os
+    três juntos.
+    """
+    html = load_panel_html()
+    fn_start = html.index("function renderSla")
+    fn_end = html.index("}\n\n", fn_start)
+    body = html[fn_start:fn_end]
+    assert "sla_percent" in body
+    assert "threshold_seconds" in body
+    assert "within_sla" in body
+    assert "offered" in body
+
+
+def test_sla_handles_empty_state_without_crashing():
+    html = load_panel_html()
+    fn_start = html.index("function renderSla")
+    fn_end = html.index("}\n\n", fn_start)
+    body = html[fn_start:fn_end]
+    assert "queues.length === 0" in body

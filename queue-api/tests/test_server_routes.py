@@ -157,3 +157,25 @@ def test_extension_states_endpoint_merges_pause_reason():
     fn_end = source.index("elif", fn_start)
     body = source[fn_start:fn_end]
     assert "merge_pause_into_states(" in body
+
+
+def test_sla_endpoint_exposes_threshold_and_per_queue_breakdown():
+    """
+    Backlog #46: o painel precisa saber qual é o limiar configurado
+    (não só o percentual) pra exibir "80% em até 20s" de forma
+    correta, não um número solto sem contexto.
+    """
+    source = load_source()
+    fn_start = source.index('"/api/metrics/sla"')
+    fn_end = source.index("elif", fn_start)
+    body = source[fn_start:fn_end]
+    assert "threshold_seconds" in body
+    assert "queue_sla_tracker.snapshot()" in body
+
+
+def test_agent_connect_and_abandon_events_feed_sla_tracker():
+    source = load_source()
+    fn_start = source.index("def handle_ami_event")
+    fn_end = source.index("\n\ndef ", fn_start) if "\n\ndef " in source[fn_start:] else len(source)
+    body = source[fn_start:fn_end]
+    assert "queue_sla_tracker.apply_event(event)" in body
