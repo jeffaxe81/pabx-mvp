@@ -27,6 +27,7 @@ REQUIRED_IDS = [
     "monitoringPinCard", "monitoringStatusText", "monitoringPinInput", "setMonitoringPinBtn", "disableMonitoringBtn", "monitoringPinError",
     "ttsCard", "ttsFilenameInput", "ttsLanguageSelect", "ttsEngineSelect", "ttsTextInput", "generateTtsBtn", "ttsResult", "ttsError",
     "soundsTableBody", "soundsEmptyHint",
+    "overflowTimeoutInput", "setOverflowTimeoutBtn", "overflowTimeoutError",
 ]
 
 
@@ -390,3 +391,28 @@ def test_sounds_table_shows_filename_size_and_date():
     assert "s.filename" in body
     assert "size_bytes" in body
     assert "modified_at" in body
+
+
+# ---------- Overflow entre filas (backlog #56) ----------
+
+def test_overflow_timeout_loaded_on_login_and_tenant_change():
+    html = load_html()
+    assert html.count("loadOverflowTimeout();") == 2  # login + troca de tenant
+
+
+def test_overflow_timeout_requests_include_current_tenant():
+    html = load_html()
+    assert "/api/config/overflow-timeout?tenant=${currentTenant}" in html
+    fn_start = html.index("el('setOverflowTimeoutBtn').addEventListener")
+    fn_end = html.index("});", html.index("catch", fn_start))
+    body = html[fn_start:fn_end]
+    assert "tenant: currentTenant" in body
+
+
+def test_overflow_timeout_save_sends_number_not_string():
+    """O input HTML devolve string por padrão - precisa converter pra número antes de enviar."""
+    html = load_html()
+    fn_start = html.index("el('setOverflowTimeoutBtn').addEventListener")
+    fn_end = html.index("});", html.index("catch", fn_start))
+    body = html[fn_start:fn_end]
+    assert "Number(el('overflowTimeoutInput').value)" in body

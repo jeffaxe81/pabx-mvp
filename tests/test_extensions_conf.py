@@ -49,7 +49,7 @@ def test_receptionist_extension_1000_routes_to_web_endpoint():
     assert "exten=>1000,1," in text
     exten_start = text.index("exten=>1000,1,")
     exten_end = text.index("exten=>", exten_start + 1)
-    assert "Queue(${FILA_IDIOMA},c,,,${OVERFLOW_TIMEOUT_SECONDS})" in text[exten_start:exten_end]
+    assert "Queue(${FILA_IDIOMA},c,,,${OVERFLOW_TIMEOUT})" in text[exten_start:exten_end]
 
 
 def test_unmatched_incoming_calls_go_into_the_ura():
@@ -172,7 +172,7 @@ def test_customer_stays_on_line_after_agent_hangs_up():
     """
     blocks = blocks_as_dict(load_ext_blocks())
     text = blocks["t1-internal"].replace(" ", "")
-    assert "Queue(${FILA_IDIOMA},c,,,${OVERFLOW_TIMEOUT_SECONDS})" in text
+    assert "Queue(${FILA_IDIOMA},c,,,${OVERFLOW_TIMEOUT})" in text
     assert "Dial(PJSIP/t1-recepcao,20,g)" in text
     assert "Dial(PJSIP/t1-recepcao-2,20,g)" in text
 
@@ -521,7 +521,7 @@ def test_tenant2_has_queue_entry_point_mirroring_tenant1():
     blocks = blocks_as_dict(load_ext_blocks())
     text = blocks["t2-internal"].replace(" ", "")
     assert "exten=>1000,1," in text
-    assert "Queue(${FILA_IDIOMA},c,,,${OVERFLOW_TIMEOUT_SECONDS})" in text
+    assert "Queue(${FILA_IDIOMA},c,,,${OVERFLOW_TIMEOUT})" in text
     assert 'QUEUESTATUS}"="CONTINUE"' in text
 
 
@@ -745,6 +745,20 @@ def test_overflow_timeout_defined_globally():
     assert "OVERFLOW_TIMEOUT_SECONDS=" in text
 
 
+def test_overflow_timeout_configurable_per_tenant_with_global_fallback():
+    """
+    Backlog #56 - fecha a limitação documentada no manual 45 (sem
+    interface pra ajustar o valor). Cada tenant pode configurar o
+    próprio timeout (AstDB "config-{tenant}"); sem configurar nada,
+    cai no valor global padrão.
+    """
+    blocks = blocks_as_dict(load_ext_blocks())
+    expected = 'OVERFLOW_TIMEOUT=${IF($["${DB(config-${TENANT}/overflow-timeout-segundos)}"=""]?${OVERFLOW_TIMEOUT_SECONDS}:${DB(config-${TENANT}/overflow-timeout-segundos)})}'
+    for context_name in ("t1-internal", "t2-internal"):
+        text = blocks[context_name].replace(" ", "")
+        assert expected in text
+
+
 def test_queue_passes_overflow_timeout_to_asterisk():
     """
     Sem o timeout no 5º parâmetro do Queue(), ${QUEUESTATUS} nunca
@@ -754,7 +768,7 @@ def test_queue_passes_overflow_timeout_to_asterisk():
     blocks = blocks_as_dict(load_ext_blocks())
     for context_name in ("t1-internal", "t2-internal"):
         text = blocks[context_name].replace(" ", "")
-        assert "Queue(${FILA_IDIOMA},c,,,${OVERFLOW_TIMEOUT_SECONDS})" in text
+        assert "Queue(${FILA_IDIOMA},c,,,${OVERFLOW_TIMEOUT})" in text
 
 
 def test_overflow_only_computed_for_language_specific_queues():

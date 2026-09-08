@@ -110,7 +110,7 @@ def test_render_extensions_creates_internal_and_hints_contexts():
 
 def test_render_extensions_mirrors_queue_entry_pattern():
     content = render_tenant_extensions("t3")
-    assert "Queue(${FILA_IDIOMA},c,,,${OVERFLOW_TIMEOUT_SECONDS})" in content
+    assert "Queue(${FILA_IDIOMA},c,,,${OVERFLOW_TIMEOUT})" in content
     assert 'QUEUESTATUS}" = "CONTINUE"' in content
 
 
@@ -121,6 +121,12 @@ def test_render_extensions_supports_queue_overflow():
     assert "exten => fila-overflow,1," in content
     assert "exten => fazer-overflow,1," in content
     assert "Goto(1000,1)" in content
+
+
+def test_render_extensions_overflow_timeout_configurable_per_tenant():
+    """Backlog #56: tenant novo já nasce com a mesma flexibilidade de ajustar o timeout de overflow pelo painel."""
+    content = render_tenant_extensions("t3")
+    assert "DB(config-${TENANT}/overflow-timeout-segundos)" in content
 
 
 def test_render_extensions_has_automatic_fallback_on_no_answer():

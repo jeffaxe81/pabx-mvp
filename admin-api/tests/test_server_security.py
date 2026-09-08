@@ -391,3 +391,34 @@ def test_deleting_extension_captures_record_before_removal_to_unregister_mapping
     delete_pos = body.index("delete_extension(STORE_PATH, name)")
     unregister_pos = body.index("unregister_extension_mapping")
     assert capture_pos < delete_pos < unregister_pos
+
+
+def test_overflow_timeout_endpoints_allow_admin_and_supervisor():
+    """Mesmo papel do modo feriado (manual 23) - ajuste operacional, não uma ação de peso maior."""
+    source = load_source()
+    do_get_body = get_function_body(source, "do_GET")
+    get_branch_start = do_get_body.index('"/api/config/overflow-timeout"')
+    get_branch = do_get_body[get_branch_start:get_branch_start + 200]
+    assert '_require_role({"admin", "supervisor"})' in get_branch
+
+    post_body = get_function_body(source, "_handle_set_overflow_timeout")
+    assert '_require_role({"admin", "supervisor"})' in post_body
+
+
+def test_overflow_timeout_validated_before_writing_to_astdb():
+    source = load_source()
+    body = get_function_body(source, "_handle_set_overflow_timeout")
+    validate_pos = body.index("validate_overflow_timeout_input(")
+    write_pos = body.index("set_overflow_timeout(")
+    assert validate_pos < write_pos
+
+
+def test_overflow_timeout_falls_back_to_default_when_unconfigured():
+    """
+    Sem isso, a interface mostraria None/vazio pra um tenant que
+    nunca configurou nada, em vez do valor que está de fato em vigor
+    (o dialplan já cai no padrão global sozinho).
+    """
+    source = load_source()
+    body = get_function_body(source, "_handle_get_overflow_timeout")
+    assert "DEFAULT_OVERFLOW_TIMEOUT_SECONDS" in body

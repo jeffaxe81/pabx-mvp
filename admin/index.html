@@ -151,6 +151,23 @@
     <button class="btn-ghost" id="holidayModeBtn">Carregando...</button>
   </div>
 
+  <div class="form-card" style="margin-top:24px;">
+    <h2>Overflow entre filas</h2>
+    <p style="font-size:13px; color:var(--text-muted); margin:0 0 12px;">
+      Se a fila de idioma específico (inglês/espanhol) não atender
+      dentro deste tempo, a chamada transborda pra fila geral do
+      tenant selecionado. Padrão: 45 segundos.
+    </p>
+    <div class="form-row">
+      <div>
+        <label for="overflowTimeoutInput">Tempo em segundos (5-600)</label>
+        <input id="overflowTimeoutInput" type="number" min="5" max="600" placeholder="45">
+      </div>
+    </div>
+    <button class="btn-primary" id="setOverflowTimeoutBtn" style="width:auto;">Salvar</button>
+    <div class="error-msg" id="overflowTimeoutError"></div>
+  </div>
+
   <div class="form-card" id="blocklistFormCard" style="margin-top:24px;">
     <h2>Números bloqueados (discagem de saída)</h2>
     <table>
@@ -401,6 +418,7 @@
     loadBlocklist();
     loadVips();
     loadHolidayMode();
+    loadOverflowTimeout();
     loadTotpStatus();
     if (myRole === 'admin') loadUsers();
     if (myRole === 'admin') loadTenants();
@@ -635,6 +653,23 @@
     }).catch((err) => alert(err.message));
   });
 
+  // ---------- Overflow entre filas (backlog #56) ----------
+  function loadOverflowTimeout() {
+    apiFetch(`/api/config/overflow-timeout?tenant=${currentTenant}`).then((data) => {
+      el('overflowTimeoutInput').value = data.seconds;
+    });
+  }
+
+  el('setOverflowTimeoutBtn').addEventListener('click', () => {
+    el('overflowTimeoutError').textContent = '';
+    apiFetch('/api/config/overflow-timeout', {
+      method: 'POST',
+      body: JSON.stringify({ seconds: Number(el('overflowTimeoutInput').value), tenant: currentTenant }),
+    })
+      .then((data) => { el('overflowTimeoutInput').value = data.seconds; })
+      .catch((err) => { el('overflowTimeoutError').textContent = err.message; });
+  });
+
   // ---------- Seletor de tenant (backlog #38) ----------
   el('tenantSelect').addEventListener('change', (e) => {
     currentTenant = e.target.value;
@@ -643,6 +678,7 @@
     loadBlocklist();
     loadVips();
     loadHolidayMode();
+    loadOverflowTimeout();
     if (myRole === 'admin') loadMonitoringStatus();
   });
 

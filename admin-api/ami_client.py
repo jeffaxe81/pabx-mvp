@@ -79,6 +79,46 @@ class AMIClient:
         })
         return response.get("Response") == "Success"
 
+    def set_overflow_timeout(self, seconds: int, tenant: str = "t1"):
+        """
+        Timeout de overflow entre filas (backlog #56) - mesma família
+        AstDB do modo feriado ('config-{tenant}'), chave própria.
+        """
+        return self._send_action({
+            "Action": "DBPut", "Family": f"config-{tenant}", "Key": "overflow-timeout-segundos", "Val": str(seconds),
+        })
+
+    def get_overflow_timeout(self, tenant: str = "t1"):
+        """
+        Diferente de get_holiday_mode (que só precisa saber
+        sim/não) - aqui precisamos do VALOR de verdade, então usamos
+        DBGetTree (mesma técnica de list_blocked_numbers/list_vips)
+        em vez de DBGet, que não devolve o valor na resposta imediata.
+        Retorna None se não configurado (dialplan cai no padrão global).
+        """
+        with self._lock:
+            self._sock.sendall(build_action({
+                "Action": "DBGetTree", "Family": f"config-{tenant}",
+            }).encode("utf-8"))
+            self._sock.settimeout(2.0)
+            data = b""
+            try:
+                while True:
+                    chunk = self._sock.recv(4096)
+                    if not chunk:
+                        break
+                    data += chunk
+            except socket.timeout:
+                pass
+            finally:
+                self._sock.settimeout(None)
+
+        blocks = parse_ami_blocks(data.decode("utf-8", errors="replace"))
+        for block in blocks:
+            if block.get("Key", "").endswith("/overflow-timeout-segundos"):
+                return block.get("Val")
+        return None
+
     def set_vip(self, number: str, target_extension: str, tenant: str = "t1"):
         """Associa um número de cliente a um ramal de destino direto (AstDB família 'vip-{tenant}')."""
         return self._send_action({

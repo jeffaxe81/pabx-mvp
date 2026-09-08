@@ -29,6 +29,7 @@ from blocklist import validate_blocklist_number
 from vip import validate_vip_input
 from monitoring import validate_monitoring_pin_input
 from sounds import list_sound_files
+from overflow import validate_overflow_timeout_input
 from tenants import (
     load_tenants, save_tenants, validate_tenant_creation_input,
     render_tenant_pjsip, render_tenant_queues, render_tenant_extensions, render_tenant_voicemail,
@@ -68,6 +69,10 @@ ADMIN_PASSWORD_HASH = os.environ.get("ADMIN_PASSWORD_HASH", "")
 
 AMI_HOST = os.environ.get("AMI_HOST", "127.0.0.1")
 AI_WORKER_URL = os.environ.get("AI_WORKER_URL", "http://ai-worker:8092")
+# Precisa bater com OVERFLOW_TIMEOUT_SECONDS em [globals] no
+# extensions.conf - é o valor que o dialplan usa quando o tenant não
+# configurou nada específico (backlog #56).
+DEFAULT_OVERFLOW_TIMEOUT_SECONDS = 45
 AMI_PORT = int(os.environ.get("AMI_PORT", "5038"))
 AMI_USERNAME = os.environ.get("AMI_USERNAME", "admin-api")
 AMI_SECRET = os.environ.get("AMI_SECRET", "troque_esta_senha_ami")
@@ -207,6 +212,10 @@ class Handler(BaseHTTPRequestHandler):
             if not self._require_role({"admin", "supervisor"}):
                 return
             self._handle_get_holiday_mode()
+        elif self.path.startswith("/api/config/overflow-timeout"):
+            if not self._require_role({"admin", "supervisor"}):
+                return
+            self._handle_get_overflow_timeout()
         elif self.path.startswith("/api/users"):
             if not self._require_role({"admin"}):
                 return
@@ -287,6 +296,27 @@ class Handler(BaseHTTPRequestHandler):
         finally:
             client.close()
 
+    def _handle_get_overflow_timeout(self):
+        """
+        Backlog #56: sem valor configurado, devolve o padrão global
+        (45s, mesmo valor do [globals] do extensions.conf) - o
+        dialplan já cai nesse mesmo padrão sozinho, então a interface
+        mostra o valor que está de fato em vigor, configurado ou não.
+        """
+        tenant = validate_tenant(parse_qs(urlparse(self.path).query).get("tenant", [None])[0])
+        if not tenant:
+            self._send_json(400, {"error": "tenant inválido ou não cadastrado"})
+            return
+        client = AMIClient(AMI_HOST, AMI_PORT, AMI_USERNAME, AMI_SECRET)
+        try:
+            client.connect_and_login()
+            seconds = client.get_overflow_timeout(tenant)
+            self._send_json(200, {"seconds": int(seconds) if seconds is not None else DEFAULT_OVERFLOW_TIMEOUT_SECONDS, "tenant": tenant})
+        except Exception as exc:  # noqa: BLE001
+            self._send_json(502, {"error": f"falha ao consultar AMI: {exc}"})
+        finally:
+            client.close()
+
     def _serve_static(self, filename, content_type):
         file_path = STATIC_DIR / filename
         if not file_path.is_file():
@@ -313,6 +343,8 @@ class Handler(BaseHTTPRequestHandler):
             self._handle_add_vip()
         elif self.path == "/api/config/modo-feriado":
             self._handle_set_holiday_mode()
+        elif self.path == "/api/config/overflow-timeout":
+            self._handle_set_overflow_timeout()
         elif self.path == "/api/users":
             self._handle_create_user()
         elif self.path == "/api/tenants":
@@ -539,6 +571,33 @@ class Handler(BaseHTTPRequestHandler):
             client.connect_and_login()
             client.set_holiday_mode(bool(data["enabled"]), tenant)
             self._send_json(200, {"enabled": bool(data["enabled"]), "tenant": tenant})
+        except Exception as exc:  # noqa: BLE001
+            self._send_json(502, {"error": f"falha ao consultar AMI: {exc}"})
+        finally:
+            client.close()
+
+    def _handle_set_overflow_timeout(self):
+        if not self._require_role({"admin", "supervisor"}):
+            return
+        data = self._read_json_body()
+        if data is None:
+            self._send_json(400, {"error": "JSON inválido"})
+            return
+
+        ok, error, cleaned_seconds = validate_overflow_timeout_input(data)
+        if not ok:
+            self._send_json(400, {"error": error})
+            return
+        tenant = validate_tenant(data.get("tenant"))
+        if not tenant:
+            self._send_json(400, {"error": "tenant inválido ou não cadastrado"})
+            return
+
+        client = AMIClient(AMI_HOST, AMI_PORT, AMI_USERNAME, AMI_SECRET)
+        try:
+            client.connect_and_login()
+            client.set_overflow_timeout(cleaned_seconds, tenant)
+            self._send_json(200, {"seconds": cleaned_seconds, "tenant": tenant})
         except Exception as exc:  # noqa: BLE001
             self._send_json(502, {"error": f"falha ao consultar AMI: {exc}"})
         finally:

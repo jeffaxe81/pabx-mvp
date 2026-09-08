@@ -417,6 +417,11 @@ sincroniza um mapeamento número→endpoint no AstDB toda vez que um
 ramal é criado, editado ou removido — ver
 `docs/manual-55-monitoramento-ramais-dinamicos.md`.
 
+**E, fechando a lacuna do manual 45**: overflow entre filas agora é
+configurável por tenant direto pelo painel (5-600 segundos), com
+fallback pro valor padrão global quando não configurado — ver
+`docs/manual-56-overflow-por-tenant.md`.
+
 Para ajustar quais ramais aparecem na lista de colegas, edite o array
 `COLLEAGUES` no início do `<script>` em `webphone/index.html`. Cada
 ramal monitorado precisa ter um `hint` correspondente em
@@ -441,7 +446,7 @@ cd ../queue-api
 python3 -m pytest tests/ -v
 ```
 
-833 testes estáticos no total, em 8 suítes (`tests/`, `queue-api/tests/`,
+849 testes estáticos no total, em 8 suítes (`tests/`, `queue-api/tests/`,
 `admin-api/tests/`, `asterisk/scripts/tests/`, `backup/tests/`,
 `ai-worker/tests/`, `asterisk/agi/tests/`, `scripts/tests/`) —
 nenhuma delas sobe o Asterisk, Whisper ou Ollama de verdade. Detalhes

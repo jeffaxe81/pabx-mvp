@@ -499,3 +499,17 @@ nao e limpo se o numero do ramal mudar numa edicao (so o novo e
 registrado). Ver docs/manual-55.
 
 833 testes, 55 manuais, 8 suites - tudo passando e no GitHub.
+
+
+## Item #56: Overflow entre filas configuravel por tenant - IMPLEMENTADO
+Fechada a lacuna do manual 45 ("sem interface no painel pra ajustar
+o valor"). admin-api ganhou overflow.py (validacao 5-600s),
+ami_client.set_overflow_timeout/get_overflow_timeout (este ultimo
+via DBGetTree, nao DBGet simples, ja que precisamos do VALOR
+numerico, nao so confirmacao sim/nao - diferenca tecnica importante
+documentada no manual). Dialplan (t1/t2-internal + template do
+wizard) consulta DB(config-${TENANT}/overflow-timeout-segundos) com
+fallback pro OVERFLOW_TIMEOUT_SECONDS global (45s). Interface no
+painel, secao "Overflow entre filas", tenant-aware. Ver docs/manual-56.
+
+849 testes, 56 manuais, 8 suites - tudo passando e no GitHub.
