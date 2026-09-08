@@ -87,6 +87,11 @@
   <div id="slaList"><div class="empty">Carregando...</div></div>
 </div>
 
+<div class="panel" style="margin-top: 16px;">
+  <h2>Tempo em pausa por motivo</h2>
+  <div id="pauseHistoryList"><div class="empty">Carregando...</div></div>
+</div>
+
 <script>
 (function () {
   'use strict';
@@ -105,15 +110,35 @@
       fetch(`${apiUrl}/api/fraud-alerts`).then((r) => r.json()).catch(() => null),
       fetch(`${apiUrl}/api/quality?only_poor=true`).then((r) => r.json()).catch(() => null),
       fetch(`${apiUrl}/api/metrics/sla`).then((r) => r.json()).catch(() => null),
-    ]).then(([metrics, extensions, queue, fraud, quality, sla]) => {
+      fetch(`${apiUrl}/api/reports/pauses`).then((r) => r.json()).catch(() => null),
+    ]).then(([metrics, extensions, queue, fraud, quality, sla, pauses]) => {
       if (metrics) renderMetrics(metrics);
       if (extensions) renderExtensions(extensions.extensions || []);
       if (queue) renderQueue(queue.waiting || []);
       if (fraud) renderFraudAlerts(fraud.alerts || []);
       if (quality) renderQuality(quality.quality_reports || []);
       if (sla) renderSla(sla);
+      if (pauses) renderPauseHistory(pauses);
       el('lastUpdate').textContent = `Atualizado às ${new Date().toLocaleTimeString('pt-BR')}`;
     });
+  }
+
+  function renderPauseHistory(pauses) {
+    const byReason = Object.entries(pauses.by_reason || {});
+    if (byReason.length === 0) {
+      el('pauseHistoryList').innerHTML = '<div class="empty">Nenhuma pausa completa registrada ainda.</div>';
+      return;
+    }
+    // Minutos são mais fáceis de ler que segundos crus pra tempos acumulados de horas de operação.
+    el('pauseHistoryList').innerHTML = byReason
+      .sort((a, b) => b[1] - a[1])
+      .map(([reason, seconds]) => {
+        const minutes = (seconds / 60).toFixed(1);
+        return `<div class="item-row">
+          <span>${reason}</span>
+          <span class="mono">${minutes} min</span>
+        </div>`;
+      }).join('');
   }
 
   function renderSla(sla) {

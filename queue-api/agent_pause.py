@@ -10,6 +10,8 @@ do projeto.
 """
 import re
 import time
+import json
+from pathlib import Path
 
 INTERFACE_RE = re.compile(r"^PJSIP/([a-zA-Z0-9-]+)$")
 
@@ -63,19 +65,47 @@ def parse_queue_member_pause_event(event: dict):
 
 
 class AgentPauseStore:
-    """Estado atual de pausa de cada agente - em memória, atualizado via evento AMI."""
+    """
+    Estado atual de pausa de cada agente - em memória, atualizado via
+    evento AMI. Opcionalmente grava histórico completo (backlog #57 -
+    fecha a limitação documentada no manual 44 "sem relatório
+    histórico de tempo em pausa por motivo") toda vez que um agente
+    DESpausa - é o único momento em que a duração da pausa é conhecida
+    por completo.
+    """
 
-    def __init__(self):
+    def __init__(self, history_store=None, clock=time.time):
         self._state = {}
+        self._history_store = history_store
+        self._clock = clock
 
     def apply_event(self, event: dict):
         parsed = parse_queue_member_pause_event(event)
         if not parsed:
             return
-        self._state[parsed["extension"]] = {
+
+        extension = parsed["extension"]
+        previous = self._state.get(extension)
+        now = self._clock()
+
+        # Estava pausado e agora despausou - fecha o registro de
+        # histórico com a duração completa. Sem "previous", não tem
+        # como saber quando a pausa começou (ex: primeiro evento
+        # depois do queue-api reiniciar) - não registra, honesto sobre
+        # o que não sabemos, em vez de inventar uma duração.
+        if not parsed["paused"] and previous and previous["paused"] and self._history_store:
+            self._history_store.append({
+                "extension": extension,
+                "reason": previous["reason"],
+                "started_at": previous["since"],
+                "ended_at": now,
+                "duration_seconds": round(now - previous["since"], 1),
+            })
+
+        self._state[extension] = {
             "paused": parsed["paused"],
             "reason": parsed["reason"] if parsed["paused"] else "",
-            "since": time.time(),
+            "since": now,
         }
 
     def get(self, extension: str):
@@ -83,6 +113,56 @@ class AgentPauseStore:
 
     def snapshot(self) -> dict:
         return dict(self._state)
+
+
+class PauseHistoryStore:
+    """Persistência do histórico de pausas completas - mesmo padrão JSONL de survey.py/reports.py."""
+
+    def __init__(self, path):
+        self.path = Path(path)
+
+    def append(self, record: dict):
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        with open(self.path, "a", encoding="utf-8") as f:
+            f.write(json.dumps(record, ensure_ascii=False) + "\n")
+
+    def load_all(self) -> list:
+        if not self.path.exists():
+            return []
+        records = []
+        for line in self.path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                records.append(json.loads(line))
+            except json.JSONDecodeError:
+                continue
+        return records
+
+
+def summarize_pause_time_by_reason(records: list) -> dict:
+    """Soma de segundos em pausa, agrupado por motivo - a pergunta operacional mais comum ("quanto tempo em almoço, no total?")."""
+    totals = {}
+    for r in records:
+        reason = r.get("reason") or "sem motivo"
+        totals[reason] = totals.get(reason, 0) + r.get("duration_seconds", 0)
+    return {reason: round(total, 1) for reason, total in totals.items()}
+
+
+def summarize_pause_time_by_extension(records: list) -> dict:
+    """Soma de segundos em pausa e contagem de pausas, agrupado por ramal."""
+    by_extension = {}
+    for r in records:
+        by_extension.setdefault(r["extension"], []).append(r)
+
+    return {
+        extension: {
+            "total_seconds": round(sum(x.get("duration_seconds", 0) for x in group), 1),
+            "count": len(group),
+        }
+        for extension, group in by_extension.items()
+    }
 
 
 def merge_pause_into_states(extension_states: list, pause_snapshot: dict) -> list:

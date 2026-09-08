@@ -61,6 +61,7 @@ configurar, como testar manualmente, e limitações conhecidas.
 54. [Limpeza de ramais órfãos ao remover tenant](manual-54-limpeza-ramais-orfaos.md)
 55. [Monitoramento de ramais dinâmicos](manual-55-monitoramento-ramais-dinamicos.md)
 56. [Overflow entre filas configurável por tenant](manual-56-overflow-por-tenant.md)
+57. [Histórico de tempo em pausa por motivo](manual-57-historico-pausa.md)
 
 ## Regra de manutenção
 

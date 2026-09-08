@@ -179,3 +179,16 @@ def test_agent_connect_and_abandon_events_feed_sla_tracker():
     fn_end = source.index("\n\ndef ", fn_start) if "\n\ndef " in source[fn_start:] else len(source)
     body = source[fn_start:fn_end]
     assert "queue_sla_tracker.apply_event(event)" in body
+
+
+def test_pause_history_report_exposes_totals_by_reason_and_extension():
+    """
+    Backlog #57 - fecha a limitação documentada no manual 44 ("sem
+    relatório histórico de tempo em pausa por motivo").
+    """
+    source = load_source()
+    fn_start = source.index('"/api/reports/pauses"')
+    fn_end = source.index("elif", fn_start)
+    body = source[fn_start:fn_end]
+    assert "summarize_pause_time_by_reason(" in body
+    assert "summarize_pause_time_by_extension(" in body

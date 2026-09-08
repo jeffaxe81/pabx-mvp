@@ -76,6 +76,8 @@ services:
       # SLA de fila (backlog #46) - meta comum de mercado é 80% em até
       # 20s; ajuste conforme a meta real da operação.
       SLA_THRESHOLD_SECONDS: "20"
+      # Histórico de tempo em pausa por motivo (backlog #57)
+      PAUSE_HISTORY_PATH: "/app/data/pause_history.jsonl"
       # Pickup dirigido (backlog #2/#8) - quais ramais podem "puxar"
       # uma chamada da fila. Adicione novos operadores aqui também.
       PICKUP_ALLOWED_EXTENSIONS: "t1-recepcao,t1-recepcao-2,t2-recepcao,t2-recepcao-2"

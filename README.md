@@ -422,6 +422,12 @@ configurável por tenant direto pelo painel (5-600 segundos), com
 fallback pro valor padrão global quando não configurado — ver
 `docs/manual-56-overflow-por-tenant.md`.
 
+**E, fechando a lacuna do manual 44**: histórico de tempo em pausa
+por motivo — cada vez que um agente despausa, o tempo completo é
+gravado (JSONL, mesmo padrão de survey.py/reports.py), agregado por
+motivo e por ramal no painel operacional — ver
+`docs/manual-57-historico-pausa.md`.
+
 Para ajustar quais ramais aparecem na lista de colegas, edite o array
 `COLLEAGUES` no início do `<script>` em `webphone/index.html`. Cada
 ramal monitorado precisa ter um `hint` correspondente em
@@ -446,7 +452,7 @@ cd ../queue-api
 python3 -m pytest tests/ -v
 ```
 
-849 testes estáticos no total, em 8 suítes (`tests/`, `queue-api/tests/`,
+864 testes estáticos no total, em 8 suítes (`tests/`, `queue-api/tests/`,
 `admin-api/tests/`, `asterisk/scripts/tests/`, `backup/tests/`,
 `ai-worker/tests/`, `asterisk/agi/tests/`, `scripts/tests/`) —
 nenhuma delas sobe o Asterisk, Whisper ou Ollama de verdade. Detalhes

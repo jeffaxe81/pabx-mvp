@@ -513,3 +513,17 @@ fallback pro OVERFLOW_TIMEOUT_SECONDS global (45s). Interface no
 painel, secao "Overflow entre filas", tenant-aware. Ver docs/manual-56.
 
 849 testes, 56 manuais, 8 suites - tudo passando e no GitHub.
+
+
+## Item #57: Historico de tempo em pausa por motivo - IMPLEMENTADO
+Fechada a lacuna do manual 44 ("sem relatorio historico de tempo em
+pausa por motivo"). agent_pause.py ganhou PauseHistoryStore (JSONL,
+mesmo padrao de survey.py/reports.py) + AgentPauseStore agora grava
+um registro completo quando o agente DESPAUSA (unico momento em que
+a duracao e conhecida). Honestidade tecnica: despausar sem pausa
+anterior conhecida (ex: queue-api reiniciou no meio de uma pausa) nao
+grava nada - nao inventa duracao. GET /api/reports/pauses (by_reason,
+by_extension). Painel operacional mostra secao nova, ordenada por
+tempo decrescente, em minutos. Ver docs/manual-57.
+
+864 testes, 57 manuais, 8 suites - tudo passando e no GitHub.

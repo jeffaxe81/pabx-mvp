@@ -391,6 +391,12 @@ def test_sla_threshold_configured_for_queue_api():
     assert "SLA_THRESHOLD_SECONDS" in env
 
 
+def test_pause_history_path_configured_for_queue_api():
+    compose = load_compose()
+    env = compose["services"]["queue-api"].get("environment", {})
+    assert "PAUSE_HISTORY_PATH" in env
+
+
 def test_tts_sounds_directory_shared_between_ai_worker_and_asterisk():
     """
     Backlog #48: sem esse mount compartilhado, o ai-worker geraria

@@ -7,7 +7,7 @@ from pathlib import Path
 PANEL_HTML = Path(__file__).parent.parent / "webphone" / "painel-operacional.html"
 WEBPHONE_HTML = Path(__file__).parent.parent / "webphone" / "index.html"
 
-REQUIRED_IDS = ["metricsRow", "extensionsList", "queueList", "lastUpdate", "fraudAlertsList", "qualityList", "slaList"]
+REQUIRED_IDS = ["metricsRow", "extensionsList", "queueList", "lastUpdate", "fraudAlertsList", "qualityList", "slaList", "pauseHistoryList"]
 
 
 def load_panel_html():
@@ -125,3 +125,28 @@ def test_sla_handles_empty_state_without_crashing():
     fn_end = html.index("}\n\n", fn_start)
     body = html[fn_start:fn_end]
     assert "queues.length === 0" in body
+
+
+# ---------- Histórico de pausa por motivo (backlog #57) ----------
+
+def test_pause_history_endpoint_is_fetched_and_rendered():
+    html = load_panel_html()
+    assert "/api/reports/pauses" in html
+    assert "renderPauseHistory(" in html
+
+
+def test_pause_history_sorted_by_time_descending():
+    """O motivo com mais tempo acumulado deveria aparecer primeiro - é a informação mais relevante."""
+    html = load_panel_html()
+    fn_start = html.index("function renderPauseHistory")
+    fn_end = html.index("}\n\n", fn_start) if "}\n\n" in html[fn_start:] else html.index("}\n})", fn_start)
+    body = html[fn_start:fn_end]
+    assert ".sort(" in body
+
+
+def test_pause_history_handles_empty_state_without_crashing():
+    html = load_panel_html()
+    fn_start = html.index("function renderPauseHistory")
+    fn_end = html.index("}\n\n", fn_start) if "}\n\n" in html[fn_start:] else html.index("}\n})", fn_start)
+    body = html[fn_start:fn_end]
+    assert "byReason.length===0" in body.replace(" ", "")

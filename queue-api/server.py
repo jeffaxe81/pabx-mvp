@@ -37,7 +37,7 @@ from callbacks import (
 )
 from survey import parse_survey_event, SurveyStore, average_score, score_distribution, summarize_by_operator
 from presence import validate_presence_input, load_presence, set_presence, clear_presence, merge_presence_into_states
-from agent_pause import validate_pause_request, AgentPauseStore, merge_pause_into_states
+from agent_pause import validate_pause_request, AgentPauseStore, merge_pause_into_states, PauseHistoryStore, summarize_pause_time_by_reason, summarize_pause_time_by_extension
 from metrics import DailyMetrics
 from queue_sla import QueueSLATracker
 from pickup import validate_pickup_request
@@ -125,13 +125,15 @@ CALLBACKS_PATH = os.environ.get("CALLBACKS_PATH", "/app/data/callbacks.json")
 CALLBACK_CONNECT_CONTEXT = os.environ.get("CALLBACK_CONNECT_CONTEXT", "callback-connect")
 SURVEY_PATH = os.environ.get("SURVEY_PATH", "/app/data/survey.jsonl")
 PRESENCE_PATH = os.environ.get("PRESENCE_PATH", "/app/data/presence.json")
+PAUSE_HISTORY_PATH = os.environ.get("PAUSE_HISTORY_PATH", "/app/data/pause_history.jsonl")
 
 state = QueueStateTracker()
 missed_calls_log = MissedCallsLog()
 daily_metrics = DailyMetrics()
 queue_sla_tracker = QueueSLATracker(threshold_seconds=SLA_THRESHOLD_SECONDS)
 extension_states = ExtensionStateTracker()
-agent_pause_store = AgentPauseStore()
+pause_history_store = PauseHistoryStore(PAUSE_HISTORY_PATH)
+agent_pause_store = AgentPauseStore(history_store=pause_history_store)
 call_log_store = CallLogStore(CALL_LOG_PATH)
 rate_tracker = CallRateTracker()
 fraud_alerts_log = FraudAlertsLog()
@@ -290,6 +292,13 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json(200, daily_metrics.snapshot())
         elif self.path.startswith("/api/metrics/sla"):
             self._send_json(200, {"threshold_seconds": SLA_THRESHOLD_SECONDS, "queues": queue_sla_tracker.snapshot()})
+        elif self.path.startswith("/api/reports/pauses"):
+            records = pause_history_store.load_all()
+            self._send_json(200, {
+                "by_reason": summarize_pause_time_by_reason(records),
+                "by_extension": summarize_pause_time_by_extension(records),
+                "total_records": len(records),
+            })
         elif self.path.startswith("/api/extension-states"):
             merged = merge_presence_into_states(extension_states.snapshot(), load_presence(PRESENCE_PATH))
             merged = merge_pause_into_states(merged, agent_pause_store.snapshot())
