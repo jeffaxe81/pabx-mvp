@@ -582,3 +582,22 @@ inalterada (890) - correcao de comportamento existente, sem rota/
 modulo novo. Ver docs/manual-61.
 
 890 testes, 61 manuais, 8 suites - tudo passando e no GitHub.
+
+
+## Item #62: Limpeza de mapeamento ao renumerar ramal - IMPLEMENTADO
+Usuario disse "continuar" sem responder minha pergunta explicita
+sobre manter esse ciclo de fechar lacunas indefinidamente - segui em
+frente mesmo assim. Fechada a lacuna do manual 55 (numero antigo nao
+limpo ao renumerar). regenerate_and_reload() generalizado de
+extra_ami_action (singular) pra extra_ami_actions (lista) - renumerar
+precisa desregistrar antigo E registrar novo, nao so um dos dois.
+_handle_update_extension captura o registro ANTERIOR antes de
+atualizar (update_extension() nao devolve o estado anterior).
+
+Bug de edicao real encontrado e corrigido NA HORA: um str_replace
+apagou por engano a assinatura de uma funcao de teste seguinte (texto
+de busca incluia acidentalmente o inicio dela). Percebido rodando a
+suite (contagem mudou) e corrigido reconstruindo as duas funcoes
+antes de seguir. Ver docs/manual-62.
+
+893 testes, 62 manuais, 8 suites - tudo passando e no GitHub.

@@ -448,6 +448,11 @@ objeto do player de áudio agora são revogadas antes de criar a
 próxima, evitando o vazamento de memória apontado no manual anterior
 — ver `docs/manual-61-correcao-vazamento-audio.md`.
 
+**E, fechando a última lacuna documentada no manual 55**: renumerar
+um ramal dinâmico agora limpa o mapeamento de monitoramento antigo
+automaticamente, não só registra o novo — ver
+`docs/manual-62-limpeza-renumeracao.md`.
+
 Para ajustar quais ramais aparecem na lista de colegas, edite o array
 `COLLEAGUES` no início do `<script>` em `webphone/index.html`. Cada
 ramal monitorado precisa ter um `hint` correspondente em
@@ -472,7 +477,7 @@ cd ../queue-api
 python3 -m pytest tests/ -v
 ```
 
-890 testes estáticos no total, em 8 suítes (`tests/`, `queue-api/tests/`,
+893 testes estáticos no total, em 8 suítes (`tests/`, `queue-api/tests/`,
 `admin-api/tests/`, `asterisk/scripts/tests/`, `backup/tests/`,
 `ai-worker/tests/`, `asterisk/agi/tests/`, `scripts/tests/`) —
 nenhuma delas sobe o Asterisk, Whisper ou Ollama de verdade. Detalhes

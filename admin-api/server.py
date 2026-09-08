@@ -108,13 +108,16 @@ def ensure_bootstrap_admin():
     }])
 
 
-def regenerate_and_reload(extra_ami_action=None):
+def regenerate_and_reload(extra_ami_actions=None):
     """
     Regera os arquivos dinâmicos (um por tenant pra dial/hints/voicemail,
-    ver manual 38) e pede pro Asterisk recarregar. extra_ami_action é
-    opcional - (nome_do_metodo, args) executado na MESMA conexão AMI,
-    usado pra sincronizar o mapeamento de monitoramento (backlog #55)
-    junto com o reload, sem abrir uma conexão AMI extra.
+    ver manual 38) e pede pro Asterisk recarregar. extra_ami_actions é
+    opcional - lista de (nome_do_metodo, args), executados na MESMA
+    conexão AMI, usados pra sincronizar o mapeamento de monitoramento
+    (backlog #55/#62) junto com o reload, sem abrir conexão AMI extra.
+    Aceita mais de uma ação porque renumerar um ramal precisa
+    DESregistrar o número antigo E registrar o novo, não só um dos
+    dois (ver manual 62).
     """
     extensions = load_store(STORE_PATH)
     files = render_all(extensions)
@@ -124,8 +127,7 @@ def regenerate_and_reload(extra_ami_action=None):
     client = AMIClient(AMI_HOST, AMI_PORT, AMI_USERNAME, AMI_SECRET)
     try:
         client.connect_and_login()
-        if extra_ami_action:
-            method_name, args = extra_ami_action
+        for method_name, args in (extra_ami_actions or []):
             getattr(client, method_name)(*args)
         return client.reload_pjsip_and_dialplan()
     finally:
@@ -772,7 +774,7 @@ class Handler(BaseHTTPRequestHandler):
 
         try:
             reload_result = regenerate_and_reload(
-                extra_ami_action=("register_extension_mapping", (cleaned["number"], cleaned["name"], cleaned["tenant"]))
+                extra_ami_actions=[("register_extension_mapping", (cleaned["number"], cleaned["name"], cleaned["tenant"]))]
             )
         except Exception as exc:  # noqa: BLE001
             self._send_json(200, {"extension": public_view(cleaned), "reload_error": str(exc)})
@@ -799,15 +801,27 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json(400, {"error": "JSON inválido"})
             return
 
+        # Captura o registro ANTES de atualizar (backlog #62 - fecha a
+        # limitação documentada no manual 55): se a renumeração mudar
+        # o número ou o tenant, o mapeamento de monitoramento do
+        # número ANTIGO precisa ser desregistrado - senão ficaria
+        # órfão, apontando pra um ramal que já tem outro número.
+        previous_record = next((e for e in load_store(STORE_PATH) if e["name"] == name), None)
+
         ok, error, cleaned = update_extension(STORE_PATH, name, data)
         if not ok:
             self._send_json(400, {"error": error})
             return
 
+        extra_actions = []
+        if previous_record and (
+            previous_record["number"] != cleaned["number"] or previous_record.get("tenant", "t1") != cleaned["tenant"]
+        ):
+            extra_actions.append(("unregister_extension_mapping", (previous_record["number"], previous_record.get("tenant", "t1"))))
+        extra_actions.append(("register_extension_mapping", (cleaned["number"], cleaned["name"], cleaned["tenant"])))
+
         try:
-            reload_result = regenerate_and_reload(
-                extra_ami_action=("register_extension_mapping", (cleaned["number"], cleaned["name"], cleaned["tenant"]))
-            )
+            reload_result = regenerate_and_reload(extra_ami_actions=extra_actions)
         except Exception as exc:  # noqa: BLE001
             self._send_json(200, {"extension": public_view(cleaned), "reload_error": str(exc)})
             return
@@ -939,12 +953,12 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json(404, {"error": error})
             return
 
-        extra_action = None
+        extra_actions = []
         if existing_record:
-            extra_action = ("unregister_extension_mapping", (existing_record["number"], existing_record.get("tenant", "t1")))
+            extra_actions.append(("unregister_extension_mapping", (existing_record["number"], existing_record.get("tenant", "t1"))))
 
         try:
-            reload_result = regenerate_and_reload(extra_ami_action=extra_action)
+            reload_result = regenerate_and_reload(extra_ami_actions=extra_actions)
         except Exception as exc:  # noqa: BLE001
             self._send_json(200, {"ok": True, "reload_error": str(exc)})
             return

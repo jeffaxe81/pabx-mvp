@@ -412,6 +412,32 @@ def test_deleting_extension_captures_record_before_removal_to_unregister_mapping
     assert capture_pos < delete_pos < unregister_pos
 
 
+def test_renumbering_extension_captures_previous_record_before_updating():
+    """
+    Backlog #62 - fecha a limitação documentada no manual 55 ("número
+    antigo não é limpo se o ramal for renumerado"). A captura precisa
+    acontecer ANTES do update_extension() rodar, senão o número
+    antigo já teria sumido do store antes de sabermos qual era.
+    """
+    source = load_source()
+    body = get_function_body(source, "_handle_update_extension")
+    capture_pos = body.index("previous_record")
+    update_pos = body.index("update_extension(STORE_PATH, name, data)")
+    assert capture_pos < update_pos
+
+
+def test_renumbering_extension_unregisters_old_mapping_only_when_number_or_tenant_changed():
+    """
+    Editar um ramal SEM mudar número/tenant (ex: só o nome de
+    exibição) não deveria desregistrar mapeamento nenhum - só faz
+    sentido limpar o antigo quando ele de fato mudou.
+    """
+    source = load_source()
+    body = get_function_body(source, "_handle_update_extension")
+    assert 'previous_record["number"] != cleaned["number"]' in body
+    assert 'previous_record.get("tenant", "t1") != cleaned["tenant"]' in body
+
+
 def test_overflow_timeout_endpoints_allow_admin_and_supervisor():
     """Mesmo papel do modo feriado (manual 23) - ajuste operacional, não uma ação de peso maior."""
     source = load_source()
