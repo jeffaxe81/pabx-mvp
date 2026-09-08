@@ -89,11 +89,23 @@
 
 <div class="panel" style="margin-top: 16px;">
   <h2>Tempo em pausa por motivo</h2>
+  <div style="display:flex; gap:8px; align-items:center; margin-bottom:10px; font-size:13px;">
+    <label>De <input type="date" id="pauseHistoryStart" style="width:auto;"></label>
+    <label>Até <input type="date" id="pauseHistoryEnd" style="width:auto;"></label>
+    <button class="btn-ghost" id="filterPauseHistoryBtn">Filtrar</button>
+    <button class="btn-ghost" id="clearPauseHistoryBtn">Limpar</button>
+  </div>
   <div id="pauseHistoryList"><div class="empty">Carregando...</div></div>
 </div>
 
 <div class="panel" style="margin-top: 16px;">
   <h2>Histórico de SLA por dia</h2>
+  <div style="display:flex; gap:8px; align-items:center; margin-bottom:10px; font-size:13px;">
+    <label>De <input type="date" id="slaHistoryStart" style="width:auto;"></label>
+    <label>Até <input type="date" id="slaHistoryEnd" style="width:auto;"></label>
+    <button class="btn-ghost" id="filterSlaHistoryBtn">Filtrar</button>
+    <button class="btn-ghost" id="clearSlaHistoryBtn">Limpar</button>
+  </div>
   <div id="slaHistoryList"><div class="empty">Carregando...</div></div>
 </div>
 
@@ -107,6 +119,20 @@
   const apiUrl = params.get('api') || 'http://pabx.local:8090';
   el('reportsLink').href = `relatorios.html?api=${encodeURIComponent(apiUrl)}`;
 
+  // ---------- Filtro de intervalo de datas (backlog #63) ----------
+  // Mantido fora de fetchAll() pra sobreviver aos ciclos de polling -
+  // sem isso, o filtro seria perdido a cada atualização automática.
+  let pauseHistoryFilter = { start: '', end: '' };
+  let slaHistoryFilter = { start: '', end: '' };
+
+  function buildHistoryQuery(filter) {
+    const params = new URLSearchParams();
+    if (filter.start) params.set('start', filter.start);
+    if (filter.end) params.set('end', filter.end);
+    const query = params.toString();
+    return query ? `?${query}` : '';
+  }
+
   function fetchAll() {
     Promise.all([
       fetch(`${apiUrl}/api/metrics/today`).then((r) => r.json()).catch(() => null),
@@ -115,8 +141,8 @@
       fetch(`${apiUrl}/api/fraud-alerts`).then((r) => r.json()).catch(() => null),
       fetch(`${apiUrl}/api/quality?only_poor=true`).then((r) => r.json()).catch(() => null),
       fetch(`${apiUrl}/api/metrics/sla`).then((r) => r.json()).catch(() => null),
-      fetch(`${apiUrl}/api/reports/pauses`).then((r) => r.json()).catch(() => null),
-      fetch(`${apiUrl}/api/metrics/sla/history`).then((r) => r.json()).catch(() => null),
+      fetch(`${apiUrl}/api/reports/pauses${buildHistoryQuery(pauseHistoryFilter)}`).then((r) => r.json()).catch(() => null),
+      fetch(`${apiUrl}/api/metrics/sla/history${buildHistoryQuery(slaHistoryFilter)}`).then((r) => r.json()).catch(() => null),
     ]).then(([metrics, extensions, queue, fraud, quality, sla, pauses, slaHistory]) => {
       if (metrics) renderMetrics(metrics);
       if (extensions) renderExtensions(extensions.extensions || []);
@@ -129,6 +155,27 @@
       el('lastUpdate').textContent = `Atualizado às ${new Date().toLocaleTimeString('pt-BR')}`;
     });
   }
+
+  el('filterPauseHistoryBtn').addEventListener('click', () => {
+    pauseHistoryFilter = { start: el('pauseHistoryStart').value, end: el('pauseHistoryEnd').value };
+    fetchAll();
+  });
+  el('clearPauseHistoryBtn').addEventListener('click', () => {
+    el('pauseHistoryStart').value = '';
+    el('pauseHistoryEnd').value = '';
+    pauseHistoryFilter = { start: '', end: '' };
+    fetchAll();
+  });
+  el('filterSlaHistoryBtn').addEventListener('click', () => {
+    slaHistoryFilter = { start: el('slaHistoryStart').value, end: el('slaHistoryEnd').value };
+    fetchAll();
+  });
+  el('clearSlaHistoryBtn').addEventListener('click', () => {
+    el('slaHistoryStart').value = '';
+    el('slaHistoryEnd').value = '';
+    slaHistoryFilter = { start: '', end: '' };
+    fetchAll();
+  });
 
   function renderSlaHistory(slaHistory) {
     // Backlog #59 - fecha a limitação documentada no manual 58 (sem

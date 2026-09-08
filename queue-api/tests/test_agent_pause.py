@@ -1,3 +1,5 @@
+import time
+
 from agent_pause import (
     validate_pause_request, extract_extension_from_interface,
     parse_queue_member_pause_event, AgentPauseStore,
@@ -274,3 +276,55 @@ def test_summarize_by_extension_sums_and_counts():
     result = summarize_pause_time_by_extension(records)
     assert result["t1-recepcao"] == {"total_seconds": 2100.0, "count": 2}
     assert result["t1-recepcao-2"] == {"total_seconds": 1200.0, "count": 1}
+
+
+# ---------- filter_pause_records_by_date_range (backlog #63) ----------
+
+def _ts(date_str):
+    """Converte 'AAAA-MM-DD 12:00' num timestamp unix, meio-dia local - evita ambiguidade de fuso perto da meia-noite."""
+    return time.mktime(time.strptime(f"{date_str} 12:00", "%Y-%m-%d %H:%M"))
+
+
+def test_filter_by_date_range_includes_boundaries():
+    from agent_pause import filter_pause_records_by_date_range
+    records = [
+        {"extension": "t1-recepcao", "reason": "Almoço", "started_at": _ts("2026-01-10"), "duration_seconds": 100},
+        {"extension": "t1-recepcao", "reason": "Almoço", "started_at": _ts("2026-01-15"), "duration_seconds": 200},
+        {"extension": "t1-recepcao", "reason": "Almoço", "started_at": _ts("2026-01-20"), "duration_seconds": 300},
+    ]
+    result = filter_pause_records_by_date_range(records, start="2026-01-10", end="2026-01-15")
+    assert len(result) == 2
+    assert all(r["duration_seconds"] in (100, 200) for r in result)
+
+
+def test_filter_by_date_range_no_bounds_returns_everything():
+    from agent_pause import filter_pause_records_by_date_range
+    records = [{"extension": "x", "reason": "y", "started_at": _ts("2026-01-10"), "duration_seconds": 1}]
+    assert filter_pause_records_by_date_range(records) == records
+
+
+def test_filter_by_date_range_only_start():
+    from agent_pause import filter_pause_records_by_date_range
+    records = [
+        {"extension": "x", "reason": "y", "started_at": _ts("2026-01-05"), "duration_seconds": 1},
+        {"extension": "x", "reason": "y", "started_at": _ts("2026-01-15"), "duration_seconds": 2},
+    ]
+    result = filter_pause_records_by_date_range(records, start="2026-01-10")
+    assert len(result) == 1
+    assert result[0]["duration_seconds"] == 2
+
+
+def test_filter_by_date_range_only_end():
+    from agent_pause import filter_pause_records_by_date_range
+    records = [
+        {"extension": "x", "reason": "y", "started_at": _ts("2026-01-05"), "duration_seconds": 1},
+        {"extension": "x", "reason": "y", "started_at": _ts("2026-01-15"), "duration_seconds": 2},
+    ]
+    result = filter_pause_records_by_date_range(records, end="2026-01-10")
+    assert len(result) == 1
+    assert result[0]["duration_seconds"] == 1
+
+
+def test_filter_by_date_range_empty_records():
+    from agent_pause import filter_pause_records_by_date_range
+    assert filter_pause_records_by_date_range([], start="2026-01-01") == []

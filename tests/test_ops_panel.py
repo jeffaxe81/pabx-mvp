@@ -7,7 +7,9 @@ from pathlib import Path
 PANEL_HTML = Path(__file__).parent.parent / "webphone" / "painel-operacional.html"
 WEBPHONE_HTML = Path(__file__).parent.parent / "webphone" / "index.html"
 
-REQUIRED_IDS = ["metricsRow", "extensionsList", "queueList", "lastUpdate", "fraudAlertsList", "qualityList", "slaList", "pauseHistoryList", "slaHistoryList"]
+REQUIRED_IDS = ["metricsRow", "extensionsList", "queueList", "lastUpdate", "fraudAlertsList", "qualityList", "slaList", "pauseHistoryList", "slaHistoryList",
+                "pauseHistoryStart", "pauseHistoryEnd", "filterPauseHistoryBtn", "clearPauseHistoryBtn",
+                "slaHistoryStart", "slaHistoryEnd", "filterSlaHistoryBtn", "clearSlaHistoryBtn"]
 
 
 def load_panel_html():
@@ -174,3 +176,42 @@ def test_sla_history_handles_empty_state_without_crashing():
     fn_end = html.index("}\n\n", fn_start) if "}\n\n" in html[fn_start:] else html.index("}\n})", fn_start)
     body = html[fn_start:fn_end]
     assert "dates.length===0" in body.replace(" ", "")
+
+
+# ---------- Filtro de intervalo de datas nos históricos (backlog #63) ----------
+
+def test_history_filters_persist_across_polling_cycles():
+    """
+    O filtro precisa ser mantido em variável FORA de fetchAll() - se
+    ficasse local à função, seria perdido a cada ciclo automático de
+    atualização do painel.
+    """
+    html = load_panel_html()
+    fetch_all_pos = html.index("function fetchAll")
+    filter_var_pos = html.index("let pauseHistoryFilter")
+    assert filter_var_pos < fetch_all_pos
+
+
+def test_pause_history_fetch_includes_filter_query_params():
+    html = load_panel_html()
+    fn_start = html.index("function fetchAll")
+    fn_end = html.index("}\n\n", fn_start)
+    body = html[fn_start:fn_end]
+    assert "buildHistoryQuery(pauseHistoryFilter)" in body
+
+
+def test_sla_history_fetch_includes_filter_query_params():
+    html = load_panel_html()
+    fn_start = html.index("function fetchAll")
+    fn_end = html.index("}\n\n", fn_start)
+    body = html[fn_start:fn_end]
+    assert "buildHistoryQuery(slaHistoryFilter)" in body
+
+
+def test_clear_filter_buttons_reset_inputs_and_refetch():
+    html = load_panel_html()
+    fn_start = html.index("el('clearPauseHistoryBtn').addEventListener")
+    fn_end = html.index("});", fn_start)
+    body = html[fn_start:fn_end]
+    assert "fetchAll()" in body
+    assert "start: ''" in body

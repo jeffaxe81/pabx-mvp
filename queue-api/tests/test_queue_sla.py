@@ -1,6 +1,6 @@
 from queue_sla import (
     parse_agent_connect_event, parse_queue_caller_abandon_event, QueueSLATracker,
-    SLAHistoryStore, summarize_sla_history_by_date,
+    SLAHistoryStore, summarize_sla_history_by_date, filter_sla_history_by_date_range,
 )
 
 
@@ -230,3 +230,45 @@ def test_summarize_by_date_groups_correctly():
 
 def test_summarize_by_date_empty_records():
     assert summarize_sla_history_by_date([]) == {}
+
+
+# ---------- filter_sla_history_by_date_range (backlog #63) ----------
+
+def test_filter_sla_history_includes_boundaries():
+    records = [
+        {"date": "2026-01-10", "queue": "fila-t1", "offered": 10, "within_sla": 8, "sla_percent": 80.0},
+        {"date": "2026-01-15", "queue": "fila-t1", "offered": 10, "within_sla": 5, "sla_percent": 50.0},
+        {"date": "2026-01-20", "queue": "fila-t1", "offered": 10, "within_sla": 9, "sla_percent": 90.0},
+    ]
+    result = filter_sla_history_by_date_range(records, start="2026-01-10", end="2026-01-15")
+    assert len(result) == 2
+    assert all(r["date"] in ("2026-01-10", "2026-01-15") for r in result)
+
+
+def test_filter_sla_history_no_bounds_returns_everything():
+    records = [{"date": "2026-01-10", "queue": "fila-t1", "offered": 1, "within_sla": 1, "sla_percent": 100.0}]
+    assert filter_sla_history_by_date_range(records) == records
+
+
+def test_filter_sla_history_only_start():
+    records = [
+        {"date": "2026-01-05", "queue": "fila-t1", "offered": 1, "within_sla": 1, "sla_percent": 100.0},
+        {"date": "2026-01-15", "queue": "fila-t1", "offered": 1, "within_sla": 1, "sla_percent": 100.0},
+    ]
+    result = filter_sla_history_by_date_range(records, start="2026-01-10")
+    assert len(result) == 1
+    assert result[0]["date"] == "2026-01-15"
+
+
+def test_filter_sla_history_only_end():
+    records = [
+        {"date": "2026-01-05", "queue": "fila-t1", "offered": 1, "within_sla": 1, "sla_percent": 100.0},
+        {"date": "2026-01-15", "queue": "fila-t1", "offered": 1, "within_sla": 1, "sla_percent": 100.0},
+    ]
+    result = filter_sla_history_by_date_range(records, end="2026-01-10")
+    assert len(result) == 1
+    assert result[0]["date"] == "2026-01-05"
+
+
+def test_filter_sla_history_empty_records():
+    assert filter_sla_history_by_date_range([], start="2026-01-01") == []

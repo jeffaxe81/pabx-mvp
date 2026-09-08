@@ -141,6 +141,28 @@ class PauseHistoryStore:
         return records
 
 
+def filter_pause_records_by_date_range(records: list, start: str = None, end: str = None) -> list:
+    """
+    Filtra registros de pausa por intervalo de datas (backlog #63 -
+    fecha a limitação documentada no manual 57 "sem filtro por
+    período"). `start`/`end` no formato "AAAA-MM-DD", inclusivos dos
+    dois lados - None em qualquer um dos dois significa "sem limite
+    daquele lado". Usa `started_at` (quando a pausa COMEÇOU) como
+    referência, não `ended_at` - uma pausa que começou no dia
+    filtrado pertence a esse dia, mesmo que tenha terminado depois da
+    meia-noite.
+    """
+    def record_date(record):
+        return time.strftime("%Y-%m-%d", time.localtime(record["started_at"]))
+
+    filtered = records
+    if start:
+        filtered = [r for r in filtered if record_date(r) >= start]
+    if end:
+        filtered = [r for r in filtered if record_date(r) <= end]
+    return filtered
+
+
 def summarize_pause_time_by_reason(records: list) -> dict:
     """Soma de segundos em pausa, agrupado por motivo - a pergunta operacional mais comum ("quanto tempo em almoço, no total?")."""
     totals = {}

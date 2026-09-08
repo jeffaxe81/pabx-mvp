@@ -601,3 +601,25 @@ suite (contagem mudou) e corrigido reconstruindo as duas funcoes
 antes de seguir. Ver docs/manual-62.
 
 893 testes, 62 manuais, 8 suites - tudo passando e no GitHub.
+
+
+## Item #63: Filtro de intervalo de datas nos relatorios - IMPLEMENTADO
+Fechadas as 2 ultimas lacunas de relatorio conhecidas (manual 57 e
+manual 59 - a terceira mencionada anteriormente, sobre soft-delete de
+tenant, permanece como decisao de design aceita, nao lacuna de
+relatorio). filter_pause_records_by_date_range (usa started_at,
+timestamp->data local) e filter_sla_history_by_date_range (usa
+campo "date" ja pronto como string) - dois endpoints aceitam
+?start=/?end= (AAAA-MM-DD, inclusivos). Interface no painel
+operacional: campos De/Ate + Filtrar/Limpar nas duas secoes, filtro
+guardado em variavel FORA de fetchAll() pra sobreviver ao polling
+automatico. Ver docs/manual-63.
+
+909 testes, 63 manuais, 8 suites - tudo passando e no GitHub.
+
+**ESTADO DO PROJETO**: nenhuma lacuna funcional conhecida pendente a
+partir deste ponto (exceto decisoes de design aceitas desde o inicio:
+sem soft-delete de tenant, nunca testado contra Asterisk real, IA
+local nunca validada com hardware de verdade, sem alta disponibilidade
+de fato - esses sao limites estruturais documentados, nao bugs ou
+gaps de funcionalidade).

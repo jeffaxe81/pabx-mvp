@@ -453,6 +453,13 @@ um ramal dinâmico agora limpa o mapeamento de monitoramento antigo
 automaticamente, não só registra o novo — ver
 `docs/manual-62-limpeza-renumeracao.md`.
 
+**E, fechando as duas últimas lacunas de relatório do projeto**:
+filtro de intervalo de datas (`?start=`/`?end=`) no histórico de
+pausa e no histórico de SLA, com interface no painel operacional que
+sobrevive ao polling automático — ver
+`docs/manual-63-filtro-data-relatorios.md`. Sem nenhuma lacuna
+funcional conhecida pendente a partir deste ponto.
+
 Para ajustar quais ramais aparecem na lista de colegas, edite o array
 `COLLEAGUES` no início do `<script>` em `webphone/index.html`. Cada
 ramal monitorado precisa ter um `hint` correspondente em
@@ -477,7 +484,7 @@ cd ../queue-api
 python3 -m pytest tests/ -v
 ```
 
-893 testes estáticos no total, em 8 suítes (`tests/`, `queue-api/tests/`,
+909 testes estáticos no total, em 8 suítes (`tests/`, `queue-api/tests/`,
 `admin-api/tests/`, `asterisk/scripts/tests/`, `backup/tests/`,
 `ai-worker/tests/`, `asterisk/agi/tests/`, `scripts/tests/`) —
 nenhuma delas sobe o Asterisk, Whisper ou Ollama de verdade. Detalhes

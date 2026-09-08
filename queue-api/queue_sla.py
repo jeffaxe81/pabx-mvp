@@ -148,6 +148,23 @@ class SLAHistoryStore:
         return records
 
 
+def filter_sla_history_by_date_range(records: list, start: str = None, end: str = None) -> list:
+    """
+    Filtra o histórico de SLA por intervalo de datas (backlog #63 -
+    fecha a limitação documentada no manual 59 "sem filtro de
+    intervalo de datas"). `start`/`end` no formato "AAAA-MM-DD",
+    inclusivos - mais simples que o filtro de pausa (agent_pause.py)
+    porque aqui a data já vem como string pronta no registro, sem
+    precisar converter timestamp.
+    """
+    filtered = records
+    if start:
+        filtered = [r for r in filtered if r["date"] >= start]
+    if end:
+        filtered = [r for r in filtered if r["date"] <= end]
+    return filtered
+
+
 def summarize_sla_history_by_date(records: list) -> dict:
     """
     {data: {fila: {offered, within_sla, sla_percent}}} - agrupa o

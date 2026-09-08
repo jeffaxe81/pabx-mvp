@@ -194,6 +194,24 @@ def test_pause_history_report_exposes_totals_by_reason_and_extension():
     assert "summarize_pause_time_by_extension(" in body
 
 
+def test_pause_history_report_applies_date_range_filter():
+    """Backlog #63 - fecha a limitação documentada no manual 57 ("sem filtro por período")."""
+    source = load_source()
+    fn_start = source.index('"/api/reports/pauses"')
+    fn_end = source.index("elif", fn_start)
+    body = source[fn_start:fn_end]
+    assert "filter_pause_records_by_date_range(" in body
+
+
+def test_sla_history_endpoint_applies_date_range_filter():
+    """Backlog #63 - fecha a limitação documentada no manual 59 ("sem filtro de intervalo de datas")."""
+    source = load_source()
+    fn_start = source.index('elif self.path.startswith("/api/metrics/sla/history"):')
+    fn_end = source.index("elif", fn_start + 1)
+    body = source[fn_start:fn_end]
+    assert "filter_sla_history_by_date_range(" in body
+
+
 def test_sla_history_route_checked_before_generic_sla_route():
     """
     Backlog #58: "/api/metrics/sla/history" começa com

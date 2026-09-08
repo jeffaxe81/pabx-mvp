@@ -37,9 +37,9 @@ from callbacks import (
 )
 from survey import parse_survey_event, SurveyStore, average_score, score_distribution, summarize_by_operator
 from presence import validate_presence_input, load_presence, set_presence, clear_presence, merge_presence_into_states
-from agent_pause import validate_pause_request, AgentPauseStore, merge_pause_into_states, PauseHistoryStore, summarize_pause_time_by_reason, summarize_pause_time_by_extension
+from agent_pause import validate_pause_request, AgentPauseStore, merge_pause_into_states, PauseHistoryStore, summarize_pause_time_by_reason, summarize_pause_time_by_extension, filter_pause_records_by_date_range
 from metrics import DailyMetrics
-from queue_sla import QueueSLATracker, SLAHistoryStore, summarize_sla_history_by_date
+from queue_sla import QueueSLATracker, SLAHistoryStore, summarize_sla_history_by_date, filter_sla_history_by_date_range
 from pickup import validate_pickup_request
 from extension_states import ExtensionStateTracker
 from reports import parse_cdr_for_report, CallLogStore, aggregate, group_by, extract_operator
@@ -297,11 +297,22 @@ class Handler(BaseHTTPRequestHandler):
             # faria essa rota cair na de hoje por engano, já que
             # "/api/metrics/sla/history" também começa com
             # "/api/metrics/sla".
-            self._send_json(200, {"by_date": summarize_sla_history_by_date(sla_history_store.load_all())})
+            query = parse_qs(urlparse(self.path).query)
+            records = filter_sla_history_by_date_range(
+                sla_history_store.load_all(),
+                start=query.get("start", [None])[0],
+                end=query.get("end", [None])[0],
+            )
+            self._send_json(200, {"by_date": summarize_sla_history_by_date(records)})
         elif self.path.startswith("/api/metrics/sla"):
             self._send_json(200, {"threshold_seconds": SLA_THRESHOLD_SECONDS, "queues": queue_sla_tracker.snapshot()})
         elif self.path.startswith("/api/reports/pauses"):
-            records = pause_history_store.load_all()
+            query = parse_qs(urlparse(self.path).query)
+            records = filter_pause_records_by_date_range(
+                pause_history_store.load_all(),
+                start=query.get("start", [None])[0],
+                end=query.get("end", [None])[0],
+            )
             self._send_json(200, {
                 "by_reason": summarize_pause_time_by_reason(records),
                 "by_extension": summarize_pause_time_by_extension(records),

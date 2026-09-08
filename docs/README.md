@@ -67,6 +67,7 @@ configurar, como testar manualmente, e limitações conhecidas.
 60. [Reprodução de áudio na lista do painel](manual-60-reproducao-audio.md)
 61. [Correção de vazamento de memória no player de áudio](manual-61-correcao-vazamento-audio.md)
 62. [Limpeza de mapeamento ao renumerar ramal](manual-62-limpeza-renumeracao.md)
+63. [Filtro de intervalo de datas nos relatórios](manual-63-filtro-data-relatorios.md)
 
 ## Regra de manutenção
 
