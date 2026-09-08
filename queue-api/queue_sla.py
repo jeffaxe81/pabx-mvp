@@ -15,7 +15,9 @@ Alimentado por dois eventos AMI do Asterisk:
 Lógica pura aqui, sem rede - 100% testável. Reset diário com relógio
 injetável, mesmo padrão de metrics.py.
 """
+import json
 import time
+from pathlib import Path
 
 DEFAULT_SLA_THRESHOLD_SECONDS = 20
 
@@ -50,18 +52,36 @@ class QueueSLATracker:
     """
     Acumula, por fila, quantas chamadas foram oferecidas e quantas
     foram atendidas dentro do limiar de SLA - reseta à meia-noite,
-    igual à DailyMetrics.
+    igual à DailyMetrics. Opcionalmente persiste o snapshot do dia
+    ANTES de resetar (backlog #58 - fecha a limitação documentada no
+    manual 46 "sem histórico") - é o único momento em que o dia
+    fechou de vez e o resumo final é conhecido.
     """
 
-    def __init__(self, threshold_seconds: int = DEFAULT_SLA_THRESHOLD_SECONDS, clock=time.time):
+    def __init__(self, threshold_seconds: int = DEFAULT_SLA_THRESHOLD_SECONDS, clock=time.time, history_store=None):
         self.threshold_seconds = threshold_seconds
         self._clock = clock
+        self._history_store = history_store
         self._day = None
         self._reset_if_new_day()
 
     def _reset_if_new_day(self):
         today = _day_key(self._clock())
         if today != self._day:
+            # self._day é None só na primeiríssima chamada (não há dia
+            # anterior nenhum pra persistir) - qualquer outra virada de
+            # dia salva o resumo antes de zerar.
+            if self._day is not None and self._history_store:
+                for queue, stats in self._queues.items():
+                    if stats["offered"] == 0:
+                        continue
+                    self._history_store.append({
+                        "date": self._day,
+                        "queue": queue,
+                        "offered": stats["offered"],
+                        "within_sla": stats["within_sla"],
+                        "sla_percent": round(stats["within_sla"] / stats["offered"] * 100, 1),
+                    })
             self._day = today
             self._queues = {}  # queue -> {"offered": int, "within_sla": int}
 
@@ -100,3 +120,45 @@ class QueueSLATracker:
                 "sla_percent": sla_percent,
             }
         return result
+
+
+class SLAHistoryStore:
+    """Persistência do histórico de SLA por dia/fila - mesmo padrão JSONL de survey.py/agent_pause.py."""
+
+    def __init__(self, path):
+        self.path = Path(path)
+
+    def append(self, record: dict):
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        with open(self.path, "a", encoding="utf-8") as f:
+            f.write(json.dumps(record, ensure_ascii=False) + "\n")
+
+    def load_all(self) -> list:
+        if not self.path.exists():
+            return []
+        records = []
+        for line in self.path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                records.append(json.loads(line))
+            except json.JSONDecodeError:
+                continue
+        return records
+
+
+def summarize_sla_history_by_date(records: list) -> dict:
+    """
+    {data: {fila: {offered, within_sla, sla_percent}}} - agrupa o
+    histórico bruto por dia, e dentro de cada dia por fila, pra dar
+    pra comparar "hoje vs. ontem vs. semana passada" olhando as datas.
+    """
+    by_date = {}
+    for r in records:
+        by_date.setdefault(r["date"], {})[r["queue"]] = {
+            "offered": r["offered"],
+            "within_sla": r["within_sla"],
+            "sla_percent": r["sla_percent"],
+        }
+    return by_date

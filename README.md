@@ -428,6 +428,11 @@ gravado (JSONL, mesmo padrão de survey.py/reports.py), agregado por
 motivo e por ramal no painel operacional — ver
 `docs/manual-57-historico-pausa.md`.
 
+**E, fechando a última lacuna documentada no manual 46**: histórico
+de SLA por dia — persistido automaticamente à meia-noite (fila sem
+chamada não polui o histórico), consultável por
+`GET /api/metrics/sla/history` — ver `docs/manual-58-historico-sla.md`.
+
 Para ajustar quais ramais aparecem na lista de colegas, edite o array
 `COLLEAGUES` no início do `<script>` em `webphone/index.html`. Cada
 ramal monitorado precisa ter um `hint` correspondente em
@@ -452,7 +457,7 @@ cd ../queue-api
 python3 -m pytest tests/ -v
 ```
 
-864 testes estáticos no total, em 8 suítes (`tests/`, `queue-api/tests/`,
+876 testes estáticos no total, em 8 suítes (`tests/`, `queue-api/tests/`,
 `admin-api/tests/`, `asterisk/scripts/tests/`, `backup/tests/`,
 `ai-worker/tests/`, `asterisk/agi/tests/`, `scripts/tests/`) —
 nenhuma delas sobe o Asterisk, Whisper ou Ollama de verdade. Detalhes

@@ -166,8 +166,8 @@ def test_sla_endpoint_exposes_threshold_and_per_queue_breakdown():
     correta, não um número solto sem contexto.
     """
     source = load_source()
-    fn_start = source.index('"/api/metrics/sla"')
-    fn_end = source.index("elif", fn_start)
+    fn_start = source.index('elif self.path.startswith("/api/metrics/sla"):')
+    fn_end = source.index("elif", fn_start + 1)
     body = source[fn_start:fn_end]
     assert "threshold_seconds" in body
     assert "queue_sla_tracker.snapshot()" in body
@@ -192,3 +192,25 @@ def test_pause_history_report_exposes_totals_by_reason_and_extension():
     body = source[fn_start:fn_end]
     assert "summarize_pause_time_by_reason(" in body
     assert "summarize_pause_time_by_extension(" in body
+
+
+def test_sla_history_route_checked_before_generic_sla_route():
+    """
+    Backlog #58: "/api/metrics/sla/history" começa com
+    "/api/metrics/sla" - se a checagem genérica viesse primeiro, o
+    startswith() faria a rota de histórico cair por engano na rota do
+    dia atual, nunca alcançando a de histórico de verdade.
+    """
+    source = load_source()
+    history_pos = source.index('elif self.path.startswith("/api/metrics/sla/history"):')
+    generic_pos = source.index('elif self.path.startswith("/api/metrics/sla"):')
+    assert history_pos < generic_pos
+
+
+def test_sla_history_endpoint_uses_persisted_history_store():
+    source = load_source()
+    fn_start = source.index('elif self.path.startswith("/api/metrics/sla/history"):')
+    fn_end = source.index("elif", fn_start + 1)
+    body = source[fn_start:fn_end]
+    assert "summarize_sla_history_by_date(" in body
+    assert "sla_history_store.load_all()" in body

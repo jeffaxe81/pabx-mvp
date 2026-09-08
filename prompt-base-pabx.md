@@ -527,3 +527,17 @@ by_extension). Painel operacional mostra secao nova, ordenada por
 tempo decrescente, em minutos. Ver docs/manual-57.
 
 864 testes, 57 manuais, 8 suites - tudo passando e no GitHub.
+
+
+## Item #58: Historico de SLA por dia - IMPLEMENTADO
+Fechada a lacuna do manual 46 ("sem historico - snapshot() sempre do
+dia atual"). QueueSLATracker ganhou history_store opcional (mesmo
+padrao JSONL de agent_pause.py/survey.py) - persiste o resumo do dia
+ANTES de resetar a meia-noite. Fila sem chamada oferecida (offered=0)
+nao gera registro vazio. GET /api/metrics/sla/history (by_date).
+Armadilha de rota evitada e testada: "/api/metrics/sla/history"
+comeca com "/api/metrics/sla" - checagem especifica precisa vir
+ANTES da generica no do_GET, senao startswith() faria cair na rota
+errada. Ver docs/manual-58.
+
+876 testes, 58 manuais, 8 suites - tudo passando e no GitHub.

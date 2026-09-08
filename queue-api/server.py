@@ -39,7 +39,7 @@ from survey import parse_survey_event, SurveyStore, average_score, score_distrib
 from presence import validate_presence_input, load_presence, set_presence, clear_presence, merge_presence_into_states
 from agent_pause import validate_pause_request, AgentPauseStore, merge_pause_into_states, PauseHistoryStore, summarize_pause_time_by_reason, summarize_pause_time_by_extension
 from metrics import DailyMetrics
-from queue_sla import QueueSLATracker
+from queue_sla import QueueSLATracker, SLAHistoryStore, summarize_sla_history_by_date
 from pickup import validate_pickup_request
 from extension_states import ExtensionStateTracker
 from reports import parse_cdr_for_report, CallLogStore, aggregate, group_by, extract_operator
@@ -57,6 +57,7 @@ PICKUP_ALLOWED_EXTENSIONS = [
 ]
 HTTP_PORT = int(os.environ.get("HTTP_PORT", "8090"))
 SLA_THRESHOLD_SECONDS = int(os.environ.get("SLA_THRESHOLD_SECONDS", "20"))
+SLA_HISTORY_PATH = os.environ.get("SLA_HISTORY_PATH", "/app/data/sla_history.jsonl")
 RECORDINGS_DIR = os.environ.get("RECORDINGS_DIR", "/app/recordings")
 # Retenção de gravações (backlog #15) - 0 (padrão) = desabilitado.
 # Apagar gravação é irreversível, então isso é opt-in de propósito.
@@ -130,7 +131,8 @@ PAUSE_HISTORY_PATH = os.environ.get("PAUSE_HISTORY_PATH", "/app/data/pause_histo
 state = QueueStateTracker()
 missed_calls_log = MissedCallsLog()
 daily_metrics = DailyMetrics()
-queue_sla_tracker = QueueSLATracker(threshold_seconds=SLA_THRESHOLD_SECONDS)
+sla_history_store = SLAHistoryStore(SLA_HISTORY_PATH)
+queue_sla_tracker = QueueSLATracker(threshold_seconds=SLA_THRESHOLD_SECONDS, history_store=sla_history_store)
 extension_states = ExtensionStateTracker()
 pause_history_store = PauseHistoryStore(PAUSE_HISTORY_PATH)
 agent_pause_store = AgentPauseStore(history_store=pause_history_store)
@@ -290,6 +292,12 @@ class Handler(BaseHTTPRequestHandler):
             self._handle_quality_query()
         elif self.path.startswith("/api/metrics/today"):
             self._send_json(200, daily_metrics.snapshot())
+        elif self.path.startswith("/api/metrics/sla/history"):
+            # Precisa vir ANTES de "/api/metrics/sla" - startswith()
+            # faria essa rota cair na de hoje por engano, já que
+            # "/api/metrics/sla/history" também começa com
+            # "/api/metrics/sla".
+            self._send_json(200, {"by_date": summarize_sla_history_by_date(sla_history_store.load_all())})
         elif self.path.startswith("/api/metrics/sla"):
             self._send_json(200, {"threshold_seconds": SLA_THRESHOLD_SECONDS, "queues": queue_sla_tracker.snapshot()})
         elif self.path.startswith("/api/reports/pauses"):

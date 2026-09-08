@@ -1,5 +1,6 @@
 from queue_sla import (
     parse_agent_connect_event, parse_queue_caller_abandon_event, QueueSLATracker,
+    SLAHistoryStore, summarize_sla_history_by_date,
 )
 
 
@@ -112,3 +113,120 @@ def test_ignores_unrelated_events_without_crashing():
     tracker = QueueSLATracker()
     tracker.apply_event({"Event": "Hangup"})
     assert tracker.snapshot() == {}
+
+
+# ---------- Histórico de SLA (backlog #58) ----------
+
+def test_midnight_reset_persists_previous_day_summary():
+    class FakeHistoryStore:
+        def __init__(self):
+            self.records = []
+
+        def append(self, record):
+            self.records.append(record)
+
+    history = FakeHistoryStore()
+    fake_time = [1000000.0]
+    tracker = QueueSLATracker(threshold_seconds=20, clock=lambda: fake_time[0], history_store=history)
+
+    tracker.apply_event({"Event": "AgentConnect", "Queue": "fila-t1", "HoldTime": "10"})
+    tracker.apply_event({"Event": "AgentConnect", "Queue": "fila-t1", "HoldTime": "30"})
+
+    fake_time[0] += 90000  # mais de 24h depois - vira o dia
+    tracker.snapshot()  # snapshot() também dispara _reset_if_new_day()
+
+    assert len(history.records) == 1
+    record = history.records[0]
+    assert record["queue"] == "fila-t1"
+    assert record["offered"] == 2
+    assert record["within_sla"] == 1
+    assert record["sla_percent"] == 50.0
+    assert "date" in record
+
+
+def test_first_day_never_persists_anything():
+    """Não há "dia anterior" na primeiríssima execução - nada pra persistir ainda."""
+    class FakeHistoryStore:
+        def __init__(self):
+            self.records = []
+
+        def append(self, record):
+            self.records.append(record)
+
+    history = FakeHistoryStore()
+    tracker = QueueSLATracker(history_store=history)
+    tracker.apply_event({"Event": "AgentConnect", "Queue": "fila-t1", "HoldTime": "10"})
+
+    assert history.records == []
+
+
+def test_queue_with_no_calls_is_not_persisted_on_reset():
+    """Fila sem nenhuma chamada oferecida no dia não gera registro vazio no histórico."""
+    class FakeHistoryStore:
+        def __init__(self):
+            self.records = []
+
+        def append(self, record):
+            self.records.append(record)
+
+    history = FakeHistoryStore()
+    fake_time = [1000000.0]
+    tracker = QueueSLATracker(clock=lambda: fake_time[0], history_store=history)
+    tracker.apply_event({"Event": "AgentConnect", "Queue": "fila-t1", "HoldTime": "10"})
+
+    fake_time[0] += 90000
+    tracker.snapshot()
+
+    assert all(r["queue"] != "fila-t2" for r in history.records)
+
+
+def test_tracker_works_without_history_store():
+    """history_store é opcional - o rastreamento do dia atual continua funcionando sem ele."""
+    fake_time = [1000000.0]
+    tracker = QueueSLATracker(clock=lambda: fake_time[0])
+    tracker.apply_event({"Event": "AgentConnect", "Queue": "fila-t1", "HoldTime": "10"})
+    fake_time[0] += 90000
+    assert tracker.snapshot() == {}  # virou o dia, resetou normalmente
+
+
+# ---------- SLAHistoryStore ----------
+
+def test_sla_history_store_append_and_load(tmp_path):
+    path = tmp_path / "sla_history.jsonl"
+    store = SLAHistoryStore(path)
+    store.append({"date": "2026-01-01", "queue": "fila-t1", "offered": 10, "within_sla": 8, "sla_percent": 80.0})
+
+    records = store.load_all()
+    assert len(records) == 1
+    assert records[0]["queue"] == "fila-t1"
+
+
+def test_sla_history_store_missing_file_returns_empty(tmp_path):
+    store = SLAHistoryStore(tmp_path / "nao-existe.jsonl")
+    assert store.load_all() == []
+
+
+def test_sla_history_store_ignores_malformed_lines(tmp_path):
+    path = tmp_path / "sla_history.jsonl"
+    path.write_text('{"date": "2026-01-01", "queue": "fila-t1", "offered": 1, "within_sla": 1, "sla_percent": 100.0}\nlixo\n', encoding="utf-8")
+    store = SLAHistoryStore(path)
+    assert len(store.load_all()) == 1
+
+
+# ---------- summarize_sla_history_by_date ----------
+
+def test_summarize_by_date_groups_correctly():
+    records = [
+        {"date": "2026-01-01", "queue": "fila-t1", "offered": 10, "within_sla": 8, "sla_percent": 80.0},
+        {"date": "2026-01-01", "queue": "fila-t2", "offered": 5, "within_sla": 5, "sla_percent": 100.0},
+        {"date": "2026-01-02", "queue": "fila-t1", "offered": 20, "within_sla": 10, "sla_percent": 50.0},
+    ]
+    result = summarize_sla_history_by_date(records)
+    assert set(result.keys()) == {"2026-01-01", "2026-01-02"}
+    assert result["2026-01-01"]["fila-t1"]["sla_percent"] == 80.0
+    assert result["2026-01-01"]["fila-t2"]["sla_percent"] == 100.0
+    assert result["2026-01-02"]["fila-t1"]["offered"] == 20
+
+
+def test_summarize_by_date_empty_records():
+    assert summarize_sla_history_by_date([]) == {}
