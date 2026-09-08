@@ -259,7 +259,7 @@
     </p>
 
     <table>
-      <thead><tr><th>Tenant</th><th>DID</th><th>Nome</th></tr></thead>
+      <thead><tr><th>Tenant</th><th>DID</th><th>Nome</th><th></th></tr></thead>
       <tbody id="tenantsTableBody"></tbody>
     </table>
     <div class="empty-hint" id="tenantsEmptyHint" style="display:none;">Nenhum tenant criado pelo wizard ainda.</div>
@@ -790,7 +790,26 @@
         <td class="mono">${t.tenant_id}</td>
         <td class="mono">${t.did}</td>
         <td>${t.display_name}</td>
+        <td class="actions"><button class="btn-danger" data-remove-tenant="${t.tenant_id}">Remover</button></td>
       </tr>`).join('');
+
+    document.querySelectorAll('[data-remove-tenant]').forEach((btn) => {
+      btn.addEventListener('click', () => removeTenant(btn.dataset.removeTenant));
+    });
+  }
+
+  function removeTenant(tenantId) {
+    if (!confirm(`Remover o tenant "${tenantId}"? Isso apaga o dialplan, telefonistas, filas e vaga de estacionamento desse tenant - não dá pra desfazer.`)) return;
+    el('tenantWizardError').textContent = '';
+    apiFetch(`/api/tenants/${tenantId}`, { method: 'DELETE' })
+      .then((data) => {
+        el('tenantWizardResult').style.display = 'block';
+        el('tenantWizardResult').textContent = data.reload_error
+          ? `Tenant "${data.removed}" removido, mas o reload automático falhou (${data.reload_error}) - rode manualmente pelo Asterisk.`
+          : `Tenant "${data.removed}" removido e recarregado com sucesso.`;
+        loadTenants();
+      })
+      .catch((err) => { el('tenantWizardError').textContent = err.message; });
   }
 
   el('wizardReviewBtn').addEventListener('click', () => {

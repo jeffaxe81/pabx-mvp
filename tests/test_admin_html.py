@@ -326,3 +326,30 @@ def test_tts_generate_posts_to_sounds_endpoint():
     body = html[fn_start:fn_end]
     assert "/api/sounds/generate" in body
     assert "method: 'POST'" in body
+
+
+# ---------- Remoção de tenant pelo wizard (backlog #52) ----------
+
+def test_remove_tenant_button_present_in_table():
+    html = load_html()
+    fn_start = html.index("function renderTenantsTable")
+    fn_end = html.index("}\n\n", fn_start)
+    body = html[fn_start:fn_end]
+    assert "data-remove-tenant" in body
+
+
+def test_remove_tenant_requires_confirmation():
+    html = load_html()
+    fn_start = html.index("function removeTenant")
+    fn_end = html.index("}\n\n", fn_start)
+    body = html[fn_start:fn_end]
+    assert "confirm(" in body
+
+
+def test_remove_tenant_calls_delete_endpoint():
+    html = load_html()
+    fn_start = html.index("function removeTenant")
+    fn_end = html.index("}\n\n", fn_start)
+    body = html[fn_start:fn_end]
+    assert "/api/tenants/${tenantId}" in body
+    assert "method: 'DELETE'" in body

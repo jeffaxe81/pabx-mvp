@@ -306,3 +306,30 @@ def test_generate_sound_requires_admin_role():
     source = load_source()
     body = get_function_body(source, "_handle_generate_sound")
     assert '_require_role({"admin"})' in body
+
+
+def test_remove_tenant_requires_admin_role():
+    source = load_source()
+    body = get_function_body(source, "_handle_remove_tenant")
+    assert '_require_role({"admin"})' in body
+
+
+def test_remove_tenant_validates_before_deleting_any_file():
+    """
+    validate_tenant_removal (t1/t2 protegidos, tenant precisa existir)
+    tem que rodar ANTES de qualquer arquivo ser apagado - senão um
+    pedido malformado poderia apagar arquivo de um tenant que nem
+    deveria ser removido.
+    """
+    source = load_source()
+    body = get_function_body(source, "_handle_remove_tenant")
+    validate_pos = body.index("validate_tenant_removal(")
+    unlink_pos = body.index("unlink(")
+    assert validate_pos < unlink_pos
+
+
+def test_remove_tenant_unregisters_did_and_persists_only_after_attempt():
+    source = load_source()
+    body = get_function_body(source, "_handle_remove_tenant")
+    assert "unregister_tenant_did(" in body
+    assert "save_tenants(" in body

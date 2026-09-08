@@ -436,3 +436,17 @@ de verificacao), 2 permanecem genuinamente pendentes e exigem o
 USUARIO executar num ambiente real (validacao contra Asterisk de
 verdade, teste da IA local Piper/Whisper/Llama sem mock) - nao
 executaveis por mim neste sandbox sem servidor real/GPU.
+
+
+## Item #52: Remocao de tenant pelo wizard - IMPLEMENTADO
+Usuario disse "continuar" de novo apos eu confirmar que os 2 itens
+restantes do roteiro exigem ambiente real. Em vez de esperar,
+escolhi fechar uma lacuna JA DOCUMENTADA (manual 39: "sem remocao de
+tenant pelo wizard - so criacao") que era executavel neste sandbox.
+validate_tenant_removal() (t1/t2 protegidos, tenant precisa existir),
+DELETE /api/tenants/{id} (admin-only, valida ANTES de apagar arquivo,
+desregistra DID, apaga os 5 arquivos de infraestrutura, recarrega
+Asterisk), botao "Remover" na tabela do wizard com confirmacao. Ver
+docs/manual-52.
+
+814 testes, 52 manuais, 8 suites - tudo passando e no GitHub.

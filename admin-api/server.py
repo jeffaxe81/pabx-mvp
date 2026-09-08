@@ -31,7 +31,7 @@ from monitoring import validate_monitoring_pin_input
 from tenants import (
     load_tenants, save_tenants, validate_tenant_creation_input,
     render_tenant_pjsip, render_tenant_queues, render_tenant_extensions, render_tenant_voicemail,
-    render_tenant_parking,
+    render_tenant_parking, validate_tenant_removal,
 )
 from users import load_users, save_users, find_user, add_user, update_user, delete_user, public_user
 from totp import generate_secret, verify_totp, build_provisioning_uri
@@ -728,8 +728,48 @@ class Handler(BaseHTTPRequestHandler):
             self._handle_delete_user()
         elif self.path.startswith("/api/monitoring-pin"):
             self._handle_disable_monitoring()
+        elif self.path.startswith("/api/tenants/"):
+            self._handle_remove_tenant()
         else:
             self._send_json(404, {"error": "not found"})
+
+    def _handle_remove_tenant(self):
+        """
+        Remoção de tenant (backlog #52 - completa o que ficou pendente
+        no manual 39). Desregistra o DID, apaga os 5 arquivos de
+        infraestrutura gerados pelo wizard, e recarrega o Asterisk.
+        Nunca remove t1/t2 (exemplos estáticos, ver validate_tenant_removal).
+        """
+        if not self._require_role({"admin"}):
+            return
+
+        tenant_id = self.path[len("/api/tenants/"):]
+        existing = load_tenants(TENANTS_PATH)
+        ok, error, record = validate_tenant_removal(tenant_id, existing)
+        if not ok:
+            self._send_json(400, {"error": error})
+            return
+
+        for subdir in ("pjsip_tenants", "queues_tenants", "extensions_tenants", "voicemail_tenants", "parking_tenants"):
+            target_file = Path(ASTERISK_CONF_DIR, subdir, f"{record['tenant_id']}.conf")
+            target_file.unlink(missing_ok=True)
+
+        client = AMIClient(AMI_HOST, AMI_PORT, AMI_USERNAME, AMI_SECRET)
+        try:
+            client.connect_and_login()
+            client.unregister_tenant_did(record["did"])
+            reload_result = client.reload_pjsip_and_dialplan()
+        except Exception as exc:  # noqa: BLE001
+            remaining = [t for t in existing if t["tenant_id"] != record["tenant_id"]]
+            save_tenants(TENANTS_PATH, remaining)
+            self._send_json(200, {"removed": record["tenant_id"], "reload_error": str(exc)})
+            return
+        finally:
+            client.close()
+
+        remaining = [t for t in existing if t["tenant_id"] != record["tenant_id"]]
+        save_tenants(TENANTS_PATH, remaining)
+        self._send_json(200, {"removed": record["tenant_id"], "reload": reload_result})
 
     def _handle_disable_monitoring(self):
         if not self._require_role({"admin"}):

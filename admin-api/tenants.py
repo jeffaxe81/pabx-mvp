@@ -67,6 +67,24 @@ def validate_tenant_creation_input(data: dict, existing: list):
     }
 
 
+def validate_tenant_removal(tenant_id: str, existing: list):
+    """
+    Retorna (ok, error_message, tenant_record). Só permite remover um
+    tenant que o wizard de fato criou (t3+, existe na lista) - nunca
+    t1/t2 (exemplos estáticos, não gerenciados pelo wizard) nem um
+    tenant que nunca existiu.
+    """
+    tenant_id = (tenant_id or "").strip().lower()
+    if tenant_id in ("t1", "t2"):
+        return False, "t1/t2 são exemplos estáticos do projeto - não gerenciados pelo wizard, não podem ser removidos por aqui", None
+
+    match = next((t for t in existing if t["tenant_id"] == tenant_id), None)
+    if not match:
+        return False, f"tenant '{tenant_id}' não encontrado", None
+
+    return True, None, match
+
+
 def render_tenant_pjsip(tenant_id: str) -> str:
     """Duas telefonistas web, mesmo padrão de t1-recepcao/t2-recepcao."""
     blocks = [AUTO_GENERATED_HEADER]

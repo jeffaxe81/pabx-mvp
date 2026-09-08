@@ -1,7 +1,7 @@
 from tenants import (
     validate_tenant_creation_input, load_tenants, save_tenants,
     render_tenant_pjsip, render_tenant_queues, render_tenant_extensions, render_tenant_voicemail,
-    render_tenant_parking,
+    render_tenant_parking, validate_tenant_removal,
 )
 
 VALID_INPUT = {"tenant_id": "t3", "did": "5511900003333", "display_name": "Empresa C"}
@@ -180,3 +180,33 @@ def test_render_parking_creates_lot_scoped_to_tenant_context():
 def test_render_parking_rings_back_to_origin_when_unretrieved():
     content = render_tenant_parking("t3")
     assert "comebacktoorigin = yes" in content
+
+
+# ---------- validate_tenant_removal (backlog #52) ----------
+
+def test_removal_rejects_t1_and_t2():
+    """t1/t2 são exemplos estáticos do projeto, nunca gerenciados pelo wizard."""
+    for reserved in ("t1", "t2"):
+        ok, error, _ = validate_tenant_removal(reserved, existing=[])
+        assert ok is False
+        assert "estáticos" in error
+
+
+def test_removal_rejects_unknown_tenant():
+    ok, error, _ = validate_tenant_removal("t7", existing=[{"tenant_id": "t3", "did": "1", "display_name": "x"}])
+    assert ok is False
+    assert "não encontrado" in error
+
+
+def test_removal_accepts_existing_tenant_and_returns_record():
+    existing = [{"tenant_id": "t3", "did": "5511900003333", "display_name": "Empresa C"}]
+    ok, error, record = validate_tenant_removal("t3", existing)
+    assert ok is True
+    assert record == existing[0]
+
+
+def test_removal_is_case_and_whitespace_tolerant():
+    existing = [{"tenant_id": "t3", "did": "1", "display_name": "x"}]
+    ok, error, record = validate_tenant_removal("  T3  ", existing)
+    assert ok is True
+    assert record["tenant_id"] == "t3"

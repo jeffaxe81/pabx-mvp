@@ -56,6 +56,7 @@ configurar, como testar manualmente, e limitações conhecidas.
 49. [Confirmação falada do atendente virtual (fase 2 do TTS)](manual-49-confirmacao-falada-atendente-virtual.md)
 50. [Geração de segredos fortes antes do deploy](manual-50-geracao-segredos.md)
 51. [Verificação pós-deploy](manual-51-verificacao-pos-deploy.md)
+52. [Remoção de tenant pelo wizard](manual-52-remocao-tenant.md)
 
 ## Regra de manutenção
 
