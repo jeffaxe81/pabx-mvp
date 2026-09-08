@@ -55,6 +55,7 @@ configurar, como testar manualmente, e limitações conhecidas.
 48. [Síntese de voz / TTS (Piper padrão, XTTS opcional)](manual-48-tts-piper-xtts.md)
 49. [Confirmação falada do atendente virtual (fase 2 do TTS)](manual-49-confirmacao-falada-atendente-virtual.md)
 50. [Geração de segredos fortes antes do deploy](manual-50-geracao-segredos.md)
+51. [Verificação pós-deploy](manual-51-verificacao-pos-deploy.md)
 
 ## Regra de manutenção
 

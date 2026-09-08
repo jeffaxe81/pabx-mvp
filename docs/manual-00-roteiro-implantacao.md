@@ -32,6 +32,10 @@ funcionalidade avançada.
    (`docs/manual-01-core-ramais.md`)
 6. Ligue de um pro outro — se o áudio passa nos dois sentidos, a base
    está sólida
+7. Rode `python3 scripts/verify_deployment.py` — confirma
+   mecanicamente que os segredos foram trocados e que os serviços
+   que você já subiu estão respondendo (não substitui o passo 6, só
+   complementa — ver `docs/manual-51-verificacao-pos-deploy.md`)
 
 **Não prossiga pra fase 2 até isso funcionar.** Qualquer problema de
 rede, NAT, ou certificado vai se multiplicar em todas as outras

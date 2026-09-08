@@ -417,3 +417,22 @@ Itens do roteiro de proximos passos AINDA pendentes (nao executaveis
 neste ambiente sandboxed): validacao contra Asterisk real, audios
 reais em vez de placeholder (beeps), teste da IA local de verdade
 (Piper/Whisper/Llama rodando de fato sem mock).
+
+
+## Item #51: Script de verificacao pos-deploy - IMPLEMENTADO
+Usuario disse "continuar" apos eu oferecer 2 opcoes (checklist vs
+encerrar) - interpretado como "prepare o checklist/script de
+verificacao". scripts/verify_deployment.py + deployment_checks.py -
+3 checagens (segredos sem placeholder, login AMI real, saude dos
+servicos HTTP). Nunca rodado contra ambiente real - so testado com
+mocks (rede) e arquivos temporarios (secrets). Complementa mas NAO
+substitui o roteiro manual de teste (manual 00) - documentado
+explicitamente o que isso NAO valida (audio, roteamento de fila,
+URA de ponta a ponta). Ver docs/manual-51.
+
+**Estado do roteiro de proximos passos**: dos 4 itens originais,
+2 executados neste ambiente sandboxed (#50 seguranca, #51 ferramenta
+de verificacao), 2 permanecem genuinamente pendentes e exigem o
+USUARIO executar num ambiente real (validacao contra Asterisk de
+verdade, teste da IA local Piper/Whisper/Llama sem mock) - nao
+executaveis por mim neste sandbox sem servidor real/GPU.

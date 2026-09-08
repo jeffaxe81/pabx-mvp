@@ -386,6 +386,12 @@ entre `docker-compose.yml` e `manager.conf`, com aviso explícito pra
 nunca comitar o resultado de volta pro repositório público. Ver
 `docs/manual-50-geracao-segredos.md`.
 
+**E um script de verificação pós-deploy**: checa mecanicamente (AMI,
+serviços HTTP, ausência de senha placeholder) o que dá pra confirmar
+programaticamente depois de subir num ambiente real — não substitui
+testar uma chamada de verdade, complementa o roteiro de implantação
+— ver `docs/manual-51-verificacao-pos-deploy.md`.
+
 Para ajustar quais ramais aparecem na lista de colegas, edite o array
 `COLLEAGUES` no início do `<script>` em `webphone/index.html`. Cada
 ramal monitorado precisa ter um `hint` correspondente em
@@ -410,7 +416,7 @@ cd ../queue-api
 python3 -m pytest tests/ -v
 ```
 
-785 testes estáticos no total, em 8 suítes (`tests/`, `queue-api/tests/`,
+804 testes estáticos no total, em 8 suítes (`tests/`, `queue-api/tests/`,
 `admin-api/tests/`, `asterisk/scripts/tests/`, `backup/tests/`,
 `ai-worker/tests/`, `asterisk/agi/tests/`, `scripts/tests/`) —
 nenhuma delas sobe o Asterisk, Whisper ou Ollama de verdade. Detalhes
