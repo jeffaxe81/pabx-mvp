@@ -349,6 +349,30 @@ de gravacao/LGPD, estacionamento de chamada, monitoramento de
 chamada, sala de conferencia ad-hoc, motivo de pausa do agente,
 overflow entre filas, SLA de fila.
 
+## Item #47: Migracao de motor STT (faster-whisper -> whisper.cpp)
+Usuario pediu avaliacao de TTS/STT via Coqui TTS/XTTS. Investigacao
+de licenciamento revelou: XTTS-v2 (Coqui) usa Coqui Public Model
+License - PROIBE uso comercial sem licenca paga da Coqui, empresa
+que encerrou operacoes em 2024, sem caminho claro pra obter essa
+licenca hoje. Usuario ainda nao decidiu uso comercial vs interno -
+avaliacao de TTS (Piper como padrao seguro comercialmente + XTTS
+como opcional nao-comercial) ainda PENDENTE de implementacao.
+
+STT ja estava resolvido (Whisper via faster-whisper, manual 36,
+licenca MIT sem essa pegadinha) - usuario confirmou que Coqui STT
+seria redundante e pediu troca de MOTOR (nao de modelo): de
+faster-whisper para whisper.cpp (via pywhispercpp), mais leve pra
+hardware restrito, mesma licenca MIT dos pesos do modelo Whisper nos
+dois lados. ~~Migracao~~ - IMPLEMENTADA. Ver docs/manual-47.
+
+## Proximo passo pendente: TTS (Piper como padrao + XTTS opcional nao-comercial)
+Ainda nao implementado - arquitetura desacoplada proposta (mesmo
+padrao de llm_client.py isolando o motor): Piper (MIT, comercialmente
+seguro) como padrao ativado, XTTS-v2 como motor opcional desligado
+por padrao com aviso explicito de uso nao-comercial. Usar isso pra
+gerar audio dinamico de saudacao no wizard de tenant (manual 39) em
+vez de gravacao manual - proximo item lógico do backlog.
+
 Outras lacunas identificadas na auditoria, nao viraram itens de
 backlog ainda (fora do escopo imediato, ou exigiriam decisao adicional
 do usuario, ex: integracao omnichannel/WhatsApp/chat e recursos

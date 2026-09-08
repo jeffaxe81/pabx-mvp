@@ -51,6 +51,7 @@ configurar, como testar manualmente, e limitações conhecidas.
 44. [Motivo de pausa do agente](manual-44-motivo-pausa-agente.md)
 45. [Overflow entre filas](manual-45-overflow-filas.md)
 46. [SLA de fila](manual-46-sla-fila.md)
+47. [Migração faster-whisper → whisper.cpp](manual-47-migracao-whisper-cpp.md)
 
 ## Regra de manutenção
 
