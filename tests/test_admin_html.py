@@ -26,6 +26,7 @@ REQUIRED_IDS = [
     "wizardReviewList", "wizardConfirmBtn", "wizardBackBtn", "tenantWizardResult", "tenantWizardError",
     "monitoringPinCard", "monitoringStatusText", "monitoringPinInput", "setMonitoringPinBtn", "disableMonitoringBtn", "monitoringPinError",
     "ttsCard", "ttsFilenameInput", "ttsLanguageSelect", "ttsEngineSelect", "ttsTextInput", "generateTtsBtn", "ttsResult", "ttsError",
+    "soundsTableBody", "soundsEmptyHint",
 ]
 
 
@@ -353,3 +354,30 @@ def test_remove_tenant_calls_delete_endpoint():
     body = html[fn_start:fn_end]
     assert "/api/tenants/${tenantId}" in body
     assert "method: 'DELETE'" in body
+
+
+# ---------- Lista de áudios existentes (backlog #53) ----------
+
+def test_sounds_loaded_on_login():
+    html = load_html()
+    fn_start = html.index("function handlePostLogin") if "function handlePostLogin" in html else html.index("loadTotpStatus();")
+    body = html[fn_start:fn_start + 400]
+    assert "loadSounds();" in body
+
+
+def test_sounds_reload_after_generating_new_audio():
+    html = load_html()
+    fn_start = html.index("el('generateTtsBtn').addEventListener")
+    fn_end = html.index("});", html.index("catch", fn_start))
+    body = html[fn_start:fn_end]
+    assert "loadSounds();" in body
+
+
+def test_sounds_table_shows_filename_size_and_date():
+    html = load_html()
+    fn_start = html.index("function renderSoundsTable")
+    fn_end = html.index("}\n})", fn_start) if "}\n})" in html[fn_start:] else html.index("}\n\n", fn_start)
+    body = html[fn_start:fn_end]
+    assert "s.filename" in body
+    assert "size_bytes" in body
+    assert "modified_at" in body

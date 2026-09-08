@@ -450,3 +450,22 @@ Asterisk), botao "Remover" na tabela do wizard com confirmacao. Ver
 docs/manual-52.
 
 814 testes, 52 manuais, 8 suites - tudo passando e no GitHub.
+
+
+## Item #53: Lista de audios existentes no painel - IMPLEMENTADO
+Usuario disse "seguir" mais uma vez sem direcao nova. Continuei o
+padrao de fechar lacunas ja documentadas nos manuais (mais
+sustentavel que ficar sugerindo indefinidamente). Fechada a lacuna
+do manual 48 ("sem lista de audios gerados na interface").
+admin-api/sounds.py (list_sound_files, lista .wav com metadados,
+mais recente primeiro), GET /api/sounds (admin+supervisor, leitura),
+tabela na secao de TTS do painel, recarrega apos gerar audio novo.
+Ver docs/manual-53.
+
+823 testes, 53 manuais, 8 suites - tudo passando e no GitHub.
+
+NOTA para proxima interacao: se o usuario disser "continuar"/"seguir"
+de novo SEM direcao nova, considerar perguntar explicitamente que
+area ele quer que eu foque, em vez de continuar escolhendo pequenas
+lacunas sozinho indefinidamente - o projeto já esta maduro (53
+manuais) e pode ser hora de uma direcao mais deliberada do usuario.

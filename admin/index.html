@@ -353,6 +353,13 @@
     <button class="btn-primary" id="generateTtsBtn" style="width:auto; margin-top:12px;">Gerar áudio</button>
     <div id="ttsResult" style="display:none; margin-top:14px; font-size:13px;"></div>
     <div class="error-msg" id="ttsError"></div>
+
+    <h2 style="margin-top:24px; font-size:16px;">Áudios existentes</h2>
+    <table>
+      <thead><tr><th>Arquivo</th><th>Tamanho</th><th>Gerado em</th></tr></thead>
+      <tbody id="soundsTableBody"></tbody>
+    </table>
+    <div class="empty-hint" id="soundsEmptyHint" style="display:none;">Nenhum áudio customizado ainda.</div>
   </div>
 </div>
 
@@ -398,6 +405,7 @@
     if (myRole === 'admin') loadUsers();
     if (myRole === 'admin') loadTenants();
     if (myRole === 'admin') loadMonitoringStatus();
+    loadSounds();
   }
 
   el('loginBtn').addEventListener('click', () => {
@@ -909,9 +917,28 @@
       .then((data) => {
         el('ttsResult').style.display = 'block';
         el('ttsResult').textContent = `Áudio gerado: ${data.filename} (motor ${data.engine}, idioma ${data.language}). Já disponível pro dialplan em custom/${data.filename.replace('.wav', '')}.`;
+        loadSounds();
       })
       .catch((err) => { el('ttsError').textContent = err.message; });
   });
+
+  // ---------- Lista de áudios existentes (backlog #53) ----------
+  function loadSounds() {
+    apiFetch('/api/sounds').then((data) => renderSoundsTable(data.sounds || [])).catch(() => {});
+  }
+
+  function renderSoundsTable(sounds) {
+    el('soundsEmptyHint').style.display = sounds.length === 0 ? 'block' : 'none';
+    el('soundsTableBody').innerHTML = sounds.map((s) => {
+      const sizeKb = (s.size_bytes / 1024).toFixed(1);
+      const when = new Date(s.modified_at * 1000).toLocaleString('pt-BR');
+      return `<tr>
+        <td class="mono">${s.filename}</td>
+        <td class="mono">${sizeKb} KB</td>
+        <td class="mono">${when}</td>
+      </tr>`;
+    }).join('');
+  }
 })();
 </script>
 

@@ -398,6 +398,12 @@ infraestrutura gerada (dialplan, telefonistas, filas, vaga de
 estacionamento) e desregistra o DID, protegendo os exemplos estáticos
 t1/t2 de remoção acidental — ver `docs/manual-52-remocao-tenant.md`.
 
+**E lista de áudios existentes no painel**: fecha outra lacuna
+documentada (manual 48) — a seção de TTS agora mostra todo `.wav`
+existente em `asterisk/sounds/custom/`, com nome, tamanho e data,
+atualizando automaticamente após gerar um áudio novo — ver
+`docs/manual-53-lista-audios.md`.
+
 Para ajustar quais ramais aparecem na lista de colegas, edite o array
 `COLLEAGUES` no início do `<script>` em `webphone/index.html`. Cada
 ramal monitorado precisa ter um `hint` correspondente em
@@ -422,7 +428,7 @@ cd ../queue-api
 python3 -m pytest tests/ -v
 ```
 
-814 testes estáticos no total, em 8 suítes (`tests/`, `queue-api/tests/`,
+823 testes estáticos no total, em 8 suítes (`tests/`, `queue-api/tests/`,
 `admin-api/tests/`, `asterisk/scripts/tests/`, `backup/tests/`,
 `ai-worker/tests/`, `asterisk/agi/tests/`, `scripts/tests/`) —
 nenhuma delas sobe o Asterisk, Whisper ou Ollama de verdade. Detalhes

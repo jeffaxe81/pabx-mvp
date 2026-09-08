@@ -28,6 +28,7 @@ from ami_client import AMIClient
 from blocklist import validate_blocklist_number
 from vip import validate_vip_input
 from monitoring import validate_monitoring_pin_input
+from sounds import list_sound_files
 from tenants import (
     load_tenants, save_tenants, validate_tenant_creation_input,
     render_tenant_pjsip, render_tenant_queues, render_tenant_extensions, render_tenant_voicemail,
@@ -222,6 +223,11 @@ class Handler(BaseHTTPRequestHandler):
                 self._send_json(502, {"error": f"falha ao consultar AMI: {exc}"})
             finally:
                 client.close()
+        elif self.path.startswith("/api/sounds"):
+            if not self._require_role({"admin", "supervisor"}):
+                return
+            sounds_dir = Path(ASTERISK_CONF_DIR, "sounds", "custom")
+            self._send_json(200, {"sounds": list_sound_files(sounds_dir)})
         elif self.path in ("/", "/index.html"):
             self._serve_static("index.html", "text/html")
         else:

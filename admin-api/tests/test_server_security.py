@@ -333,3 +333,16 @@ def test_remove_tenant_unregisters_did_and_persists_only_after_attempt():
     body = get_function_body(source, "_handle_remove_tenant")
     assert "unregister_tenant_did(" in body
     assert "save_tenants(" in body
+
+
+def test_sounds_listing_requires_authentication():
+    """
+    Diferente das ações destrutivas do resto do painel, listar áudios
+    existentes é leitura de baixo risco - admin E supervisor podem
+    ver, mas ainda exige login (não é público).
+    """
+    source = load_source()
+    do_get_body = get_function_body(source, "do_GET")
+    sounds_branch_start = do_get_body.index('"/api/sounds"')
+    sounds_branch = do_get_body[sounds_branch_start:sounds_branch_start + 200]
+    assert '_require_role({"admin", "supervisor"})' in sounds_branch
