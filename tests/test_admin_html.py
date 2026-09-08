@@ -27,6 +27,7 @@ REQUIRED_IDS = [
     "monitoringPinCard", "monitoringStatusText", "monitoringPinInput", "setMonitoringPinBtn", "disableMonitoringBtn", "monitoringPinError",
     "ttsCard", "ttsFilenameInput", "ttsLanguageSelect", "ttsEngineSelect", "ttsTextInput", "generateTtsBtn", "ttsResult", "ttsError",
     "soundsTableBody", "soundsEmptyHint",
+    "soundPlayer",
     "overflowTimeoutInput", "setOverflowTimeoutBtn", "overflowTimeoutError",
 ]
 
@@ -416,3 +417,34 @@ def test_overflow_timeout_save_sends_number_not_string():
     fn_end = html.index("});", html.index("catch", fn_start))
     body = html[fn_start:fn_end]
     assert "Number(el('overflowTimeoutInput').value)" in body
+
+
+# ---------- Reprodução de áudio (backlog #60) ----------
+
+def test_play_button_present_for_each_sound():
+    html = load_html()
+    fn_start = html.index("function renderSoundsTable")
+    body = html[fn_start:fn_start + 700]
+    assert "data-play-sound" in body
+
+
+def test_play_sound_does_not_use_audio_src_attribute_directly():
+    """
+    Um <audio src="..."> não manda o header Authorization - a busca
+    precisa ser via fetch() manual com o token, não a tag HTML direto.
+    """
+    html = load_html()
+    fn_start = html.index("function playSound")
+    fn_end = html.index("}\n\n", fn_start) if "}\n\n" in html[fn_start:] else html.index("}\n  }", fn_start)
+    body = html[fn_start:fn_end]
+    assert "Authorization: `Bearer ${token}`" in body
+    assert "res.blob()" in body
+
+
+def test_play_sound_creates_object_url_for_playback():
+    html = load_html()
+    fn_start = html.index("function playSound")
+    fn_end = html.index("}\n\n", fn_start) if "}\n\n" in html[fn_start:] else html.index("}\n  }", fn_start)
+    body = html[fn_start:fn_end]
+    assert "URL.createObjectURL(blob)" in body
+    assert "player.play()" in body

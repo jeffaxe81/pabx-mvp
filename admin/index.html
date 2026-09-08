@@ -373,10 +373,11 @@
 
     <h2 style="margin-top:24px; font-size:16px;">Áudios existentes</h2>
     <table>
-      <thead><tr><th>Arquivo</th><th>Tamanho</th><th>Gerado em</th></tr></thead>
+      <thead><tr><th>Arquivo</th><th>Tamanho</th><th>Gerado em</th><th></th></tr></thead>
       <tbody id="soundsTableBody"></tbody>
     </table>
     <div class="empty-hint" id="soundsEmptyHint" style="display:none;">Nenhum áudio customizado ainda.</div>
+    <audio id="soundPlayer" style="display:none;"></audio>
   </div>
 </div>
 
@@ -964,6 +965,35 @@
     apiFetch('/api/sounds').then((data) => renderSoundsTable(data.sounds || [])).catch(() => {});
   }
 
+  // ---------- Reprodução de áudio (backlog #60) ----------
+  // Não usa <audio src="/api/sounds/nome.wav"> direto porque essa tag
+  // não manda o cabeçalho Authorization que a API exige - busca como
+  // blob autenticado (fetch normal, não apiFetch, que sempre espera
+  // JSON) e cria uma URL temporária só pra tocar.
+  function playSound(filename, btn) {
+    const originalText = btn.textContent;
+    btn.textContent = 'Carregando...';
+    btn.disabled = true;
+
+    fetch(`/api/sounds/${filename}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error(`erro ${res.status}`);
+        return res.blob();
+      })
+      .then((blob) => {
+        const player = el('soundPlayer');
+        player.src = URL.createObjectURL(blob);
+        player.play();
+      })
+      .catch((err) => alert(`Não foi possível reproduzir: ${err.message}`))
+      .finally(() => {
+        btn.textContent = originalText;
+        btn.disabled = false;
+      });
+  }
+
   function renderSoundsTable(sounds) {
     el('soundsEmptyHint').style.display = sounds.length === 0 ? 'block' : 'none';
     el('soundsTableBody').innerHTML = sounds.map((s) => {
@@ -973,8 +1003,13 @@
         <td class="mono">${s.filename}</td>
         <td class="mono">${sizeKb} KB</td>
         <td class="mono">${when}</td>
+        <td class="actions"><button class="btn-ghost" data-play-sound="${s.filename}">Reproduzir</button></td>
       </tr>`;
     }).join('');
+
+    document.querySelectorAll('[data-play-sound]').forEach((btn) => {
+      btn.addEventListener('click', () => playSound(btn.dataset.playSound, btn));
+    });
   }
 })();
 </script>

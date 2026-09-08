@@ -3,7 +3,24 @@ Listagem de áudios customizados gerados/gravados (backlog #53) -
 completa o manual 48 (TTS): gerava áudio, mas não tinha como ver o
 que já existia sem entrar no servidor de arquivos.
 """
+import re
 from pathlib import Path
+
+# Só letras minúsculas/números/hífen + ".wav" - rejeita qualquer
+# tentativa de path traversal (../, /, caracteres especiais) antes
+# mesmo de tocar no sistema de arquivos (backlog #60, reprodução de
+# áudio pela interface).
+SAFE_FILENAME_RE = re.compile(r"^[a-z0-9-]{1,60}\.wav$")
+
+
+def is_safe_sound_filename(filename: str) -> bool:
+    """
+    Valida que um nome de arquivo é seguro pra servir como resposta
+    HTTP - sem isso, alguém poderia pedir "../../etc/passwd" (ou
+    qualquer outro arquivo do sistema) via
+    GET /api/sounds/<filename escolhido pelo cliente>.
+    """
+    return bool(SAFE_FILENAME_RE.match(filename or ""))
 
 
 def list_sound_files(directory) -> list:

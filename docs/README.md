@@ -64,6 +64,7 @@ configurar, como testar manualmente, e limitações conhecidas.
 57. [Histórico de tempo em pausa por motivo](manual-57-historico-pausa.md)
 58. [Histórico de SLA por dia](manual-58-historico-sla.md)
 59. [Interface do histórico de SLA no painel](manual-59-interface-historico-sla.md)
+60. [Reprodução de áudio na lista do painel](manual-60-reproducao-audio.md)
 
 ## Regra de manutenção
 

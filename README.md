@@ -437,6 +437,12 @@ chamada não polui o histórico), consultável por
 também aparece direto no painel operacional, não só via API — ver
 `docs/manual-59-interface-historico-sla.md`.
 
+**E, fechando a lacuna do manual 53**: a lista de áudios do painel
+agora reproduz o som direto na interface (via `fetch()` autenticado +
+blob, já que `<audio src>` não manda o token exigido pela API), com
+proteção explícita contra path traversal — ver
+`docs/manual-60-reproducao-audio.md`.
+
 Para ajustar quais ramais aparecem na lista de colegas, edite o array
 `COLLEAGUES` no início do `<script>` em `webphone/index.html`. Cada
 ramal monitorado precisa ter um `hint` correspondente em
@@ -461,7 +467,7 @@ cd ../queue-api
 python3 -m pytest tests/ -v
 ```
 
-879 testes estáticos no total, em 8 suítes (`tests/`, `queue-api/tests/`,
+890 testes estáticos no total, em 8 suítes (`tests/`, `queue-api/tests/`,
 `admin-api/tests/`, `asterisk/scripts/tests/`, `backup/tests/`,
 `ai-worker/tests/`, `asterisk/agi/tests/`, `scripts/tests/`) —
 nenhuma delas sobe o Asterisk, Whisper ou Ollama de verdade. Detalhes

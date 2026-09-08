@@ -348,6 +348,25 @@ def test_sounds_listing_requires_authentication():
     assert '_require_role({"admin", "supervisor"})' in sounds_branch
 
 
+def test_serving_sound_file_validates_filename_before_touching_filesystem():
+    """
+    Backlog #60: o nome do arquivo vem da URL, escolhido por quem
+    chama - validar ANTES de montar o caminho e ler o arquivo evita
+    qualquer tentativa de path traversal (ex: "../../etc/passwd").
+    """
+    source = load_source()
+    body = get_function_body(source, "_handle_serve_sound_file")
+    validate_pos = body.index("is_safe_sound_filename(")
+    read_pos = body.index("read_bytes()")
+    assert validate_pos < read_pos
+
+
+def test_serving_sound_file_requires_authentication():
+    source = load_source()
+    body = get_function_body(source, "_handle_serve_sound_file")
+    assert '_require_role({"admin", "supervisor"})' in body
+
+
 def test_remove_tenant_also_cleans_up_dynamic_extensions_and_files():
     """
     Backlog #54 - fecha a limitação documentada no manual 52: ramais

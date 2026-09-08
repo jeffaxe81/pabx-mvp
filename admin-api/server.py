@@ -28,7 +28,7 @@ from ami_client import AMIClient
 from blocklist import validate_blocklist_number
 from vip import validate_vip_input
 from monitoring import validate_monitoring_pin_input
-from sounds import list_sound_files
+from sounds import list_sound_files, is_safe_sound_filename
 from overflow import validate_overflow_timeout_input
 from tenants import (
     load_tenants, save_tenants, validate_tenant_creation_input,
@@ -241,11 +241,16 @@ class Handler(BaseHTTPRequestHandler):
                 self._send_json(502, {"error": f"falha ao consultar AMI: {exc}"})
             finally:
                 client.close()
-        elif self.path.startswith("/api/sounds"):
+        elif self.path == "/api/sounds":
             if not self._require_role({"admin", "supervisor"}):
                 return
             sounds_dir = Path(ASTERISK_CONF_DIR, "sounds", "custom")
             self._send_json(200, {"sounds": list_sound_files(sounds_dir)})
+        elif self.path.startswith("/api/sounds/"):
+            # Precisa vir DEPOIS da checagem exata "/api/sounds" (a
+            # listagem) - senão um startswith() genérico capturaria
+            # esta rota também, e nunca chegaríamos aqui.
+            self._handle_serve_sound_file()
         elif self.path in ("/", "/index.html"):
             self._serve_static("index.html", "text/html")
         else:
@@ -325,6 +330,36 @@ class Handler(BaseHTTPRequestHandler):
         data = file_path.read_bytes()
         self.send_response(200)
         self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+
+    def _handle_serve_sound_file(self):
+        """
+        Serve o conteúdo de um áudio existente (backlog #60 - fecha a
+        limitação documentada no manual 53 "sem reprodução de áudio na
+        interface"). O `filename` vem direto da URL, escolhido por
+        quem está chamando - por isso a validação de nome seguro
+        (is_safe_sound_filename) é OBRIGATÓRIA antes de tocar no
+        sistema de arquivos, senão alguém poderia pedir
+        "../../etc/passwd" via essa mesma rota.
+        """
+        if not self._require_role({"admin", "supervisor"}):
+            return
+
+        filename = self.path[len("/api/sounds/"):]
+        if not is_safe_sound_filename(filename):
+            self._send_json(400, {"error": "nome de arquivo inválido"})
+            return
+
+        file_path = Path(ASTERISK_CONF_DIR, "sounds", "custom", filename)
+        if not file_path.is_file():
+            self._send_json(404, {"error": "áudio não encontrado"})
+            return
+
+        data = file_path.read_bytes()
+        self.send_response(200)
+        self.send_header("Content-Type", "audio/wav")
         self.send_header("Content-Length", str(len(data)))
         self.end_headers()
         self.wfile.write(data)

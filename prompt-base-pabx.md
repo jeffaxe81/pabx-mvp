@@ -554,3 +554,17 @@ errada primeiro - corrigido tornando a busca mais especifica
 ("function renderSla(" com parentese). Ver docs/manual-59.
 
 879 testes, 59 manuais, 8 suites - tudo passando e no GitHub.
+
+
+## Item #60: Reproducao de audio na lista do painel - IMPLEMENTADO
+Fechada a lacuna do manual 53 ("sem reproducao de audio na
+interface"). Problema real descoberto: <audio src="..."> nao manda
+header Authorization, entao API responderia 401 - solucao foi
+fetch() manual com o token, pedindo blob, criando URL temporaria via
+URL.createObjectURL() e tocando num <audio> compartilhado oculto.
+admin-api/sounds.py ganhou is_safe_sound_filename() (protecao contra
+path traversal, ex: ../../etc/passwd) - validada ANTES de tocar no
+sistema de arquivos. GET /api/sounds/<filename> serve o wav puro
+(admin+supervisor). Ver docs/manual-60.
+
+890 testes, 60 manuais, 8 suites - tudo passando e no GitHub.
