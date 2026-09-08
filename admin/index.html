@@ -984,7 +984,15 @@
       })
       .then((blob) => {
         const player = el('soundPlayer');
-        player.src = URL.createObjectURL(blob);
+        // Libera a URL temporária do áudio tocado antes (backlog #61)
+        // - sem isso, cada clique em "Reproduzir" acumulava memória
+        // não liberada no navegador, mesmo depois do áudio terminar.
+        if (player.dataset.objectUrl) {
+          URL.revokeObjectURL(player.dataset.objectUrl);
+        }
+        const objectUrl = URL.createObjectURL(blob);
+        player.dataset.objectUrl = objectUrl;
+        player.src = objectUrl;
         player.play();
       })
       .catch((err) => alert(`Não foi possível reproduzir: ${err.message}`))

@@ -448,3 +448,18 @@ def test_play_sound_creates_object_url_for_playback():
     body = html[fn_start:fn_end]
     assert "URL.createObjectURL(blob)" in body
     assert "player.play()" in body
+
+
+def test_play_sound_revokes_previous_object_url():
+    """
+    Backlog #61: sem isso, cada clique em "Reproduzir" acumula
+    memória não liberada no navegador (URLs de objeto nunca revogadas
+    entre uma reprodução e outra).
+    """
+    html = load_html()
+    fn_start = html.index("function playSound")
+    fn_end = html.index("}\n\n", fn_start) if "}\n\n" in html[fn_start:] else html.index("}\n  }", fn_start)
+    body = html[fn_start:fn_end]
+    revoke_pos = body.index("URL.revokeObjectURL(")
+    create_pos = body.index("URL.createObjectURL(")
+    assert revoke_pos < create_pos

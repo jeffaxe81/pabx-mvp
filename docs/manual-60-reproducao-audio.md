@@ -69,13 +69,11 @@ existentes" → botão "Reproduzir" em qualquer linha.
   elemento `<audio>` fica oculto (`display:none`), então não há
   barra de progresso nem botão de pausa visíveis; só toca do início
   ao fim
-- **URLs de objeto (`createObjectURL`) não são revogadas** — cada
-  clique em "Reproduzir" cria uma nova URL temporária sem chamar
-  `URL.revokeObjectURL()` na anterior; em uma sessão muito longa com
-  muitos áudios diferentes tocados, isso acumula memória não liberada
-  no navegador (impacto pequeno na prática, mas real)
 - **Nunca testado contra um Asterisk real** — mesma situação de
   sempre; aqui, especificamente, nunca confirmado que os áudios
   gerados por TTS (manual 48) realmente têm o formato que o
   `<audio>` do navegador consegue tocar sem problema (ex: taxa de
   amostragem compatível)
+
+> **Nota**: a limitação original deste manual (vazamento de memória
+> por URLs de objeto nunca revogadas) foi corrigida — ver manual 61.

@@ -443,6 +443,11 @@ blob, já que `<audio src>` não manda o token exigido pela API), com
 proteção explícita contra path traversal — ver
 `docs/manual-60-reproducao-audio.md`.
 
+**E, fechando a última limitação daquele mesmo item**: as URLs de
+objeto do player de áudio agora são revogadas antes de criar a
+próxima, evitando o vazamento de memória apontado no manual anterior
+— ver `docs/manual-61-correcao-vazamento-audio.md`.
+
 Para ajustar quais ramais aparecem na lista de colegas, edite o array
 `COLLEAGUES` no início do `<script>` em `webphone/index.html`. Cada
 ramal monitorado precisa ter um `hint` correspondente em

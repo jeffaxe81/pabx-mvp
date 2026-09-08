@@ -568,3 +568,17 @@ sistema de arquivos. GET /api/sounds/<filename> serve o wav puro
 (admin+supervisor). Ver docs/manual-60.
 
 890 testes, 60 manuais, 8 suites - tudo passando e no GitHub.
+
+
+## Item #61: Correcao de vazamento de memoria no player de audio - IMPLEMENTADO
+Fechada a lacuna do proprio manual 60 (URLs de objeto nunca
+revogadas). playSound() agora guarda a ultima URL criada em
+player.dataset.objectUrl e a revoga ANTES de criar a proxima (nao
+espera evento "ended" - usuario pode trocar de audio no meio ou
+fechar o painel, entao revogar no INICIO da proxima reproducao cobre
+os dois casos sem listener extra). Teste confirma ordem
+(revokeObjectURL antes de createObjectURL). Contagem de testes
+inalterada (890) - correcao de comportamento existente, sem rota/
+modulo novo. Ver docs/manual-61.
+
+890 testes, 61 manuais, 8 suites - tudo passando e no GitHub.

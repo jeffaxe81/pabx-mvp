@@ -65,6 +65,7 @@ configurar, como testar manualmente, e limitações conhecidas.
 58. [Histórico de SLA por dia](manual-58-historico-sla.md)
 59. [Interface do histórico de SLA no painel](manual-59-interface-historico-sla.md)
 60. [Reprodução de áudio na lista do painel](manual-60-reproducao-audio.md)
+61. [Correção de vazamento de memória no player de áudio](manual-61-correcao-vazamento-audio.md)
 
 ## Regra de manutenção
 
