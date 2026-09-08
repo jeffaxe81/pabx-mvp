@@ -53,6 +53,7 @@ configurar, como testar manualmente, e limitações conhecidas.
 46. [SLA de fila](manual-46-sla-fila.md)
 47. [Migração faster-whisper → whisper.cpp](manual-47-migracao-whisper-cpp.md)
 48. [Síntese de voz / TTS (Piper padrão, XTTS opcional)](manual-48-tts-piper-xtts.md)
+49. [Confirmação falada do atendente virtual (fase 2 do TTS)](manual-49-confirmacao-falada-atendente-virtual.md)
 
 ## Regra de manutenção
 

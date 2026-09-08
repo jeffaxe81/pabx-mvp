@@ -377,8 +377,15 @@ Painel tem secao "Gerar audio por texto (TTS)", nome de arquivo
 opcional (permite regenerar exatamente menu-principal-pt por texto),
 escolher XTTS exige confirmacao extra na UI. Ver docs/manual-48.
 
-PENDENTE: integracao com resposta falada do atendente virtual (manual
-37) - fase 2, nao implementada ainda.
+## Item #49: Confirmacao falada do atendente virtual (fase 2 do TTS) - IMPLEMENTADO
+~~Fase 2 (resposta falada do atendente virtual, manual 37)~~ -
+IMPLEMENTADA. Apos classificar intencao, Piper sintetiza uma frase
+fixa de confirmacao ("Entendi que voce quer falar sobre vendas...")
+e o script AGI toca via STREAM FILE ANTES de definir INTENT_DESTINO.
+Best-effort - se sintese falhar, roteamento continua normalmente sem
+confirmacao (nunca bloqueia o fluxo principal). Ver docs/manual-49.
+
+**Ambas as fases do TTS (URA + atendente virtual) agora completas.**
 
 Outras lacunas identificadas na auditoria, nao viraram itens de
 backlog ainda (fora do escopo imediato, ou exigiriam decisao adicional

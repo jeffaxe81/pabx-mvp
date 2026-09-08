@@ -116,3 +116,28 @@ def test_tts_dispatches_to_correct_engine_module():
     fn_end = source.index("\n\n    def ", fn_start) if "\n\n    def " in source[fn_start:] else len(source)
     body = source[fn_start:fn_end]
     assert "piper_engine if cleaned[\"engine\"] == ENGINE_PIPER else xtts_engine" in body
+
+
+# ---------- Confirmação falada do atendente virtual (backlog #48, fase 2) ----------
+
+def test_classify_intent_includes_confirmation_audio_in_response():
+    source = load_source()
+    fn_start = source.index("def _handle_classify_intent")
+    fn_end = source.index("\n\n    def _synthesize_confirmation", fn_start)
+    body = source[fn_start:fn_end]
+    assert body.count("_synthesize_confirmation(") == 2  # caminho sem transcrição + caminho normal
+    assert '"confirmation_filename": confirmation' in body
+
+
+def test_confirmation_synthesis_never_raises():
+    """
+    Se a síntese de voz falhar (motor indisponível, texto vazio,
+    etc.), o atendente virtual precisa continuar funcionando sem a
+    confirmação falada - nunca travar a classificação de intenção
+    inteira por causa de um recurso "a mais".
+    """
+    source = load_source()
+    fn_start = source.index("def _synthesize_confirmation")
+    body = source[fn_start:]
+    assert "except Exception" in body
+    assert "return None" in body

@@ -53,3 +53,22 @@ def parse_intent_response(raw_response: str) -> str:
 def intent_to_extension(intent: str) -> str:
     """Sempre retorna um destino válido - nunca None, mesmo pra intenção desconhecida."""
     return INTENT_TO_EXTENSION.get(intent, INTENT_TO_EXTENSION["outro"])
+
+
+# ---------- Confirmação falada (backlog #48, fase 2) ----------
+
+CONFIRMATION_PHRASES = {
+    "vendas": "Entendi que você quer falar sobre vendas. Vou te transferir.",
+    "suporte": "Entendi que você precisa de suporte. Vou te transferir.",
+    "outro": "Não tenho certeza do assunto, vou te transferir pra um atendente.",
+}
+
+
+def build_confirmation_phrase(intent: str) -> str:
+    """
+    Frase curta confirmando em voz o que foi entendido, antes de
+    transferir - dá um caráter mais conversacional ao atendente
+    virtual, sem virar um robô que faz perguntas de volta (isso seria
+    um projeto bem maior, ver aviso no topo deste arquivo).
+    """
+    return CONFIRMATION_PHRASES.get(intent, CONFIRMATION_PHRASES["outro"])

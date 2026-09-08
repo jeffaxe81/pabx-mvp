@@ -42,6 +42,17 @@ def build_set_variable_command(name: str, value: str) -> str:
     return f'SET VARIABLE {name} "{value}"'
 
 
+def build_stream_file_command(filename: str, escape_digits: str = "") -> str:
+    """
+    Monta o comando AGI 'STREAM FILE' - toca um áudio pro cliente
+    (backlog #48, fase 2: confirmação falada do atendente virtual).
+    filename é relativo à pasta de sons do Asterisk, sem extensão
+    (ex: "custom/tts-abc123", não "custom/tts-abc123.wav") - mesma
+    convenção usada por Playback()/Background() no dialplan.
+    """
+    return f'STREAM FILE "{filename}" "{escape_digits}"'
+
+
 def parse_agi_response(line: str) -> dict:
     """
     Parseia a resposta do Asterisk a um comando AGI - formato típico

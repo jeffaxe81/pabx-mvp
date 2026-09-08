@@ -16,7 +16,7 @@ import os
 import sys
 import urllib.request
 
-from agi_protocol import parse_agi_env, build_record_command, build_set_variable_command, parse_agi_response
+from agi_protocol import parse_agi_env, build_record_command, build_set_variable_command, build_stream_file_command, parse_agi_response
 
 AI_WORKER_URL = os.environ.get("AI_WORKER_URL", "http://ai-worker:8092")
 RECORDINGS_DIR = os.environ.get("AGI_RECORDINGS_DIR", "/var/spool/asterisk/monitor")
@@ -40,8 +40,12 @@ def send_agi_command(command: str) -> dict:
     return parse_agi_response(response_line)
 
 
-def classify_intent(filename: str) -> str:
-    """Chama o ai-worker; em qualquer falha, cai no destino seguro (fila geral)."""
+def classify_intent(filename: str) -> dict:
+    """
+    Chama o ai-worker; em qualquer falha, cai no destino seguro (fila
+    geral) sem confirmação falada (backlog #48, fase 2) - a confirmação
+    é um "a mais", nunca pode travar o roteamento em si.
+    """
     try:
         body = json.dumps({"filename": filename}).encode("utf-8")
         request = urllib.request.Request(
@@ -50,10 +54,13 @@ def classify_intent(filename: str) -> str:
         )
         with urllib.request.urlopen(request, timeout=60) as response:
             data = json.loads(response.read().decode("utf-8"))
-            return data.get("extension", FALLBACK_EXTENSION)
+            return {
+                "extension": data.get("extension", FALLBACK_EXTENSION),
+                "confirmation_filename": data.get("confirmation_filename"),
+            }
     except Exception as exc:  # noqa: BLE001
         print(f"[atendente-virtual] falha ao classificar intenção: {exc}", file=sys.stderr)
-        return FALLBACK_EXTENSION
+        return {"extension": FALLBACK_EXTENSION, "confirmation_filename": None}
 
 
 def main():
@@ -64,8 +71,16 @@ def main():
 
     send_agi_command(build_record_command(recording_path, audio_format="wav", timeout_ms=8000))
 
-    destination = classify_intent(filename)
-    send_agi_command(build_set_variable_command("INTENT_DESTINO", destination))
+    result = classify_intent(filename)
+
+    confirmation_filename = result.get("confirmation_filename")
+    if confirmation_filename:
+        # Sem extensão .wav - STREAM FILE espera o caminho relativo à
+        # pasta de sons, mesma convenção de Playback()/Background().
+        sound_name = confirmation_filename.rsplit(".", 1)[0]
+        send_agi_command(build_stream_file_command(f"custom/{sound_name}"))
+
+    send_agi_command(build_set_variable_command("INTENT_DESTINO", result["extension"]))
 
 
 if __name__ == "__main__":

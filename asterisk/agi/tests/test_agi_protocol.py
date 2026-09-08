@@ -1,4 +1,4 @@
-from agi_protocol import parse_agi_env, build_record_command, build_set_variable_command, parse_agi_response
+from agi_protocol import parse_agi_env, build_record_command, build_set_variable_command, build_stream_file_command, parse_agi_response
 
 
 # ---------- parse_agi_env ----------
@@ -41,6 +41,18 @@ def test_build_record_command_includes_escape_digit_and_timeout():
 def test_build_set_variable_command():
     cmd = build_set_variable_command("INTENT_DESTINO", "1010")
     assert cmd == 'SET VARIABLE INTENT_DESTINO "1010"'
+
+
+# ---------- build_stream_file_command ----------
+
+def test_build_stream_file_command_basic():
+    cmd = build_stream_file_command("custom/tts-abc123")
+    assert cmd == 'STREAM FILE "custom/tts-abc123" ""'
+
+
+def test_build_stream_file_command_with_escape_digits():
+    cmd = build_stream_file_command("custom/tts-abc123", escape_digits="#")
+    assert cmd == 'STREAM FILE "custom/tts-abc123" "#"'
 
 
 # ---------- parse_agi_response ----------

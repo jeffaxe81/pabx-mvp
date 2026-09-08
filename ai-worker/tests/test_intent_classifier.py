@@ -51,3 +51,23 @@ def test_intent_to_extension_unknown_falls_back_to_outro_destination():
 def test_intent_to_extension_never_returns_none():
     for intent in ("vendas", "suporte", "outro", "", "lixo", None):
         assert intent_to_extension(intent) is not None
+
+
+# ---------- build_confirmation_phrase ----------
+
+def test_build_confirmation_phrase_known_intents():
+    from intent_classifier import build_confirmation_phrase
+    assert "vendas" in build_confirmation_phrase("vendas").lower()
+    assert "suporte" in build_confirmation_phrase("suporte").lower()
+
+
+def test_build_confirmation_phrase_never_returns_empty():
+    from intent_classifier import build_confirmation_phrase
+    for intent in ("vendas", "suporte", "outro", "", "lixo", None):
+        phrase = build_confirmation_phrase(intent)
+        assert phrase and isinstance(phrase, str)
+
+
+def test_build_confirmation_phrase_unknown_intent_falls_back_to_outro():
+    from intent_classifier import build_confirmation_phrase
+    assert build_confirmation_phrase("intencao-desconhecida") == build_confirmation_phrase("outro")

@@ -22,7 +22,7 @@ from urllib.parse import urlparse, parse_qs
 from store import TranscriptStore
 from pipeline import process_recording
 from recordings_scanner import list_unprocessed_recordings
-from intent_classifier import build_intent_prompt, parse_intent_response, intent_to_extension
+from intent_classifier import build_intent_prompt, parse_intent_response, intent_to_extension, build_confirmation_phrase
 from transcription import transcribe_audio
 from llm_client import generate as llm_generate
 from tts_service import validate_tts_request, ENGINE_PIPER, ENGINE_XTTS
@@ -198,16 +198,40 @@ class Handler(BaseHTTPRequestHandler):
         if not transcript.strip():
             # Sem transcrição não dá pra classificar - cai no destino
             # seguro (fila geral) em vez de travar a chamada.
-            self._send_json(200, {"transcript": "", "intent": "outro", "extension": intent_to_extension("outro")})
+            confirmation = self._synthesize_confirmation("outro")
+            self._send_json(200, {
+                "transcript": "", "intent": "outro", "extension": intent_to_extension("outro"),
+                "confirmation_filename": confirmation,
+            })
             return
 
         raw_response = llm_generate(OLLAMA_URL, build_intent_prompt(transcript), model=OLLAMA_MODEL)
         intent = parse_intent_response(raw_response)
+        confirmation = self._synthesize_confirmation(intent)
         self._send_json(200, {
             "transcript": transcript,
             "intent": intent,
             "extension": intent_to_extension(intent),
+            "confirmation_filename": confirmation,
         })
+
+    def _synthesize_confirmation(self, intent: str):
+        """
+        Gera o áudio de confirmação falada (backlog #48, fase 2) via
+        Piper - best-effort: se a síntese falhar por qualquer motivo,
+        devolve None em vez de travar a resposta inteira. O atendente
+        virtual continua funcionando sem a confirmação falada, só sem
+        esse toque a mais.
+        """
+        try:
+            phrase = build_confirmation_phrase(intent)
+            filename = f"tts-{uuid.uuid4().hex}.wav"
+            output_path = Path(SOUNDS_OUTPUT_DIR) / filename
+            Path(SOUNDS_OUTPUT_DIR).mkdir(parents=True, exist_ok=True)
+            piper_engine.synthesize(phrase, "pt", output_path)
+            return filename
+        except Exception:  # noqa: BLE001
+            return None
 
 
 def main():

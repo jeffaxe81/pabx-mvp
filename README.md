@@ -372,6 +372,12 @@ empresa que encerrou operações em 2024). Admin gera áudio de anúncios
 da URA digitando o texto, sem precisar de locutor — ver
 `docs/manual-48-tts-piper-xtts.md`.
 
+**E, fechando a fase 2**: o atendente virtual com IA (manual 37)
+agora confirma em voz o que entendeu antes de transferir a chamada
+("Entendi que você quer falar sobre vendas...") — best-effort, nunca
+bloqueia o roteamento se a síntese falhar — ver
+`docs/manual-49-confirmacao-falada-atendente-virtual.md`.
+
 Para ajustar quais ramais aparecem na lista de colegas, edite o array
 `COLLEAGUES` no início do `<script>` em `webphone/index.html`. Cada
 ramal monitorado precisa ter um `hint` correspondente em
@@ -396,7 +402,7 @@ cd ../queue-api
 python3 -m pytest tests/ -v
 ```
 
-758 testes estáticos no total, em 7 suítes (`tests/`, `queue-api/tests/`,
+768 testes estáticos no total, em 7 suítes (`tests/`, `queue-api/tests/`,
 `admin-api/tests/`, `asterisk/scripts/tests/`, `backup/tests/`,
 `ai-worker/tests/`, `asterisk/agi/tests/`) — nenhuma delas sobe o
 Asterisk, Whisper ou Ollama de verdade. Detalhes em `tests/README.md`.
