@@ -393,3 +393,27 @@ do usuario, ex: integracao omnichannel/WhatsApp/chat e recursos
 completos de videoconferencia): anonimizacao de dados sensiveis em
 gravacao/transcricao, rate limiting em tentativas de codigo 2FA,
 lista branca formal de discagem, selecao de rota por menor custo.
+
+
+## Item #50: Geracao de segredos fortes antes do deploy (endurecimento de seguranca)
+Usuario respondeu "sim" a pergunta sobre proximos passos - interpretado
+como endurecimento de seguranca (unico dos 4 itens do roteiro que e
+realmente executavel neste ambiente sandboxed, sem Asterisk real/GPU).
+~~scripts/generate_secrets.py~~ - IMPLEMENTADO. Varre docker-compose.yml/
+manager.conf/pjsip.conf, troca todos os placeholders "troque_esta_senha_*"
+por segredos fortes de 32 caracteres, mantendo os segredos de AMI
+SINCRONIZADOS entre docker-compose.yml e manager.conf. Bug real
+encontrado e corrigido: "troque_esta_senha_ami" e substring de
+"troque_esta_senha_ami_admin" - replace_all_placeholders ordena por
+comprimento decrescente pra evitar corrupcao. Aviso explicito pra
+NUNCA comitar os arquivos alterados de volta pro repositorio publico.
+Nova 8a suite de testes (scripts/tests/). Ver docs/manual-50.
+
+Tambem alertei o usuario nesta resposta: o token do GitHub usado
+durante toda a conversa (github_pat_11BJXUDKQ0a2YqHZpyjiFh_...) ficou
+exposto em texto claro no historico - recomendei revogar/rotacionar.
+
+Itens do roteiro de proximos passos AINDA pendentes (nao executaveis
+neste ambiente sandboxed): validacao contra Asterisk real, audios
+reais em vez de placeholder (beeps), teste da IA local de verdade
+(Piper/Whisper/Llama rodando de fato sem mock).

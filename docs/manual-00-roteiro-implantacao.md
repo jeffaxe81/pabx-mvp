@@ -20,12 +20,17 @@ verdade, não só "configurada".
 funcionalidade avançada.
 
 1. `git clone` o repositório, `cd` nele
-2. Gere os certificados TLS de verdade (os do repositório são
+2. **Gere segredos fortes de verdade** (obrigatório, não pule):
+   `python3 scripts/generate_secrets.py` — as senhas do repositório
+   são placeholders públicos, subir com elas é o mesmo que não ter
+   senha nenhuma. Leia o aviso que o script imprime antes de comitar
+   qualquer coisa de volta pro GitHub (ver `docs/manual-50-geracao-segredos.md`)
+3. Gere os certificados TLS de verdade (os do repositório são
    self-signed de exemplo) — ver `docs/manual-02-criptografia.md`
-3. `docker compose up -d asterisk`
-4. Registre 2 softphones nos ramais `t1-1001` e `t1-1002`
+4. `docker compose up -d asterisk`
+5. Registre 2 softphones nos ramais `t1-1001` e `t1-1002`
    (`docs/manual-01-core-ramais.md`)
-5. Ligue de um pro outro — se o áudio passa nos dois sentidos, a base
+6. Ligue de um pro outro — se o áudio passa nos dois sentidos, a base
    está sólida
 
 **Não prossiga pra fase 2 até isso funcionar.** Qualquer problema de

@@ -54,6 +54,7 @@ configurar, como testar manualmente, e limitações conhecidas.
 47. [Migração faster-whisper → whisper.cpp](manual-47-migracao-whisper-cpp.md)
 48. [Síntese de voz / TTS (Piper padrão, XTTS opcional)](manual-48-tts-piper-xtts.md)
 49. [Confirmação falada do atendente virtual (fase 2 do TTS)](manual-49-confirmacao-falada-atendente-virtual.md)
+50. [Geração de segredos fortes antes do deploy](manual-50-geracao-segredos.md)
 
 ## Regra de manutenção
 

@@ -378,6 +378,14 @@ agora confirma em voz o que entendeu antes de transferir a chamada
 bloqueia o roteamento se a síntese falhar — ver
 `docs/manual-49-confirmacao-falada-atendente-virtual.md`.
 
+**E, por fim, um script de geração de segredos fortes**: as senhas
+placeholder do repositório são públicas (qualquer pessoa que veja o
+código no GitHub sabe essas senhas) — `scripts/generate_secrets.py`
+troca todas de uma vez, mantendo os segredos de AMI sincronizados
+entre `docker-compose.yml` e `manager.conf`, com aviso explícito pra
+nunca comitar o resultado de volta pro repositório público. Ver
+`docs/manual-50-geracao-segredos.md`.
+
 Para ajustar quais ramais aparecem na lista de colegas, edite o array
 `COLLEAGUES` no início do `<script>` em `webphone/index.html`. Cada
 ramal monitorado precisa ter um `hint` correspondente em
@@ -402,10 +410,11 @@ cd ../queue-api
 python3 -m pytest tests/ -v
 ```
 
-768 testes estáticos no total, em 7 suítes (`tests/`, `queue-api/tests/`,
+785 testes estáticos no total, em 8 suítes (`tests/`, `queue-api/tests/`,
 `admin-api/tests/`, `asterisk/scripts/tests/`, `backup/tests/`,
-`ai-worker/tests/`, `asterisk/agi/tests/`) — nenhuma delas sobe o
-Asterisk, Whisper ou Ollama de verdade. Detalhes em `tests/README.md`.
+`ai-worker/tests/`, `asterisk/agi/tests/`, `scripts/tests/`) —
+nenhuma delas sobe o Asterisk, Whisper ou Ollama de verdade. Detalhes
+em `tests/README.md`.
 
 ## Documentação
 
