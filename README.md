@@ -410,6 +410,13 @@ dentro dele (arquivos e registros), evitando ramais "fantasma"
 listados pra um tenant que não existe mais — ver
 `docs/manual-54-limpeza-ramais-orfaos.md`.
 
+**E, fechando a última lacuna documentada no manual 42**: o
+monitoramento de chamada agora alcança qualquer ramal dinâmico
+criado pelo painel, não só as telefonistas fixas — o `admin-api`
+sincroniza um mapeamento número→endpoint no AstDB toda vez que um
+ramal é criado, editado ou removido — ver
+`docs/manual-55-monitoramento-ramais-dinamicos.md`.
+
 Para ajustar quais ramais aparecem na lista de colegas, edite o array
 `COLLEAGUES` no início do `<script>` em `webphone/index.html`. Cada
 ramal monitorado precisa ter um `hint` correspondente em
@@ -434,7 +441,7 @@ cd ../queue-api
 python3 -m pytest tests/ -v
 ```
 
-829 testes estáticos no total, em 8 suítes (`tests/`, `queue-api/tests/`,
+833 testes estáticos no total, em 8 suítes (`tests/`, `queue-api/tests/`,
 `admin-api/tests/`, `asterisk/scripts/tests/`, `backup/tests/`,
 `ai-worker/tests/`, `asterisk/agi/tests/`, `scripts/tests/`) —
 nenhuma delas sobe o Asterisk, Whisper ou Ollama de verdade. Detalhes

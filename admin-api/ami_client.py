@@ -144,6 +144,23 @@ class AMIClient:
         blocks = parse_ami_blocks(data.decode("utf-8", errors="replace"))
         return [b["Key"].split("/")[-1] for b in blocks if b.get("Key")]
 
+    def register_extension_mapping(self, number: str, name: str, tenant: str = "t1"):
+        """
+        Mapeamento número→endpoint (backlog #55) - permite que o
+        monitoramento de chamada (manual 42) alcance qualquer ramal
+        dinâmico criado pelo painel, não só as telefonistas fixas
+        (1010/1011). Chamado toda vez que um ramal é criado/editado.
+        """
+        return self._send_action({
+            "Action": "DBPut", "Family": f"extension-map-{tenant}", "Key": str(number), "Val": name,
+        })
+
+    def unregister_extension_mapping(self, number: str, tenant: str = "t1"):
+        """Chamado quando um ramal é removido - evita mapeamento órfão apontando pra um ramal que não existe mais."""
+        return self._send_action({
+            "Action": "DBDel", "Family": f"extension-map-{tenant}", "Key": str(number),
+        })
+
     def register_tenant_did(self, did: str, tenant_id: str):
         """
         Wizard de preparação de ambiente (backlog #39): associa um DID

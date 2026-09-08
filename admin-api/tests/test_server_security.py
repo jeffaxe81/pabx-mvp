@@ -360,3 +360,34 @@ def test_remove_tenant_also_cleans_up_dynamic_extensions_and_files():
     assert "extensions_dynamic_dial-" in body
     assert "extensions_dynamic_hints-" in body
     assert "voicemail_dynamic_" in body
+
+
+def test_creating_extension_registers_monitoring_mapping():
+    """
+    Backlog #55: sem isso, o monitoramento de chamada (manual 42)
+    nunca alcançaria ramais dinâmicos criados pelo painel - só as
+    telefonistas fixas 1010/1011.
+    """
+    source = load_source()
+    body = get_function_body(source, "_handle_create_extension")
+    assert "register_extension_mapping" in body
+
+
+def test_updating_extension_re_registers_monitoring_mapping():
+    source = load_source()
+    body = get_function_body(source, "_handle_update_extension")
+    assert "register_extension_mapping" in body
+
+
+def test_deleting_extension_captures_record_before_removal_to_unregister_mapping():
+    """
+    delete_extension() não devolve o registro apagado - por isso o
+    servidor precisa consultar o número/tenant ANTES de apagar,
+    senão nunca saberia o que desregistrar do AstDB depois.
+    """
+    source = load_source()
+    body = get_function_body(source, "_handle_delete_extension")
+    capture_pos = body.index("existing_record")
+    delete_pos = body.index("delete_extension(STORE_PATH, name)")
+    unregister_pos = body.index("unregister_extension_mapping")
+    assert capture_pos < delete_pos < unregister_pos

@@ -698,6 +698,18 @@ def test_invalid_monitoring_target_does_not_silently_spy_on_nothing():
     assert 'GotoIf($["${MONITOR_CHANNEL}"=""]?destino-invalido,1)' in text
 
 
+def test_monitoring_falls_back_to_astdb_lookup_for_dynamic_extensions():
+    """
+    Backlog #55 - fecha a limitação documentada no manual 42:
+    monitoramento não pode cobrir só as telefonistas fixas (1010/1011)
+    - qualquer ramal dinâmico criado pelo painel precisa ser
+    alcançável também, via consulta ao AstDB sincronizado pelo admin-api.
+    """
+    blocks = blocks_as_dict(load_ext_blocks())
+    text = blocks["chamada-monitorada"].replace(" ", "")
+    assert "DB(extension-map-${TENANT}/${MONITOR_TARGET})" in text
+
+
 # ---------- Sala de conferência ad-hoc (backlog #43) ----------
 
 def test_both_tenants_have_conference_room_dial_pattern():

@@ -483,3 +483,19 @@ extensions_store.json. Interface informa quantos ramais foram
 limpos junto. Ver docs/manual-54.
 
 829 testes, 54 manuais, 8 suites - tudo passando e no GitHub.
+
+
+## Item #55: Monitoramento de chamada estendido a ramais dinamicos - IMPLEMENTADO
+Continuando a fechar lacunas (usuario confirmou essa direcao).
+Fechada a limitacao do manual 42 ("so cobre as telefonistas
+1010/1011"). admin-api ganhou ami_client.register_extension_mapping/
+unregister_extension_mapping (AstDB familia extension-map-{tenant}),
+sincronizado em create/update/delete de ramal via
+regenerate_and_reload(extra_ami_action=...) reaproveitando a mesma
+conexao AMI. Dialplan [chamada-monitorada] consulta
+DB(extension-map-${TENANT}/${MONITOR_TARGET}) como fallback pra
+qualquer numero alem de 1010/1011. Limitacao aceita: numero antigo
+nao e limpo se o numero do ramal mudar numa edicao (so o novo e
+registrado). Ver docs/manual-55.
+
+833 testes, 55 manuais, 8 suites - tudo passando e no GitHub.

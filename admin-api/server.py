@@ -103,8 +103,14 @@ def ensure_bootstrap_admin():
     }])
 
 
-def regenerate_and_reload():
-    """Regera os arquivos dinâmicos (um por tenant pra dial/hints/voicemail, ver manual 38) e pede pro Asterisk recarregar."""
+def regenerate_and_reload(extra_ami_action=None):
+    """
+    Regera os arquivos dinâmicos (um por tenant pra dial/hints/voicemail,
+    ver manual 38) e pede pro Asterisk recarregar. extra_ami_action é
+    opcional - (nome_do_metodo, args) executado na MESMA conexão AMI,
+    usado pra sincronizar o mapeamento de monitoramento (backlog #55)
+    junto com o reload, sem abrir uma conexão AMI extra.
+    """
     extensions = load_store(STORE_PATH)
     files = render_all(extensions)
     for filename, content in files.items():
@@ -113,6 +119,9 @@ def regenerate_and_reload():
     client = AMIClient(AMI_HOST, AMI_PORT, AMI_USERNAME, AMI_SECRET)
     try:
         client.connect_and_login()
+        if extra_ami_action:
+            method_name, args = extra_ami_action
+            getattr(client, method_name)(*args)
         return client.reload_pjsip_and_dialplan()
     finally:
         client.close()
@@ -668,7 +677,9 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         try:
-            reload_result = regenerate_and_reload()
+            reload_result = regenerate_and_reload(
+                extra_ami_action=("register_extension_mapping", (cleaned["number"], cleaned["name"], cleaned["tenant"]))
+            )
         except Exception as exc:  # noqa: BLE001
             self._send_json(200, {"extension": public_view(cleaned), "reload_error": str(exc)})
             return
@@ -700,7 +711,9 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         try:
-            reload_result = regenerate_and_reload()
+            reload_result = regenerate_and_reload(
+                extra_ami_action=("register_extension_mapping", (cleaned["number"], cleaned["name"], cleaned["tenant"]))
+            )
         except Exception as exc:  # noqa: BLE001
             self._send_json(200, {"extension": public_view(cleaned), "reload_error": str(exc)})
             return
@@ -821,13 +834,23 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         name = self.path[len("/api/extensions/"):]
+        # Precisa capturar número/tenant ANTES de apagar - depois que
+        # delete_extension() roda, o registro já não existe mais pra
+        # consultar (backlog #55: desregistrar o mapeamento de
+        # monitoramento também).
+        existing_record = next((e for e in load_store(STORE_PATH) if e["name"] == name), None)
+
         ok, error = delete_extension(STORE_PATH, name)
         if not ok:
             self._send_json(404, {"error": error})
             return
 
+        extra_action = None
+        if existing_record:
+            extra_action = ("unregister_extension_mapping", (existing_record["number"], existing_record.get("tenant", "t1")))
+
         try:
-            reload_result = regenerate_and_reload()
+            reload_result = regenerate_and_reload(extra_ami_action=extra_action)
         except Exception as exc:  # noqa: BLE001
             self._send_json(200, {"ok": True, "reload_error": str(exc)})
             return
