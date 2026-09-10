@@ -623,3 +623,36 @@ sem soft-delete de tenant, nunca testado contra Asterisk real, IA
 local nunca validada com hardware de verdade, sem alta disponibilidade
 de fato - esses sao limites estruturais documentados, nao bugs ou
 gaps de funcionalidade).
+
+
+## Item #64: Integracao de voz (STT+LLM+TTS) na URA principal - IMPLEMENTADO
+Usuario perguntou "integrar TTS e STT na URA/IVR". Antes disso, o
+atendente virtual (manuais 37/49) so era alcancavel via extensao de
+teste isolada (650) - nunca fazia parte do fluxo real de atendimento.
+Adicionada opcao "0" em [horario-comercial] (contexto compartilhado
+entre tenants, sem duplicacao) -> Goto(atendente-virtual,s,1).
+
+Bug de conformidade real encontrado durante a revisao: o
+[atendente-virtual] grava a voz do cliente (AGI RECORD FILE) mas
+NUNCA tocava o aviso de gravacao (custom/aviso-gravacao, manual 40,
+LGPD) antes disso - unico ponto do projeto que grava sem avisar.
+Corrigido, adicionado Playback(custom/aviso-gravacao) antes do menu.
+
+911 testes, 64 manuais, 8 suites - tudo passando, AINDA NAO commitado
+nem pushado no momento de escrever esta nota (fazer isso a seguir).
+
+## Descoberta importante: usuario esta no Windows
+Usuario perguntou "e no windows?" sobre como acessar os paineis.
+ALERTA CRITICO DESCOBERTO: o projeto usa network_mode: host em 3
+servicos (asterisk, queue-api, admin-api) - comentario no proprio
+docker-compose.yml diz "necessario pra SIP/RTP funcionarem sem dor de
+cabeca com NAT". Host networking NAO funciona do jeito esperado no
+Docker Desktop pra Windows (a VM Linux por baixo faz a rede ficar
+isolada do Windows) - isso quebraria AMI (127.0.0.1:5038) e o
+proprio SIP/RTP, que e a razao de existir desse modo de rede aqui.
+
+Recomendei 3 caminhos: (1) WSL2 com Docker ENGINE nativo instalado
+DENTRO da distro Linux (nao Docker Desktop) - minha recomendacao
+principal; (2) VM Linux completa; (3) servidor Linux remoto/nuvem.
+Usuario pediu pra documentar o caminho 1 como manual novo - PROXIMO
+PASSO a fazer (nao escrito ainda no momento desta nota).

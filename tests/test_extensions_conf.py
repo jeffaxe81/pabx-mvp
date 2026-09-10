@@ -341,6 +341,35 @@ def test_ura_routes_digit_1_and_2_differently():
     blocks = blocks_as_dict(load_ext_blocks())
     text = blocks["horario-comercial"].replace(" ", "")
     assert "exten=>1,1,Goto(${TENANT}-internal,1000,1)" in text
+
+
+# ---------- Integração de voz na URA principal (backlog #64) ----------
+
+def test_ura_offers_voice_option_reaching_virtual_attendant():
+    """
+    Backlog #64 - integra o atendente virtual (STT+LLM+TTS, manuais
+    37/49) direto no menu principal, em vez de só uma extensão de
+    teste isolada (650). Cliente pode apertar "0" pra falar em vez de
+    digitar.
+    """
+    blocks = blocks_as_dict(load_ext_blocks())
+    text = blocks["horario-comercial"].replace(" ", "")
+    assert "exten=>0,1,Goto(atendente-virtual,s,1)" in text
+
+
+def test_voice_option_available_regardless_of_tenant():
+    """
+    [horario-comercial] é compartilhado entre tenants (manual 38) -
+    a opção de voz funciona pra qualquer tenant sem duplicação
+    nenhuma, já que ${TENANT} já está definido antes de chegar aqui
+    (from-tdm-gateway/extensões de teste) e o Goto não hardcoda
+    nenhum tenant específico.
+    """
+    blocks = blocks_as_dict(load_ext_blocks())
+    text = blocks["horario-comercial"].replace(" ", "")
+    assert "exten=>0,1,Goto(atendente-virtual,s,1)" in text
+    assert "t1" not in text.split("exten=>0,1,")[1].split("\n")[0]
+    assert "t2" not in text.split("exten=>0,1,")[1].split("\n")[0]
     assert "exten=>2,1,Goto(${TENANT}-internal,1010,1)" in text
 
 

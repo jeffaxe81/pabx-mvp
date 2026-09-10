@@ -68,6 +68,7 @@ configurar, como testar manualmente, e limitações conhecidas.
 61. [Correção de vazamento de memória no player de áudio](manual-61-correcao-vazamento-audio.md)
 62. [Limpeza de mapeamento ao renumerar ramal](manual-62-limpeza-renumeracao.md)
 63. [Filtro de intervalo de datas nos relatórios](manual-63-filtro-data-relatorios.md)
+64. [Integração de voz na URA principal](manual-64-integracao-voz-ura.md)
 
 ## Regra de manutenção
 

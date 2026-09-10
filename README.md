@@ -457,8 +457,16 @@ automaticamente, não só registra o novo — ver
 filtro de intervalo de datas (`?start=`/`?end=`) no histórico de
 pausa e no histórico de SLA, com interface no painel operacional que
 sobrevive ao polling automático — ver
-`docs/manual-63-filtro-data-relatorios.md`. Sem nenhuma lacuna
-funcional conhecida pendente a partir deste ponto.
+`docs/manual-63-filtro-data-relatorios.md`.
+
+**E, integrando o atendente virtual (STT+LLM+TTS) direto no fluxo
+real de atendimento**: o menu principal da URA ganhou a opção `0`
+("fale com um assistente"), reaproveitando a pipeline dos manuais
+37/49 em vez de deixá-la isolada numa extensão de teste. Durante essa
+integração, um bug real de conformidade foi encontrado e corrigido: o
+atendente virtual gravava a voz do cliente sem nunca tocar o aviso de
+gravação exigido pela LGPD (manual 40) — ver
+`docs/manual-64-integracao-voz-ura.md`.
 
 Para ajustar quais ramais aparecem na lista de colegas, edite o array
 `COLLEAGUES` no início do `<script>` em `webphone/index.html`. Cada
@@ -484,7 +492,7 @@ cd ../queue-api
 python3 -m pytest tests/ -v
 ```
 
-909 testes estáticos no total, em 8 suítes (`tests/`, `queue-api/tests/`,
+911 testes estáticos no total, em 8 suítes (`tests/`, `queue-api/tests/`,
 `admin-api/tests/`, `asterisk/scripts/tests/`, `backup/tests/`,
 `ai-worker/tests/`, `asterisk/agi/tests/`, `scripts/tests/`) —
 nenhuma delas sobe o Asterisk, Whisper ou Ollama de verdade. Detalhes
