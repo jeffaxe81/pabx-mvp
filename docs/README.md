@@ -69,6 +69,7 @@ configurar, como testar manualmente, e limitações conhecidas.
 62. [Limpeza de mapeamento ao renumerar ramal](manual-62-limpeza-renumeracao.md)
 63. [Filtro de intervalo de datas nos relatórios](manual-63-filtro-data-relatorios.md)
 64. [Integração de voz na URA principal](manual-64-integracao-voz-ura.md)
+65. [Rodando o projeto a partir do Windows via WSL2](manual-65-windows-wsl2.md)
 
 ## Regra de manutenção
 

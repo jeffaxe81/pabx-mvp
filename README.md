@@ -468,6 +468,13 @@ atendente virtual gravava a voz do cliente sem nunca tocar o aviso de
 gravação exigido pela LGPD (manual 40) — ver
 `docs/manual-64-integracao-voz-ura.md`.
 
+**E, pra quem está rodando isso a partir do Windows**: um manual
+explicando por que `network_mode: host` (usado por `asterisk`,
+`queue-api` e `admin-api`, necessário pro SIP/RTP funcionar com NAT)
+não funciona como esperado no Docker Desktop pra Windows, e como
+contornar isso com Docker Engine nativo dentro do WSL2 — ver
+`docs/manual-65-windows-wsl2.md`.
+
 Para ajustar quais ramais aparecem na lista de colegas, edite o array
 `COLLEAGUES` no início do `<script>` em `webphone/index.html`. Cada
 ramal monitorado precisa ter um `hint` correspondente em

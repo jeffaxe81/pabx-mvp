@@ -7,7 +7,10 @@ fase só faz sentido depois que a anterior está funcionando de
 verdade, não só "configurada".
 
 ## Antes de começar
-- Servidor Linux com Docker e Docker Compose instalados
+- Servidor Linux com Docker e Docker Compose instalados — se sua
+  máquina é Windows, veja `docs/manual-65-windows-wsl2.md` **antes**
+  de continuar (o projeto usa `network_mode: host`, que não funciona
+  como esperado no Docker Desktop pra Windows)
 - Portas livres: 5060/UDP, 5061/TCP, 8089/TCP (SIP/WebRTC), 8080-8082
   (provisionamento/webphone), 8090/8091/8092 (APIs)
 - Pelo menos 2 softphones ou ramais físicos pra testar chamadas de

@@ -656,3 +656,22 @@ DENTRO da distro Linux (nao Docker Desktop) - minha recomendacao
 principal; (2) VM Linux completa; (3) servidor Linux remoto/nuvem.
 Usuario pediu pra documentar o caminho 1 como manual novo - PROXIMO
 PASSO a fazer (nao escrito ainda no momento desta nota).
+
+
+## Item #65: Manual de Windows/WSL2 - IMPLEMENTADO
+Usuario confirmou "sim" ao oferecimento de documentar o caminho WSL2.
+docs/manual-65-windows-wsl2.md: explica por que network_mode: host
+nao funciona no Docker Desktop pra Windows, recomenda Docker Engine
+NATIVO instalado dentro do WSL2 (nao Docker Desktop) com passo a
+passo completo (comandos exatos), inclui deteccao de confusao comum
+(Docker Desktop com integracao WSL2 ligada fazendo o comando docker
+apontar pro daemon errado). Alternativas documentadas: VM Linux
+completa, servidor remoto/nuvem. Referenciado no manual-00 (roteiro
+de implantacao) como aviso ANTES do primeiro passo pra quem estiver
+no Windows.
+
+Manual puramente instrucional, sem codigo/teste novo (911 testes
+continuam, contagem inalterada).
+
+64 manuais + este = 65 manuais totais, 911 testes, 8 suites - tudo
+commitado e pushado no GitHub apos esta nota.
