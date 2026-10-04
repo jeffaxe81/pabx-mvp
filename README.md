@@ -484,6 +484,40 @@ O que **não** faz (de propósito, é MVP): múltiplas chamadas
 simultâneas, gravação, transferência assistida com consulta — ver
 ideias abaixo.
 
+## Interface AXE PABX — padrão visual do Despacho
+
+As cinco telas web seguem o padrão do projeto
+[`jeffaxe81/dispatch`](https://github.com/jeffaxe81/dispatch): fundo claro,
+cartões brancos, destaque azul-petróleo, menu lateral com ícones e
+cabeçalho operacional. O menu pode ser recolhido no desktop e abre
+como painel no celular.
+
+- Telefonista: conexão, discador e controles de chamada, com orientação
+  inicial antes da conexão. Os atalhos para outras telas abrem em outra
+  aba para manter o console WebRTC carregado.
+- Painel operacional, campanhas e relatórios: navegação e componentes
+  visuais consistentes, com cartões responsivos e tabelas roláveis.
+- Administração: seções Ramais, Atendimento, Segurança, Usuários,
+  Empresas e Áudios e IA; preserva as permissões dos perfis existentes.
+
+O Docker Compose continua servindo o webphone na porta **8082** e a
+administração na porta **8091**. Para proxy reverso ou URLs diferentes,
+os parâmetros `web`, `admin` e `api` permitem configurar os atalhos.
+Não são usados para autenticar ou transportar senhas/chaves.
+Configuração, teste manual e limitações no
+[manual 66](docs/manual-66-interface-despacho.md).
+
+Os arquivos comuns ficam em `ui/`. Após alterar o CSS ou a navegação:
+
+```bash
+python3 scripts/sync_ui.py
+python3 scripts/sync_ui.py --check
+node --test tests/ui_navigation.test.cjs
+```
+
+O sincronizador embute o conteúdo nas páginas HTML para manter os
+servidores atuais e a PWA sem novas rotas ou dependências de frontend.
+
 ## Testes automatizados
 
 Duas suítes:
@@ -499,11 +533,14 @@ cd ../queue-api
 python3 -m pytest tests/ -v
 ```
 
-911 testes estáticos no total, em 8 suítes (`tests/`, `queue-api/tests/`,
+913 testes Python no total, em 8 suítes (`tests/`, `queue-api/tests/`,
 `admin-api/tests/`, `asterisk/scripts/tests/`, `backup/tests/`,
 `ai-worker/tests/`, `asterisk/agi/tests/`, `scripts/tests/`) —
 nenhuma delas sobe o Asterisk, Whisper ou Ollama de verdade. Detalhes
 em `tests/README.md`.
+
+Os testes de navegação e a suíte opcional de navegador estão descritos
+no [manual da interface](docs/manual-66-interface-despacho.md).
 
 ## Documentação
 

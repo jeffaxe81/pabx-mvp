@@ -45,6 +45,26 @@ Ideia natural de evolução: um segundo nível `tests/integration/` que
 sobe o `docker-compose.yml` de verdade e faz uma chamada de teste via
 `sipp` ou `pjsua`, uma vez que o projeto tiver CI configurado.
 
+## Testes da interface AXE PABX
+
+Execute na raiz do repositório:
+
+```bash
+# Sincronização e navegação, sem navegador ou serviços externos
+python3 scripts/sync_ui.py --check
+node --test tests/ui_navigation.test.cjs
+
+# Opcional: HTML real em Chromium, APIs sintéticas e sem chamadas SIP
+npm install --no-save playwright
+npx playwright install chromium
+node --test tests/ui_browser.test.cjs
+```
+
+`test_ui_sync.py` é executado junto da suíte principal. Os testes Node
+verificam os links de navegação; a suíte de navegador verifica menu,
+foco, largura do discador, seções e restrições visuais por perfil.
+Detalhes no [manual 66](../docs/manual-66-interface-despacho.md).
+
 ## Regra do projeto
 
 Toda nova funcionalidade implementada neste projeto deve vir com:
