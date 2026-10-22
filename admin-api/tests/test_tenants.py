@@ -1,7 +1,7 @@
 from tenants import (
     validate_tenant_creation_input, load_tenants, save_tenants,
     render_tenant_pjsip, render_tenant_queues, render_tenant_extensions, render_tenant_voicemail,
-    render_tenant_parking, validate_tenant_removal,
+    render_tenant_parking, validate_tenant_removal, generate_tenant_credentials,
 )
 
 VALID_INPUT = {"tenant_id": "t3", "did": "5511900003333", "display_name": "Empresa C"}
@@ -83,10 +83,43 @@ def test_render_pjsip_creates_two_telephonists():
     assert "mailboxes=t3-recepcao@t3" in content
 
 
-def test_render_pjsip_uses_different_passwords_for_each_telephonist():
+def test_render_pjsip_uses_different_strong_passwords():
     content = render_tenant_pjsip("t3")
-    assert "password=troque_esta_senha_web_t3\n" in content
-    assert "password=troque_esta_senha_web_t3_2\n" in content
+    passwords = [line.split("=", 1)[1] for line in content.splitlines()
+                 if line.startswith("password=")]
+    assert len(passwords) == 2
+    assert all(len(p) >= 32 for p in passwords)
+    assert passwords[0] != passwords[1]
+    assert "troque_esta_senha" not in content
+
+
+def test_new_tenant_credentials_are_unpredictable():
+    first = generate_tenant_credentials("t3")
+    second = generate_tenant_credentials("t3")
+    assert first.keys() == {"t3-recepcao", "t3-recepcao-2"}
+    assert all(len(secret) >= 32 for secret in first.values())
+    assert len(set(first.values()) | set(second.values())) == 4
+
+
+def test_render_tenant_pjsip_receives_same_credentials_returned_to_admin():
+    creds = {"t3-recepcao": "A" * 32, "t3-recepcao-2": "B" * 32}
+    generated = render_tenant_pjsip("t3", creds)
+    assert "password=" + creds["t3-recepcao"] in generated
+    assert "password=" + creds["t3-recepcao-2"] in generated
+
+
+def test_render_tenant_pjsip_fails_closed_on_weak_or_missing_credentials():
+    import pytest
+    for credentials in ({}, {"t3-recepcao": "123", "t3-recepcao-2": "B" * 32},
+                        {"t3-recepcao": "A" * 32, "t3-recepcao-2": "bad\nINJECT"}):
+        with pytest.raises(ValueError):
+            render_tenant_pjsip("t3", credentials)
+
+
+def test_credential_generation_rejects_unsafe_tenant_id():
+    import pytest
+    with pytest.raises(ValueError):
+        generate_tenant_credentials("t3\nsecret=abc")
 
 
 # ---------- render_tenant_queues ----------

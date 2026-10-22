@@ -102,10 +102,11 @@ tenant certo, sem editar dialplan.
   DID (`DBDel` na família `tenant-did`) — não implementado
 - **IDs só seguem o padrão `tN`** (`t3`, `t4`, ...) — não dá pra usar
   nomes de tenant mais descritivos (ex: "empresa-c")
-- **Senha SIP das telefonistas geradas é sempre a mesma string
-  previsível** (`troque_esta_senha_web_{tenant}`) — precisa trocar
-  manualmente antes de produção, mesma limitação já aceita nos
-  exemplos estáticos t1/t2 desde o início do projeto
+- **Credenciais SIP fortes no wizard:** a criação de novos tenants
+  agora gera senhas aleatórias exclusivas e apresenta as duas credenciais
+  uma única vez ao administrador (ver manual 72). É necessário copiar
+  e guardar os segredos para provisionar as telefonistas. Os exemplos
+  estáticos t1/t2 continuam exigindo troca manual antes de produção.
 - **Nenhuma configuração de horário comercial customizada por
   tenant** — todos usam o mesmo horário fixo (08:00-18:00, seg-sex)
   definido em `[horario-comercial]`, que é compartilhado

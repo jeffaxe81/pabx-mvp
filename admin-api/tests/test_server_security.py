@@ -467,3 +467,17 @@ def test_overflow_timeout_falls_back_to_default_when_unconfigured():
     source = load_source()
     body = get_function_body(source, "_handle_get_overflow_timeout")
     assert "DEFAULT_OVERFLOW_TIMEOUT_SECONDS" in body
+
+def test_wizard_creates_strong_credentials_before_files():
+    source = SERVER_PY.read_text(encoding="utf-8")
+    body = get_function_body(source, "_handle_create_tenant")
+    assert "generate_tenant_credentials(tenant_id)" in body
+    assert body.index("generate_tenant_credentials(") < body.index("target_dir.mkdir(")
+    assert "render_tenant_pjsip(tid, sip_credentials)" in body
+    assert body.count('"sip_credentials": sip_credentials') == 2
+
+
+def test_api_json_responses_disable_cache():
+    source = SERVER_PY.read_text(encoding="utf-8")
+    body = get_function_body(source, "_send_json")
+    assert '"Cache-Control", "no-store"' in body

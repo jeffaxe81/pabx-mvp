@@ -12,6 +12,7 @@ server.py, mesmo padrão do resto do projeto.
 import json
 import os
 import re
+import secrets
 import tempfile
 from pathlib import Path
 
@@ -133,8 +134,26 @@ def validate_tenant_removal(tenant_id: str, existing: list):
     return True, None, match
 
 
-def render_tenant_pjsip(tenant_id: str) -> str:
-    """Duas telefonistas web, mesmo padrão de t1-recepcao/t2-recepcao."""
+def generate_tenant_credentials(tenant_id: str) -> dict:
+    """Gera senhas SIP fortes e distintas para as duas telefonistas."""
+    if not isinstance(tenant_id, str) or not TENANT_ID_RE.fullmatch(tenant_id):
+        raise ValueError("tenant inválido para credenciais SIP")
+    return {
+        f"{tenant_id}-recepcao": secrets.token_urlsafe(24),
+        f"{tenant_id}-recepcao-2": secrets.token_urlsafe(24),
+    }
+
+
+def render_tenant_pjsip(tenant_id: str, credentials=None) -> str:
+    """Duas telefonistas WebRTC com segredos exclusivos, não previsíveis."""
+    if credentials is None:
+        credentials = generate_tenant_credentials(tenant_id)
+    if not isinstance(credentials, dict):
+        raise ValueError("credenciais SIP inválidas")
+    for name in (f"{tenant_id}-recepcao", f"{tenant_id}-recepcao-2"):
+        password = credentials.get(name)
+        if not isinstance(password, str) or not re.fullmatch(r"[A-Za-z0-9_-]{32,}", password):
+            raise ValueError("senha SIP ausente ou insegura")
     blocks = [AUTO_GENERATED_HEADER]
     for suffix, line_number in (("", "1010"), ("-2", "1011")):
         name = f"{tenant_id}-recepcao{suffix}"
@@ -150,7 +169,7 @@ mailboxes={name}@{tenant_id}
 type=auth
 auth_type=userpass
 username={name}
-password=troque_esta_senha_web_{tenant_id}{suffix.replace('-', '_')}
+password={credentials[name]}
 
 [{name}]
 type=aor

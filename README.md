@@ -618,3 +618,14 @@ de qualquer gravação em arquivos ou mapeamento AstDB.
 
 Consultar o [Manual 71](docs/manual-71-validacao-wizard-tenants.md) para
 os testes e as limitações desta proteção.
+
+## Credenciais SIP do wizard de empresas
+
+A criação de tenant `t3+` gera duas senhas SIP fortes e independentes,
+uma para cada telefonista WebRTC. O painel as mostra ao administrador
+no resultado inicial, com opção de ocultar; elas não aparecem na
+listagem de empresas. Os campos exibidos no wizard usam `textContent`
+para evitar interpretação de HTML de dados de cadastro.
+
+Veja o [Manual 72](docs/manual-72-segredos-sip-wizard.md). Os exemplos
+estáticos t1/t2 continuam exigindo troca de segredos antes de produção.
