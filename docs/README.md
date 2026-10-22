@@ -80,6 +80,8 @@ configurar, como testar manualmente, e limitações conhecidas.
 
 70. [Segurança da verificação AMI](manual-70-verificador-ami.md)
 
+71. [Validação defensiva do wizard multiempresa](manual-71-validacao-wizard-tenants.md)
+
 ## Regra de manutenção
 
 Toda vez que uma funcionalidade nova for implementada no projeto, um
