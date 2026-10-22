@@ -732,25 +732,39 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     apiFetch(`/api/extensions?tenant=${currentTenant}`).then((data) => renderTable(data.extensions || []));
   }
 
+  function adminTextCell(value, className = '') {
+    const cell = document.createElement('td');
+    if (className) cell.className = className;
+    cell.textContent = String(value ?? '');
+    return cell;
+  }
+
+  function adminAction(label, cssClass, attribute, value, handler) {
+    const button = document.createElement('button');
+    button.className = cssClass;
+    button.textContent = label;
+    button.setAttribute(attribute, String(value ?? ''));
+    button.addEventListener('click', handler);
+    return button;
+  }
+
   function renderTable(extensions) {
     el('emptyHint').style.display = extensions.length === 0 ? 'block' : 'none';
-    el('extensionsTableBody').innerHTML = extensions.map((ext) => `
-      <tr>
-        <td class="mono">${ext.name}</td>
-        <td>${ext.display_name}</td>
-        <td class="mono">${ext.number}</td>
-        <td class="actions">
-          <button class="btn-ghost" data-edit="${ext.name}">Editar</button>
-          <button class="btn-danger" data-delete="${ext.name}">Excluir</button>
-        </td>
-      </tr>`).join('');
-
-    document.querySelectorAll('[data-edit]').forEach((btn) => {
-      btn.addEventListener('click', () => startEdit(extensions.find((e) => e.name === btn.dataset.edit)));
-    });
-    document.querySelectorAll('[data-delete]').forEach((btn) => {
-      btn.addEventListener('click', () => deleteExtension(btn.dataset.delete));
-    });
+    const table = el('extensionsTableBody');
+    table.replaceChildren();
+    for (const ext of extensions) {
+      const row = document.createElement('tr');
+      row.appendChild(adminTextCell(ext.name, 'mono'));
+      row.appendChild(adminTextCell(ext.display_name));
+      row.appendChild(adminTextCell(ext.number, 'mono'));
+      const actions = adminTextCell('', 'actions');
+      actions.appendChild(adminAction('Editar', 'btn-ghost', 'data-edit', ext.name,
+        () => startEdit(ext)));
+      actions.appendChild(adminAction('Excluir', 'btn-danger', 'data-delete', ext.name,
+        () => deleteExtension(ext.name)));
+      row.appendChild(actions);
+      table.appendChild(row);
+    }
   }
 
   function startEdit(ext) {
@@ -814,15 +828,17 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 
   function renderBlocklist(numbers) {
     el('blocklistEmptyHint').style.display = numbers.length === 0 ? 'block' : 'none';
-    el('blocklistTableBody').innerHTML = numbers.map((number) => `
-      <tr>
-        <td class="mono">${number}</td>
-        <td class="actions"><button class="btn-danger" data-unblock="${number}">Desbloquear</button></td>
-      </tr>`).join('');
-
-    document.querySelectorAll('[data-unblock]').forEach((btn) => {
-      btn.addEventListener('click', () => unblockNumber(btn.dataset.unblock));
-    });
+    const table = el('blocklistTableBody');
+    table.replaceChildren();
+    for (const number of numbers) {
+      const row = document.createElement('tr');
+      row.appendChild(adminTextCell(number, 'mono'));
+      const actions = adminTextCell('', 'actions');
+      actions.appendChild(adminAction('Desbloquear', 'btn-danger',
+        'data-unblock', number, () => unblockNumber(number)));
+      row.appendChild(actions);
+      table.appendChild(row);
+    }
   }
 
   el('addBlockBtn').addEventListener('click', () => {
@@ -848,16 +864,18 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 
   function renderVips(vips) {
     el('vipEmptyHint').style.display = vips.length === 0 ? 'block' : 'none';
-    el('vipTableBody').innerHTML = vips.map((v) => `
-      <tr>
-        <td class="mono">${v.number}</td>
-        <td class="mono">${v.target_extension}</td>
-        <td class="actions"><button class="btn-danger" data-remove-vip="${v.number}">Remover</button></td>
-      </tr>`).join('');
-
-    document.querySelectorAll('[data-remove-vip]').forEach((btn) => {
-      btn.addEventListener('click', () => removeVip(btn.dataset.removeVip));
-    });
+    const table = el('vipTableBody');
+    table.replaceChildren();
+    for (const vip of vips) {
+      const row = document.createElement('tr');
+      row.appendChild(adminTextCell(vip.number, 'mono'));
+      row.appendChild(adminTextCell(vip.target_extension, 'mono'));
+      const actions = adminTextCell('', 'actions');
+      actions.appendChild(adminAction('Remover', 'btn-danger',
+        'data-remove-vip', vip.number, () => removeVip(vip.number)));
+      row.appendChild(actions);
+      table.appendChild(row);
+    }
   }
 
   el('addVipBtn').addEventListener('click', () => {
@@ -963,22 +981,22 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   }
 
   function renderUsersTable(users) {
-    el('usersTableBody').innerHTML = users.map((u) => `
-      <tr>
-        <td class="mono">${u.username}</td>
-        <td>${u.role}</td>
-        <td class="actions">
-          <button class="btn-ghost" data-edit-user="${u.username}" data-role="${u.role}">Editar</button>
-          <button class="btn-danger" data-delete-user="${u.username}">Excluir</button>
-        </td>
-      </tr>`).join('');
-
-    document.querySelectorAll('[data-edit-user]').forEach((btn) => {
-      btn.addEventListener('click', () => startEditUser(btn.dataset.editUser, btn.dataset.role));
-    });
-    document.querySelectorAll('[data-delete-user]').forEach((btn) => {
-      btn.addEventListener('click', () => deleteUserAccount(btn.dataset.deleteUser));
-    });
+    const table = el('usersTableBody');
+    table.replaceChildren();
+    for (const user of users) {
+      const row = document.createElement('tr');
+      row.appendChild(adminTextCell(user.username, 'mono'));
+      row.appendChild(adminTextCell(user.role));
+      const actions = adminTextCell('', 'actions');
+      const edit = adminAction('Editar', 'btn-ghost', 'data-edit-user', user.username,
+        () => startEditUser(user.username, user.role));
+      edit.setAttribute('data-role', String(user.role ?? ''));
+      actions.appendChild(edit);
+      actions.appendChild(adminAction('Excluir', 'btn-danger',
+        'data-delete-user', user.username, () => deleteUserAccount(user.username)));
+      row.appendChild(actions);
+      table.appendChild(row);
+    }
   }
 
   function startEditUser(username, role) {

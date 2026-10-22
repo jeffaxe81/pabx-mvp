@@ -498,3 +498,51 @@ def test_wizard_shows_voicemail_pins_only_during_initial_provisioning():
     assert "wizardCredentialsText').textContent" in wizard
     assert ".innerHTML" not in wizard
     assert "wizardCredentialsHideBtn" in html
+
+def test_admin_tables_render_api_values_as_text_not_html():
+    html = load_html()
+    for start, end in (
+        ("function renderTable(", "function startEdit("),
+        ("function renderBlocklist(", "el('addBlockBtn').addEventListener"),
+        ("function renderVips(", "el('addVipBtn').addEventListener"),
+        ("function renderUsersTable(", "function startEditUser("),
+    ):
+        begin = html.index(start)
+        region = html[begin:html.index(end, begin)]
+        assert "innerHTML" not in region
+        assert "replaceChildren()" in region
+        assert "adminTextCell(" in region
+        assert "adminAction(" in region
+    helper = html[html.index("function adminTextCell("):html.index("function renderTable(")]
+    assert "cell.textContent" in helper
+    assert "button.textContent" in helper
+    assert "button.addEventListener('click', handler)" in helper
+
+# ---------- Segurança da renderização de tabelas (Manual 76) ----------
+
+def test_admin_lists_render_untrusted_api_data_as_text():
+    html = load_html()
+    boundaries = (
+        ("function renderTable(extensions)", "function startEdit(ext)"),
+        ("function renderBlocklist(numbers)", "el('addBlockBtn').addEventListener"),
+        ("function renderVips(vips)", "el('addVipBtn').addEventListener"),
+        ("function renderUsersTable(users)", "function startEditUser(username, role)"),
+    )
+    for start, end in boundaries:
+        body = html[html.index(start):html.index(end, html.index(start))]
+        assert ".innerHTML" not in body, start
+        assert "replaceChildren()" in body, start
+        assert "adminTextCell(" in body, start
+        assert "adminAction(" in body, start
+
+
+def test_admin_text_cells_never_interpret_html_and_actions_keep_handlers():
+    html = load_html()
+    start = html.index("function adminTextCell(")
+    body = html[start:html.index("function renderTable(extensions)", start)]
+    assert "document.createElement('td')" in body
+    assert "cell.textContent =" in body
+    assert "button.textContent =" in body
+    assert "button.setAttribute(" in body
+    assert "button.addEventListener('click', handler)" in body
+    assert ".innerHTML" not in body
