@@ -71,6 +71,9 @@ configurar, como testar manualmente, e limitações conhecidas.
 64. [Integração de voz na URA principal](manual-64-integracao-voz-ura.md)
 65. [Rodando o projeto a partir do Windows via WSL2](manual-65-windows-wsl2.md)
 
+66. [CI e validação das entregas](manual-66-ci-e-validacao.md)
+67. [Interface AXE PABX no padrão do Despacho](manual-67-interface-despacho.md)
+
 ## Regra de manutenção
 
 Toda vez que uma funcionalidade nova for implementada no projeto, um
@@ -79,6 +82,3 @@ a funcionalidade concluída — não depois, "quando der tempo". Isso está
 registrado como regra permanente no prompt master
 (`prompt-base-pabx.md`).
 
-
-- [Manual 66 — CI e validação das entregas](manual-66-ci-e-validacao.md):
-  oito suítes automáticas em PRs, execução local, gates e homologação SIP.

@@ -659,6 +659,7 @@ PASSO a fazer (nao escrito ainda no momento desta nota).
 
 
 ## Item #65: Manual de Windows/WSL2 - IMPLEMENTADO
+
 Usuario confirmou "sim" ao oferecimento de documentar o caminho WSL2.
 docs/manual-65-windows-wsl2.md: explica por que network_mode: host
 nao funciona no Docker Desktop pra Windows, recomenda Docker Engine
@@ -675,3 +676,19 @@ continuam, contagem inalterada).
 
 64 manuais + este = 65 manuais totais, 911 testes, 8 suites - tudo
 commitado e pushado no GitHub apos esta nota.
+
+## Item #67: Interface no padrão visual do Despacho - IMPLEMENTADO
+
+Pedido do usuário: seguir com PABX-MVP usando o design do Despacho.
+Referência: `jeffaxe81/dispatch`, main em
+`3aee47e889c30f8cf9ae858e5d05ebf35c64691b`.
+
+- Cinco páginas com navegação lateral, cabeçalho, fundo claro e
+  destaque azul-petróleo.
+- Administração organizada em seis seções, preservando login e perfis.
+- Menu responsivo/recolhível; atalhos da telefonista em outra aba.
+- CSS e navegação em `ui/`, embutidos por `scripts/sync_ui.py`.
+- Testes de navegação, sincronização e navegador; manual 67.
+- Sem mudança em dialplan, APIs, serviços ou dados. Chamada real SIP,
+  áudio e integração com Contact Center/Despacho dependem do ambiente
+  de validação; esta etapa entrega a interface.

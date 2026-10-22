@@ -499,7 +499,7 @@ cd ../queue-api
 python3 -m pytest tests/ -v
 ```
 
-911 testes estáticos no total, em 8 suítes (`tests/`, `queue-api/tests/`,
+Testes estáticos distribuídos em 8 suítes (`tests/`, `queue-api/tests/`,
 `admin-api/tests/`, `asterisk/scripts/tests/`, `backup/tests/`,
 `ai-worker/tests/`, `asterisk/agi/tests/`, `scripts/tests/`) —
 nenhuma delas sobe o Asterisk, Whisper ou Ollama de verdade. Detalhes
@@ -532,3 +532,37 @@ para execução local, critérios de revisão e limites da validação.
 **CI verde não equivale à homologação de telefonia**: testes de registro SIP,
 RTP/SRTP, URA, AMI e isolamento multiempresa exigem ambiente de integração
 com Asterisk e clientes SIP reais antes da implantação.
+
+## Interface AXE PABX — padrão visual do Despacho
+
+As cinco telas web seguem o padrão do projeto
+[`jeffaxe81/dispatch`](https://github.com/jeffaxe81/dispatch): fundo claro,
+cartões brancos, destaque azul-petróleo, menu lateral com ícones e
+cabeçalho operacional. O menu pode ser recolhido no desktop e abre
+como painel no celular.
+
+- Telefonista: conexão, discador e controles de chamada, com orientação
+  inicial antes da conexão. Os atalhos para outras telas abrem em outra
+  aba para manter o console WebRTC carregado.
+- Painel operacional, campanhas e relatórios: navegação e componentes
+  visuais consistentes, com cartões responsivos e tabelas roláveis.
+- Administração: seções Ramais, Atendimento, Segurança, Usuários,
+  Empresas e Áudios e IA; preserva as permissões dos perfis existentes.
+
+O Docker Compose continua servindo o webphone na porta **8082** e a
+administração na porta **8091**. Para proxy reverso ou URLs diferentes,
+os parâmetros `web`, `admin` e `api` permitem configurar os atalhos.
+Não são usados para autenticar ou transportar senhas/chaves.
+Configuração, teste manual e limitações no
+[manual 67](docs/manual-67-interface-despacho.md).
+
+Os arquivos comuns ficam em `ui/`. Após alterar o CSS ou a navegação:
+
+```bash
+python3 scripts/sync_ui.py
+python3 scripts/sync_ui.py --check
+node --test tests/ui_navigation.test.cjs
+```
+
+O sincronizador embute o conteúdo nas páginas HTML para manter os
+servidores atuais e a PWA sem novas rotas ou dependências de frontend.
