@@ -33,7 +33,7 @@ from overflow import validate_overflow_timeout_input
 from tenants import (
     load_tenants, save_tenants, validate_tenant_creation_input,
     render_tenant_pjsip, render_tenant_queues, render_tenant_extensions, render_tenant_voicemail,
-    render_tenant_parking, validate_tenant_removal, generate_tenant_credentials, generate_tenant_voicemail_pins,
+    render_tenant_parking, validate_tenant_removal, generate_tenant_credentials, generate_tenant_voicemail_pins, parse_static_inbound_dids,
 )
 from users import load_users, save_users, find_user, add_user, update_user, delete_user, public_user
 from totp import generate_secret, verify_totp, build_provisioning_uri
@@ -491,8 +491,17 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json(400, {"error": "JSON inválido"})
             return
 
+        # Ler a configuração realmente instalada: os DIDs explícitos
+        # do dialplan têm precedência sobre tenant-did no AstDB.
+        try:
+            dialplan_text = Path(ASTERISK_CONF_DIR, "extensions.conf").read_text(encoding="utf-8")
+            reserved_dids = parse_static_inbound_dids(dialplan_text)
+        except (OSError, UnicodeError, ValueError):
+            self._send_json(503, {"error": "não foi possível verificar os DIDs estáticos"})
+            return
+
         existing = load_tenants(TENANTS_PATH)
-        ok, error, cleaned = validate_tenant_creation_input(data, existing)
+        ok, error, cleaned = validate_tenant_creation_input(data, existing, reserved_dids)
         if not ok:
             self._send_json(400, {"error": error})
             return
