@@ -97,6 +97,8 @@ configurar, como testar manualmente, e limitações conhecidas.
 
 78. [Listagem segura de gravações](manual-78-indice-gravacoes-seguro.md)
 
+79. [Validação segura de ramais e credenciais SIP](manual-79-ramais-validacao-segredos.md)
+
 ## Regra de manutenção
 
 Toda vez que uma funcionalidade nova for implementada no projeto, um
