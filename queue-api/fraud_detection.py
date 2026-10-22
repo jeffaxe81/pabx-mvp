@@ -28,12 +28,19 @@ class CallRateTracker:
         if not extension:
             return
         now = self._clock()
-        # Mantenha apenas um horizonte de 24 h e imponha limite por
-        # ramal para não acumular memória indefinidamente em produção.
+        # Retenção deslizante de 24 h; poda somente quando o primeiro
+        # evento estiver vencido, evitando recomputar toda a lista a
+        # cada chamada (importante em ramais de alto tráfego).
         horizon = now - 86400
-        recent = [(ts, dest) for ts, dest in self._calls.get(extension, []) if ts >= horizon]
-        recent.append((now, destination))
-        self._calls[extension] = recent[-10000:]
+        calls = self._calls.setdefault(extension, [])
+        if calls and calls[0][0] < horizon:
+            expired = 0
+            while expired < len(calls) and calls[expired][0] < horizon:
+                expired += 1
+            del calls[:expired]
+        calls.append((now, destination))
+        if len(calls) > 10000:
+            del calls[:-10000]
 
     def is_abnormal(self, extension: str, window_seconds: int = 60, threshold: int = 10) -> bool:
         calls = self._calls.get(extension, [])
