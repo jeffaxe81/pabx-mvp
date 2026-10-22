@@ -90,6 +90,8 @@ configurar, como testar manualmente, e limitações conhecidas.
 
 75. [Prevenir conflito de DID estático entre empresas](manual-75-did-estatico-colisao.md)
 
+76. [Proteção XSS nas tabelas administrativas](manual-76-xss-tabelas-admin.md)
+
 ## Regra de manutenção
 
 Toda vez que uma funcionalidade nova for implementada no projeto, um
