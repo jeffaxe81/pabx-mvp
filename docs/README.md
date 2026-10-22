@@ -101,6 +101,8 @@ configurar, como testar manualmente, e limitações conhecidas.
 
 80. [Credenciais e isolamento de gravações por tenant](manual-80-acesso-gravacoes-tenant.md)
 
+81. [PIN seguro de voicemail para novos ramais](manual-81-pins-voicemail-ramais.md)
+
 ## Regra de manutenção
 
 Toda vez que uma funcionalidade nova for implementada no projeto, um

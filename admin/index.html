@@ -384,7 +384,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     <button class="btn-ghost" id="cancelEditBtn" style="display:none; margin-top:18px; margin-left:8px;">Cancelar edição</button>
     <div class="error-msg" id="formError"></div>
     <div id="extensionCredentialPanel" style="display:none; margin-top:12px;">
-      <p>Credenciais SIP deste novo ramal. Guarde em cofre seguro; a senha não será exibida novamente.</p>
+      <p>Credenciais SIP e PIN de correio de voz deste novo ramal. Guarde em cofre seguro; não serão exibidos novamente.</p>
       <pre id="extensionCredentialText" style="white-space:pre-wrap; overflow-wrap:anywhere; padding:12px; border:1px solid var(--border); border-radius:8px;"></pre>
       <button class="btn-ghost" id="extensionCredentialHideBtn" type="button">Ocultar credenciais</button>
     </div>
@@ -827,8 +827,12 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
       .then((data) => {
         resetForm();
         loadExtensions();
-        if (!editingName && data.provisioning && typeof data.provisioning.sip_password === 'string') {
-          el('extensionCredentialText').textContent = `${data.provisioning.username}: ${data.provisioning.sip_password}`;
+        if (!editingName && data.provisioning &&
+            typeof data.provisioning.sip_password === 'string' &&
+            typeof data.provisioning.voicemail_pin === 'string') {
+          const info = data.provisioning;
+          el('extensionCredentialText').textContent =
+            `Ramal: ${info.username}\nSenha SIP: ${info.sip_password}\nPIN correio de voz: ${info.voicemail_pin}`;
           el('extensionCredentialPanel').style.display = 'block';
         }
       })

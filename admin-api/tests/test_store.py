@@ -269,3 +269,40 @@ def test_password_short_on_create_rejected_but_legacy_kept_on_edit():
 def test_registry_corruption_fails_closed(registry):
     ok, error, cleaned = validate_extension_input(VALID_INPUT, registry)
     assert not ok and cleaned is None and "cadastro" in error
+
+def test_generated_voicemail_pins_are_numeric_and_distinct(tmp_path):
+    path = tmp_path / "ramais.json"
+    first = {**VALID_INPUT, "name": "recepcao-3", "number": 1112}
+    second = {**VALID_INPUT, "name": "recepcao-4", "number": 1113}
+    a = add_extension(path, first)[2]
+    b = add_extension(path, second)[2]
+    assert len(a["voicemail_pin"]) == 8
+    assert a["voicemail_pin"].isdigit()
+    assert a["voicemail_pin"][0] != "0"
+    assert a["voicemail_pin"] != b["voicemail_pin"]
+    assert load_store(path)[0]["voicemail_pin"] == a["voicemail_pin"]
+
+
+def test_update_preserves_existing_voicemail_pin(tmp_path):
+    path = tmp_path / "ramais.json"
+    created = add_extension(path, VALID_INPUT)[2]
+    changed = update_extension(path, created["name"], {"display_name": "Recepção Nova"})[2]
+    assert changed["voicemail_pin"] == created["voicemail_pin"]
+
+
+def test_post_and_put_cannot_choose_voicemail_pin(tmp_path):
+    path = tmp_path / "ramais.json"
+    bad = {**VALID_INPUT, "voicemail_pin": "00000000"}
+    ok, error, _ = add_extension(path, bad)
+    assert not ok and "PIN" in error
+    add_extension(path, VALID_INPUT)
+    ok, error, _ = update_extension(path, VALID_INPUT["name"], {"voicemail_pin": "1234"})
+    assert not ok and "PIN" in error
+
+
+def test_legacy_voicemail_pin_not_rotated_implicitly(tmp_path):
+    path = tmp_path / "ramais.json"
+    legacy = {**VALID_INPUT, "tenant": "t1"}
+    save_store(path, [legacy])
+    edited = update_extension(path, legacy["name"], {"display_name": "Atualizado"})[2]
+    assert edited["voicemail_pin"] == "1234"

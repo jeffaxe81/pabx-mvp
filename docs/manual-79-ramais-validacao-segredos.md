@@ -58,9 +58,9 @@ credencial num Chromium instrumentado com API mockada.
 
 - Não migra senhas antigas automaticamente; permanece necessária
   rotação programada de segredos fracos.
-- O PIN `1234` de correio de voz dos **ramais dinâmicos** continua
-  como limitação separada e não é resolvido por esta entrega. A troca
-  desse PIN exige evolução específica.
+- Para novos ramais, o PIN `1234` foi substituído na entrega
+  complementar descrita no [Manual 81](manual-81-pins-voicemail-ramais.md).
+  Os ramais legados precisam de rotação administrada.
 - O gerador e armazenamento JSON não fornecem transação distribuída
   com AstDB/AMI; erros de reload devem ser tratados operacionalmente.
 - Registro SIP/TLS, mídia RTP/SRTP e isolamento em chamadas reais
