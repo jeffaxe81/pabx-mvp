@@ -12,6 +12,7 @@ rede deste projeto (AMI, SMTP, webhooks).
 """
 import json
 import urllib.request
+from urllib.parse import urlsplit
 
 
 def build_generate_request(prompt: str, model: str = "llama3", temperature: float = 0.2) -> dict:
@@ -36,7 +37,8 @@ def extract_response_text(ollama_response: dict) -> str:
     """
     if not isinstance(ollama_response, dict):
         return ""
-    return (ollama_response.get("response") or "").strip()
+    value = ollama_response.get("response")
+    return value.strip() if isinstance(value, str) else ""
 
 
 def generate(base_url: str, prompt: str, model: str = "llama3", timeout: int = 120) -> str:
@@ -44,6 +46,9 @@ def generate(base_url: str, prompt: str, model: str = "llama3", timeout: int = 1
     Chamada de rede de verdade pro Ollama. `timeout` alto de propósito
     - modelos locais em CPU podem demorar bem mais que uma API na nuvem.
     """
+    parsed = urlsplit(base_url)
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname or parsed.username or parsed.password:
+        raise ValueError("URL do Ollama inválida: use HTTP(S) sem credenciais embutidas")
     request_body = build_generate_request(prompt, model)
     data = json.dumps(request_body).encode("utf-8")
 
@@ -54,5 +59,9 @@ def generate(base_url: str, prompt: str, model: str = "llama3", timeout: int = 1
         headers={"Content-Type": "application/json"},
     )
     with urllib.request.urlopen(request, timeout=timeout) as response:
-        body = json.loads(response.read().decode("utf-8"))
+        # Respostas descontroladas não podem consumir memória ilimitada.
+        payload = response.read(2_000_001)
+        if len(payload) > 2_000_000:
+            raise ValueError("Resposta do Ollama excedeu limite de 2 MB")
+        body = json.loads(payload.decode("utf-8"))
         return extract_response_text(body)
