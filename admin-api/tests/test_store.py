@@ -5,7 +5,7 @@ from store import (
     add_extension, update_extension, delete_extension, delete_extensions_by_tenant,
 )
 
-VALID_INPUT = {"name": "recepcao-3", "number": 1112, "display_name": "Recepção 3", "password": "senha-forte"}
+VALID_INPUT = {"name": "recepcao-3", "number": 1112, "display_name": "Recepção 3", "password": "senha-forte-2026"}
 
 
 def test_load_store_returns_empty_list_when_file_missing(tmp_path):
@@ -189,3 +189,83 @@ def test_delete_extensions_by_tenant_returns_zero_when_none_match(tmp_path):
 def test_delete_extensions_by_tenant_handles_missing_store_file(tmp_path):
     path = tmp_path / "nao-existe.json"
     assert delete_extensions_by_tenant(path, "t3") == 0
+
+
+# ---------- Regressão de tipos e injeção em configuração ----------
+
+@pytest.mark.parametrize("payload", [None, [], "bad", 42, True])
+def test_validation_rejects_non_object_json_payload(payload):
+    ok, error, cleaned = validate_extension_input(payload, [])
+    assert not ok and error and cleaned is None
+
+
+@pytest.mark.parametrize("field,value", [
+    ("name", ["ramal"]),
+    ("name", 1234),
+    ("tenant", ["t1"]),
+    ("number", True),
+    ("number", 1100.1),
+    ("number", "1100\nSet(MALICIOUS=yes)"),
+    ("display_name", ["Vendas"]),
+    ("email", {"to": "mail@domain.com"}),
+    ("password", {"value": "secret"}),
+])
+def test_validation_rejects_wrong_field_types(field, value):
+    ok, error, cleaned = validate_extension_input(
+        {**VALID_INPUT, field: value}, []
+    )
+    assert not ok and error and cleaned is None
+
+
+@pytest.mark.parametrize("field,value", [
+    ("name", "vendas-1\n"),
+    ("display_name", "Operador\r\n[malicious]"),
+    ("display_name", "Nome,secret=123"),
+    ("display_name", "Nome <injetado>"),
+    ("email", "user@example.com\n[global]"),
+    ("email", "user@example.com,Inject"),
+    ("password", "SegredoMuitoForte\n[operator]"),
+    ("password", "SegredoMuito;Comment"),
+])
+def test_validation_blocks_asterisk_config_injection(field, value):
+    ok, error, cleaned = validate_extension_input(
+        {**VALID_INPUT, field: value}, []
+    )
+    assert not ok and cleaned is None, (field, value, error)
+
+
+def test_validation_allows_ordinary_diacritics_and_email():
+    payload = {**VALID_INPUT, "display_name": "Recepção São José",
+               "email": "atendimento+sp@empresa.com.br"}
+    ok, error, cleaned = validate_extension_input(payload, [])
+    assert ok and error is None
+    assert cleaned["display_name"] == "Recepção São José"
+
+
+def test_missing_password_generates_secure_long_random_secret():
+    payload = {**VALID_INPUT, "password": ""}
+    a = validate_extension_input(payload, [])[2]["password"]
+    b = validate_extension_input(payload, [])[2]["password"]
+    assert a != b
+    assert len(a) >= 32 and len(b) >= 32
+
+
+def test_password_short_on_create_rejected_but_legacy_kept_on_edit():
+    payload = {**VALID_INPUT, "password": "oldsecret"}
+    ok, _, _ = validate_extension_input(payload, [])
+    assert not ok
+    legacy = [{**payload}]
+    ok, _, cleaned = validate_extension_input(payload, legacy, editing_name=payload["name"])
+    assert ok and cleaned["password"] == "oldsecret"
+    rotated = {**payload, "password": "newsecret"}
+    ok, _, _ = validate_extension_input(rotated, legacy, editing_name=payload["name"])
+    assert not ok
+
+
+@pytest.mark.parametrize("registry", [
+    [None], [{}], [{"name": "vendas-1", "number": "oops"}],
+    [{"name": "vendas-1", "number": True}],
+])
+def test_registry_corruption_fails_closed(registry):
+    ok, error, cleaned = validate_extension_input(VALID_INPUT, registry)
+    assert not ok and cleaned is None and "cadastro" in error
