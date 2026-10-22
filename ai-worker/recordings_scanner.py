@@ -22,7 +22,8 @@ def list_unprocessed_recordings(directory, already_processed: set) -> list:
 
     files = [
         f for f in path.iterdir()
-        if f.is_file() and f.suffix.lower() in SUPPORTED_EXTENSIONS and f.name not in already_processed
+        if f.is_file() and not f.is_symlink()
+        and f.suffix.lower() in SUPPORTED_EXTENSIONS and f.name not in already_processed
     ]
     files.sort(key=lambda f: f.stat().st_mtime)
     return [f.name for f in files]
