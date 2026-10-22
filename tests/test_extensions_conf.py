@@ -52,17 +52,27 @@ def test_receptionist_extension_1000_routes_to_web_endpoint():
     assert "Queue(${FILA_IDIOMA},c,,,${OVERFLOW_TIMEOUT})" in text[exten_start:exten_end]
 
 
-def test_unmatched_incoming_calls_go_into_the_ura():
-    """
-    Chamadas do gateway TDM sem DID mapeado entram na URA (backlog
-    #17) - a URA decide, por horário/feriado, se toca a fila direto
-    ou uma mensagem de fora de expediente.
-    """
-    blocks = blocks_as_dict(load_ext_blocks())
-    fallback_block = blocks["from-tdm-gateway"]
-    assert "_X." in fallback_block
-    assert "Goto(ura-principal,s,1)" in fallback_block.replace(" ", "")
+def test_unmatched_incoming_calls_are_rejected_without_tenant():
+    """DID sem cadastro nunca chega à URA de outra empresa."""
+    text = blocks_as_dict(load_ext_blocks())["from-tdm-gateway"].replace(" ", "")
+    start = text.index("exten=>_X.,1,")
+    lookup = text.index("DB(tenant-did/${EXTEN})", start)
+    guard = text.index('GotoIf($["${TENANT}"=""]?did-desconhecido,1)', lookup)
+    goto_ura = text.index("Goto(ura-principal,s,1)", guard)
+    deny = text.index("exten=>did-desconhecido,1,NoOp(", goto_ura)
+    hangup = text.index("Hangup(21)", deny)
+    assert start < lookup < guard < goto_ura < deny < hangup
+    assert 'TENANT=${IF($["${TENANT}"="" ]?t1' not in text
+    assert "Set(TENANT=${IF(" not in text[start:deny]
 
+
+def test_static_dids_keep_explicit_tenant_isolation():
+    """DIDs dos exemplos t1/t2 seguem roteamento direto e exclusivo."""
+    text = blocks_as_dict(load_ext_blocks())["from-tdm-gateway"].replace(" ", "")
+    assert "exten=>5511900001111,1,Set(TENANT=t1)" in text
+    assert "Goto(t1-internal,1001,1)" in text
+    assert "exten=>5511900002222,1,Set(TENANT=t2)" in text
+    assert "Goto(t2-internal,1001,1)" in text
 
 def test_pickup_target_context_dials_receptionist():
     """
@@ -610,20 +620,14 @@ def test_from_tdm_gateway_sets_tenant_before_entering_shared_contexts():
 
 
 def test_unmapped_did_looks_up_tenant_dynamically_via_astdb():
-    """
-    Backlog #39 (wizard de preparação de ambiente): o "pega-tudo" de
-    DID não mapeado explicitamente precisa consultar o AstDB (família
-    "tenant-did", registrada pelo wizard ao criar um tenant novo) ANTES
-    de cair no padrão (t1) - senão criar um tenant novo pelo wizard
-    nunca teria efeito nenhum no roteamento de chamada de entrada.
-    """
-    blocks = blocks_as_dict(load_ext_blocks())
-    text = blocks["from-tdm-gateway"].replace(" ", "")
-    catch_all_pos = text.index("exten=>_X.,1,")
-    lookup_pos = text.index("DB(tenant-did/${EXTEN})", catch_all_pos)
-    default_pos = text.index('TENANT=${IF($["${TENANT}"=""]?t1', catch_all_pos)
-    assert catch_all_pos < lookup_pos < default_pos
-
+    """DID do wizard só acessa URA após obter tenant do AstDB."""
+    text = blocks_as_dict(load_ext_blocks())["from-tdm-gateway"].replace(" ", "")
+    start = text.index("exten=>_X.,1,")
+    lookup = text.index("DB(tenant-did/${EXTEN})", start)
+    reject = text.index("GotoIf(", lookup)
+    ura = text.index("Goto(ura-principal,s,1)", reject)
+    assert start < lookup < reject < ura
+    assert "?did-desconhecido,1" in text[reject:ura]
 
 def test_extensions_conf_includes_wizard_created_tenants_via_wildcard():
     """
