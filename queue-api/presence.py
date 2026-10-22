@@ -11,6 +11,8 @@ do queue-api - diferente de crachá de presença efêmero, "estou de
 férias" não deveria resetar sozinho.
 """
 import json
+import os
+import tempfile
 import time
 from pathlib import Path
 
@@ -35,7 +37,23 @@ def load_presence(path) -> dict:
 
 
 def save_presence(path, data: dict):
-    Path(path).write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+    """Evita corromper o mapa de presença em escritas interrompidas."""
+    destination = Path(path)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w", encoding="utf-8", dir=destination.parent,
+            prefix=f".{destination.name}.", delete=False,
+        ) as handle:
+            temporary = handle.name
+            json.dump(data, handle, indent=2, ensure_ascii=False)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, destination)
+    finally:
+        if temporary is not None and os.path.exists(temporary):
+            os.unlink(temporary)
 
 
 def set_presence(path, extension: str, status: str, note: str = ""):
