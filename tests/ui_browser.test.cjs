@@ -244,3 +244,33 @@ test('supervisor navigation preserves the existing administration restrictions',
     await screenshot(page, 'administracao-supervisor-mobile');
   } finally { await context.close(); }
 });
+
+test('administration treats hostile API values as text, never HTML', async () => {
+  const { context, page, errors } = await openPage('admin/index.html');
+  const hostile = '<img src=x onerror="window.__pabxXssTriggered=1">';
+  const mock = {
+    '/api/extensions': { extensions: [{ name: 'vendas-1', display_name: hostile, number: 1100, tenant: 't1' }] },
+    '/api/blocklist': { numbers: [hostile] },
+    '/api/vip': { vips: [{ number: '11999999999', target_extension: hostile }] },
+    '/api/users': { users: [{ username: hostile, role: 'supervisor' }] },
+  };
+  try {
+    await page.route('**/api/**', async (route) => {
+      const pathname = new URL(route.request().url()).pathname;
+      if (mock[pathname]) {
+        await route.fulfill({ status: 200, contentType: 'application/json',
+          body: JSON.stringify(mock[pathname]) });
+      } else {
+        await route.continue();
+      }
+    });
+    await login(page, 'admin');
+    for (const id of ['extensionsTableBody', 'blocklistTableBody', 'vipTableBody', 'usersTableBody']) {
+      await page.locator('#' + id + ' tr').first().waitFor();
+      assert.equal(await page.locator('#' + id + ' img').count(), 0);
+      assert.ok((await page.locator('#' + id).innerText()).includes(hostile));
+    }
+    assert.equal(await page.evaluate(() => window.__pabxXssTriggered || 0), 0);
+    assert.deepEqual(errors, []);
+  } finally { await context.close(); }
+});
