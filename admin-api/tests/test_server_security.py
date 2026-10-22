@@ -489,3 +489,12 @@ def test_tenant_creation_pins_generated_before_writing_and_disclosed_only_on_cre
     assert body.index("generate_tenant_voicemail_pins(") < body.index("target_dir.mkdir(")
     assert "render_tenant_voicemail(tid, voicemail_pins)" in body
     assert body.count('"voicemail_pins": voicemail_pins') == 2
+
+def test_tenant_wizard_rejects_static_did_before_side_effects():
+    source = SERVER_PY.read_text(encoding="utf-8")
+    body = get_function_body(source, "_handle_create_tenant")
+    assert "parse_static_inbound_dids(dialplan_text)" in body
+    assert "validate_tenant_creation_input(data, existing, reserved_dids)" in body
+    assert body.index("parse_static_inbound_dids(") < body.index("target_dir.mkdir(")
+    assert body.index("validate_tenant_creation_input(") < body.index("target_dir.mkdir(")
+    assert '"não foi possível verificar os DIDs estáticos"' in body
