@@ -577,3 +577,19 @@ Consultar o [Manual 68](docs/manual-68-did-sem-tenant.md) antes
 de uma atualização: números que dependiam do fallback anterior
 precisam ser cadastrados, e o isolamento deve ser homologado com
 chamadas SIP reais.
+
+## Diagnóstico do Asterisk antes da homologação SIP
+
+O script `scripts/sip_preflight.py` consulta, em **modo somente leitura**,
+os transportes TLS/WSS, ramais PJSIP, dialplan de DID e canais ativos.
+Executa no contêiner local ou no Asterisk instalado no Linux, sem
+fazer chamadas e sem alterar arquivos ou banco.
+
+```bash
+python3 scripts/sip_preflight.py --runtime docker --container pabx-mvp
+```
+
+A saída é um relatório JSON e a documentação está no
+[Manual 69](docs/manual-69-diagnostico-sip.md).
+Este diagnóstico **não** homologa registro SIP, áudio, RTP/SRTP,
+URA, contingência nem isolamento entre tenants durante chamadas reais.
