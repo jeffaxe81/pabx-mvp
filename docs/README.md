@@ -74,6 +74,8 @@ configurar, como testar manualmente, e limitações conhecidas.
 66. [CI e validação das entregas](manual-66-ci-e-validacao.md)
 67. [Interface AXE PABX no padrão do Despacho](manual-67-interface-despacho.md)
 
+68. [Rejeitar chamadas com DID desconhecido](manual-68-did-sem-tenant.md)
+
 ## Regra de manutenção
 
 Toda vez que uma funcionalidade nova for implementada no projeto, um
