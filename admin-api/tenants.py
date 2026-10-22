@@ -76,6 +76,8 @@ def validate_tenant_creation_input(data: dict, existing: list):
     raw_tenant = data.get("tenant_id")
     if not isinstance(raw_tenant, str):
         return False, "id do tenant deve ser texto", None
+    if "\r" in raw_tenant or "\n" in raw_tenant:
+        return False, "id do tenant inválido", None
     tenant_id = raw_tenant.strip().lower()
     if not TENANT_ID_RE.fullmatch(tenant_id):
         return False, "id do tenant deve seguir o padrão 't3', 't4', ... (t1/t2 já existem)", None
@@ -114,6 +116,8 @@ def validate_tenant_removal(tenant_id: str, existing: list):
     """Exclusão só aceita IDs t3+ de registros válidos do wizard."""
     if not isinstance(tenant_id, str):
         return False, "id do tenant deve ser texto", None
+    if "\r" in tenant_id or "\n" in tenant_id:
+        return False, "id do tenant inválido", None
     tenant_id = tenant_id.strip().lower()
     if tenant_id in ("t1", "t2"):
         return False, "t1/t2 são exemplos estáticos do projeto - não gerenciados pelo wizard, não podem ser removidos por aqui", None
