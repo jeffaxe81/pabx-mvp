@@ -690,3 +690,10 @@ Veja o [Manual 76](docs/manual-76-xss-tabelas-admin.md).
 caso `docker-compose.yml`, `asterisk/manager.conf` ou
 `asterisk/pjsip.conf` estejam ausentes, vazios ou ilegíveis,
 em vez de ignorá-los. Consulte o [Manual 77](docs/manual-77-arquivos-segredos-obrigatorios.md).
+
+## Segurança na listagem de gravações
+
+O índice de gravações da API ignora links simbólicos; a leitura
+individual também rejeita aliases. A mudança inclui regressões
+automatizadas, sem alterar o fluxo de chamadas SIP.
+Consulte o [Manual 78](docs/manual-78-indice-gravacoes-seguro.md).

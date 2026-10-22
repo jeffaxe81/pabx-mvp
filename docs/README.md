@@ -95,6 +95,8 @@ configurar, como testar manualmente, e limitações conhecidas.
 
 77. [Arquivos críticos obrigatórios no verificador de deploy](manual-77-arquivos-segredos-obrigatorios.md)
 
+78. [Listagem segura de gravações](manual-78-indice-gravacoes-seguro.md)
+
 ## Regra de manutenção
 
 Toda vez que uma funcionalidade nova for implementada no projeto, um
