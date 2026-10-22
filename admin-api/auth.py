@@ -27,9 +27,15 @@ def verify_password(password: str, stored_hash: str) -> bool:
     except (ValueError, AttributeError):
         return False
 
-    salt = bytes.fromhex(salt_hex)
+    if not isinstance(password, str) or len(salt_hex) != 32 or len(hash_hex) != 64:
+        return False
+    try:
+        salt = bytes.fromhex(salt_hex)
+        expected = bytes.fromhex(hash_hex)
+    except ValueError:
+        return False
     derived = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, PBKDF2_ITERATIONS)
-    return hmac.compare_digest(derived.hex(), hash_hex)
+    return hmac.compare_digest(derived, expected)
 
 
 class SessionStore:
