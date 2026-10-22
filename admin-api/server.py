@@ -786,15 +786,18 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json(400, {"error": error})
             return
 
+        # Enviar credenciais só nesta resposta de criação (nunca na
+        # listagem ou em public_view) para permitir provisionamento.
+        provisioning = {"username": cleaned["name"], "sip_password": cleaned["password"]}
         try:
             reload_result = regenerate_and_reload(
                 extra_ami_actions=[("register_extension_mapping", (cleaned["number"], cleaned["name"], cleaned["tenant"]))]
             )
         except Exception as exc:  # noqa: BLE001
-            self._send_json(200, {"extension": public_view(cleaned), "reload_error": str(exc)})
+            self._send_json(200, {"extension": public_view(cleaned), "provisioning": provisioning, "reload_error": str(exc)})
             return
 
-        self._send_json(201, {"extension": public_view(cleaned), "reload": reload_result})
+        self._send_json(201, {"extension": public_view(cleaned), "provisioning": provisioning, "reload": reload_result})
 
     # ---------- PUT / DELETE ----------
     def do_PUT(self):

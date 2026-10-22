@@ -319,3 +319,40 @@ test('admin tables never execute HTML received from APIs and preserve row action
     assert.deepEqual(errors, []);
   } finally { await context.close(); }
 });
+
+test('new extension exposes generated SIP password once, with hide and logout clearing it', async () => {
+  const { context, page, errors } = await openPage('admin/index.html');
+  try {
+    const sipSecret = 'LabStrongSecretFromMock_2026';
+    await page.route('**/api/extensions', async route => {
+      if (route.request().method() === 'POST') {
+        return route.fulfill({
+          status: 201,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            extension: { name: 'novo-ramal', number: 1109, display_name: 'Novo Ramal' },
+            provisioning: { username: 'novo-ramal', sip_password: sipSecret },
+            reload: { pjsip: 'Success' },
+          }),
+        });
+      }
+      return route.continue();
+    });
+    await login(page, 'admin');
+    await page.locator('#formName').fill('novo-ramal');
+    await page.locator('#formNumber').fill('1109');
+    await page.locator('#formDisplayName').fill('Novo Ramal');
+    assert.equal(await page.locator('#formPassword').getAttribute('type'), 'password');
+    await page.locator('#saveBtn').click();
+    await page.locator('#extensionCredentialPanel').waitFor({ state: 'visible' });
+    assert.equal(await page.locator('#extensionCredentialText').innerText(),
+      'novo-ramal: ' + sipSecret);
+    await page.locator('#extensionCredentialHideBtn').click();
+    assert.equal(await page.locator('#extensionCredentialText').innerText(), '');
+    assert.equal(await page.locator('#extensionCredentialPanel').isVisible(), false);
+    await page.locator('#logoutBtn').click();
+    await page.locator('#loginScreen').waitFor({ state: 'visible' });
+    assert.equal(await page.locator('#extensionCredentialText').innerText(), '');
+    assert.deepEqual(errors, []);
+  } finally { await context.close(); }
+});
