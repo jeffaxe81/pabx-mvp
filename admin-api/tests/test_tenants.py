@@ -1,7 +1,7 @@
 from tenants import (
     validate_tenant_creation_input, load_tenants, save_tenants,
     render_tenant_pjsip, render_tenant_queues, render_tenant_extensions, render_tenant_voicemail,
-    render_tenant_parking, validate_tenant_removal, generate_tenant_credentials,
+    render_tenant_parking, validate_tenant_removal, generate_tenant_credentials, generate_tenant_voicemail_pins,
 )
 
 VALID_INPUT = {"tenant_id": "t3", "did": "5511900003333", "display_name": "Empresa C"}
@@ -201,9 +201,38 @@ def test_render_extensions_includes_dynamic_ramal_files():
 def test_render_voicemail_creates_telephonist_mailboxes():
     content = render_tenant_voicemail("t3")
     assert "[t3]" in content
-    assert "t3-recepcao => 1234" in content
-    assert "t3-recepcao-2 => 1234" in content
+    assert "t3-recepcao => " in content
+    assert "t3-recepcao-2 => " in content
+    assert "=> 1234," not in content
     assert "#include voicemail_dynamic_t3.conf" in content
+
+
+def test_voicemail_pins_are_random_unique_and_eight_digits():
+    first = generate_tenant_voicemail_pins("t3")
+    second = generate_tenant_voicemail_pins("t3")
+    assert set(first) == {"t3-recepcao", "t3-recepcao-2"}
+    assert all(pin.isdigit() and len(pin) == 8 for pin in first.values())
+    assert len(set(first.values())) == 2
+    assert first != second
+
+
+def test_voicemail_render_uses_pins_generated_for_response():
+    pins = {"t3-recepcao": "12345678", "t3-recepcao-2": "87654321"}
+    content = render_tenant_voicemail("t3", pins)
+    assert "t3-recepcao => 12345678," in content
+    assert "t3-recepcao-2 => 87654321," in content
+
+
+def test_voicemail_render_rejects_weak_or_reused_pins():
+    import pytest
+    for pins in (
+        {"t3-recepcao": "1234", "t3-recepcao-2": "87654321"},
+        {"t3-recepcao": "12345678", "t3-recepcao-2": "12345678"},
+        {"t3-recepcao": "12345678", "t3-recepcao-2": "5678901\\nsecret"},
+        {},
+    ):
+        with pytest.raises(ValueError):
+            render_tenant_voicemail("t3", pins)
 
 
 # ---------- render_tenant_parking ----------
