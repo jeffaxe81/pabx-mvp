@@ -26,7 +26,7 @@ um passo manual sem apoio nenhum.
 ```bash
 python3 scripts/verify_deployment.py
 ```
-O script pede o `AMI_SECRET` atual (não lê de arquivo automaticamente
+O script pede o `AMI_SECRET` atual com **digitação oculta** via `getpass` (não lê de arquivo automaticamente
 de propósito — evita que o script precise de acesso de leitura a
 segredos que talvez você já tenha movido pra fora do repositório, ver
 manual 50). No final, imprime um resumo com código de saída `0`
@@ -67,7 +67,7 @@ ligação funciona", precisa ouvir de verdade.
 - **Nunca rodado contra um ambiente real** — mesma situação já
   documentada pro resto das integrações de rede deste projeto; a
   primeira execução de verdade é sua
-- **Pede o `AMI_SECRET` interativamente** — não dá pra automatizar
+- **Pede o `AMI_SECRET` interativamente, com eco desativado** — não dá pra automatizar
   numa pipeline CI sem alguma adaptação (ex: variável de ambiente em
   vez de `input()`)
 - **Não valida certificados TLS** de verdade, só que a porta HTTP
@@ -75,3 +75,12 @@ ligação funciona", precisa ouvir de verdade.
 - **Portas fixas** (`127.0.0.1:8090` etc.) — se você mudou as portas
   padrão no `docker-compose.yml`, precisa editar `HTTP_SERVICES` no
   script também
+
+## Reforço de segurança do verificador (manual 70)
+
+O login AMI agora é montado apenas com campos sem CR/LF. A resposta
+pode chegar fragmentada em várias leituras de socket; só é aceita
+quando o primeiro bloco de resposta termina e contém `Response: Success`
+exato. Timeout, EOF, resposta incompleta ou excessiva e prefixos como
+`SuccessExtra` são falhas. A senha não aparece no terminal nem
+é salva nos relatórios. Veja `docs/manual-70-verificador-ami.md`.
