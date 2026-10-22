@@ -46,10 +46,13 @@ na URA. Agora, pra DIDs não mapeados explicitamente (os dois exemplos
 manuais de t1/t2 continuam como estão), o dialplan consulta o AstDB:
 ```
 exten => _X.,1,Set(TENANT=${DB(tenant-did/${EXTEN})})
- same => n,Set(TENANT=${IF($["${TENANT}" = ""]?t1:${TENANT})})
+ same => n,GotoIf($["${TENANT}" = ""]?did-desconhecido,1)
  same => n,Goto(ura-principal,s,1)
+
+exten => did-desconhecido,1,NoOp(DID de entrada sem tenant cadastrado: ${EXTEN})
+ same => n,Hangup(21)
 ```
-O wizard registra `tenant-did/<DID> = <tenant_id>` via AMI no momento
+Chamadas para DID não cadastrado são rejeitadas, sem fallback para t1 (manual 68). O wizard registra `tenant-did/<DID> = <tenant_id>` via AMI no momento
 da criação — é isso que faz uma chamada pro DID novo cair na URA do
 tenant certo, sem editar dialplan.
 
