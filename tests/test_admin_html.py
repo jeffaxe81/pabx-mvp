@@ -498,3 +498,22 @@ def test_wizard_shows_voicemail_pins_only_during_initial_provisioning():
     assert "wizardCredentialsText').textContent" in wizard
     assert ".innerHTML" not in wizard
     assert "wizardCredentialsHideBtn" in html
+
+def test_admin_tables_render_api_values_as_text_not_html():
+    html = load_html()
+    for start, end in (
+        ("function renderTable(", "function startEdit("),
+        ("function renderBlocklist(", "el('addBlockBtn').addEventListener"),
+        ("function renderVips(", "el('addVipBtn').addEventListener"),
+        ("function renderUsersTable(", "function startEditUser("),
+    ):
+        begin = html.index(start)
+        region = html[begin:html.index(end, begin)]
+        assert "innerHTML" not in region
+        assert "replaceChildren()" in region
+        assert "adminTextCell(" in region
+        assert "adminAction(" in region
+    helper = html[html.index("function adminTextCell("):html.index("function renderTable(")]
+    assert "cell.textContent" in helper
+    assert "button.textContent" in helper
+    assert "button.addEventListener('click', handler)" in helper
