@@ -463,3 +463,27 @@ def test_play_sound_revokes_previous_object_url():
     revoke_pos = body.index("URL.revokeObjectURL(")
     create_pos = body.index("URL.createObjectURL(")
     assert revoke_pos < create_pos
+
+def test_wizard_displays_sip_credentials_as_text_once():
+    html = ADMIN_HTML.read_text(encoding="utf-8")
+    assert 'id="wizardCredentialsPanel"' in html
+    assert 'id="wizardCredentialsHideBtn"' in html
+    start = html.index("el('wizardConfirmBtn').addEventListener")
+    end = html.index("// ---------- PIN de monitoramento", start)
+    wizard = html[start:end]
+    assert "data.sip_credentials" in wizard
+    assert "wizardCredentialsText').textContent" in wizard
+    assert "tenantWizardResult').innerHTML" not in wizard
+    assert "clearWizardCredentials()" in html
+
+
+def test_tenant_list_and_review_do_not_interpolate_html():
+    html = ADMIN_HTML.read_text(encoding="utf-8")
+    start = html.index("function renderTenantsTable(")
+    listing = html[start:html.index("function removeTenant(", start)]
+    assert ".innerHTML" not in listing
+    assert "cell.textContent" in listing
+    start = html.index("el('wizardReviewBtn').addEventListener")
+    wizard = html[start:html.index("el('wizardBackBtn').addEventListener", start)]
+    assert "wizardReviewList').innerHTML" not in wizard
+    assert "li.textContent" in wizard
