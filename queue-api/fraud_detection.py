@@ -27,7 +27,13 @@ class CallRateTracker:
     def track_call(self, extension: str, destination: str):
         if not extension:
             return
-        self._calls.setdefault(extension, []).append((self._clock(), destination))
+        now = self._clock()
+        # Mantenha apenas um horizonte de 24 h e imponha limite por
+        # ramal para não acumular memória indefinidamente em produção.
+        horizon = now - 86400
+        recent = [(ts, dest) for ts, dest in self._calls.get(extension, []) if ts >= horizon]
+        recent.append((now, destination))
+        self._calls[extension] = recent[-10000:]
 
     def is_abnormal(self, extension: str, window_seconds: int = 60, threshold: int = 10) -> bool:
         calls = self._calls.get(extension, [])
