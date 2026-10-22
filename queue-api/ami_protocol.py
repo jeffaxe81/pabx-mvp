@@ -42,5 +42,14 @@ def build_action(fields: dict) -> str:
     chaves foram inseridas (Python 3.7+ preserva ordem de dict).
     Ex: build_action({"Action": "Login", "Username": "x"})
     """
-    lines = [f"{key}: {value}" for key, value in fields.items()]
+    if not isinstance(fields, dict) or not fields:
+        raise ValueError("Ação AMI vazia ou inválida")
+    lines = []
+    for key, value in fields.items():
+        if not isinstance(key, str) or not key or any(c in key for c in "\r\n:"):
+            raise ValueError("Campo AMI inválido")
+        value = str(value)
+        if "\r" in value or "\n" in value:
+            raise ValueError("Quebra de linha proibida em campo AMI")
+        lines.append(f"{key}: {value}")
     return "\r\n".join(lines) + "\r\n\r\n"
