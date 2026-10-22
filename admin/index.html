@@ -553,7 +553,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 
     <div id="tenantWizardResult" style="display:none; margin-top:14px; font-size:13px;"></div>
     <div id="wizardCredentialsPanel" style="display:none; margin-top:12px;">
-      <p style="font-size:13px;">Credenciais SIP geradas para este tenant. Copie e armazene em local seguro; elas não serão exibidas novamente nesta tela.</p>
+      <p style="font-size:13px;">Senhas SIP e PINs de correio de voz gerados para este tenant. Copie e armazene em cofre seguro; eles não serão exibidos novamente nesta tela.</p>
       <pre id="wizardCredentialsText" style="white-space:pre-wrap; word-break:break-all; padding:12px; border:1px solid var(--border); border-radius:8px;"></pre>
       <button class="btn-ghost" id="wizardCredentialsHideBtn" type="button">Ocultar credenciais</button>
     </div>
@@ -1173,9 +1173,14 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
           : `Tenant "${data.tenant.tenant_id}" criado e recarregado com sucesso. Registre as telefonistas nos softphones.`;
         clearWizardCredentials();
         const creds = data.sip_credentials || {};
+        const pins = data.voicemail_pins || {};
         const ids = [`${data.tenant.tenant_id}-recepcao`, `${data.tenant.tenant_id}-recepcao-2`];
-        if (ids.every((id) => typeof creds[id] === 'string')) {
-          el('wizardCredentialsText').textContent = ids.map((id) => `${id}: ${creds[id]}`).join('\n');
+        if (ids.every((id) => typeof creds[id] === 'string' && typeof pins[id] === 'string')) {
+          const lines = ['SIP / WebRTC'];
+          lines.push(...ids.map((id) => `${id}: ${creds[id]}`));
+          lines.push('', 'PINs de correio de voz');
+          lines.push(...ids.map((id) => `${id}: ${pins[id]}`));
+          el('wizardCredentialsText').textContent = lines.join('\n');
           el('wizardCredentialsPanel').style.display = 'block';
         }
         el('tenantWizardStep1').style.display = 'block';
