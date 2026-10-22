@@ -41,7 +41,12 @@ def validate_extension_input(data: dict, existing: list, editing_name: str = Non
     if not isinstance(existing, list) or any(
         not isinstance(e, dict)
         or not isinstance(e.get("name"), str)
-        or not isinstance(e.get("number"), (int, str))
+        or isinstance(e.get("number"), bool)
+        or not (
+            isinstance(e.get("number"), int)
+            or (isinstance(e.get("number"), str) and e["number"].isascii()
+                and e["number"].isdecimal())
+        )
         or (e.get("tenant") is not None and not isinstance(e["tenant"], str))
         for e in existing
     ):
@@ -102,10 +107,15 @@ def validate_extension_input(data: dict, existing: list, editing_name: str = Non
         password = secrets.token_urlsafe(24)
     elif not isinstance(raw_password, str):
         return False, "senha SIP deve ser texto", None
-    elif not 12 <= len(raw_password) <= 128 or not re.fullmatch(
-        r"[A-Za-z0-9._~!@#$%^&*()+\-=]{12,128}", raw_password
+    elif not re.fullmatch(r"[A-Za-z0-9._~!@#$%^&*()+\-=]{1,128}", raw_password):
+        return False, "senha SIP contém delimitadores ou caracteres inválidos", None
+    elif len(raw_password) < 12 and not (
+        editing_name is not None and any(
+            e["name"] == editing_name and e.get("password") == raw_password
+            for e in existing
+        )
     ):
-        return False, "senha SIP deve ter 12-128 caracteres sem espaços ou delimitadores inseguros", None
+        return False, "senha SIP deve ter pelo menos 12 caracteres", None
     else:
         password = raw_password
 
