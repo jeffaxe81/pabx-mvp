@@ -683,3 +683,10 @@ valores vindos das APIs como HTML. Um teste real de navegador injeta
 um payload HTML simulado e verifica que ele não é executado, sem
 alterar dados operacionais ou iniciar chamadas.
 Veja o [Manual 76](docs/manual-76-xss-tabelas-admin.md).
+
+## Verificador de implantação: configuração obrigatória
+
+`scripts/verify_deployment.py` agora reprova a checagem de segredos
+caso `docker-compose.yml`, `asterisk/manager.conf` ou
+`asterisk/pjsip.conf` estejam ausentes, vazios ou ilegíveis,
+em vez de ignorá-los. Consulte o [Manual 77](docs/manual-77-arquivos-segredos-obrigatorios.md).
