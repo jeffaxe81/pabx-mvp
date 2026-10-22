@@ -86,6 +86,8 @@ configurar, como testar manualmente, e limitações conhecidas.
 
 73. [Matriz de homologação e critérios de GO](manual-73-gates-homologacao.md)
 
+74. [PINs seguros de correio de voz por tenant](manual-74-voicemail-pins-seguros.md)
+
 ## Regra de manutenção
 
 Toda vez que uma funcionalidade nova for implementada no projeto, um
