@@ -647,3 +647,11 @@ A ferramenta só declara **apto para revisão de GO** quando todos
 os cenários estiverem marcados como aprovados com referência de
 evidência; ela não faz chamadas nem verifica o conteúdo das provas.
 Veja [Manual 73](docs/manual-73-gates-homologacao.md).
+
+## PINs de caixa postal das telefonistas
+
+O wizard de novos tenants gera PINs distintos e aleatórios de oito
+dígitos para as caixas postais, além de senhas SIP fortes. Os PINs
+aparecem somente no resultado da criação para o administrador.
+Caixas existentes (inclusive t1/t2) não são alteradas automaticamente.
+Consulte o [Manual 74](docs/manual-74-voicemail-pins-seguros.md).

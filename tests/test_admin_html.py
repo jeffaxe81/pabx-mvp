@@ -487,3 +487,14 @@ def test_tenant_list_and_review_do_not_interpolate_html():
     wizard = html[start:html.index("el('wizardBackBtn').addEventListener", start)]
     assert "wizardReviewList').innerHTML" not in wizard
     assert "li.textContent" in wizard
+
+def test_wizard_shows_voicemail_pins_only_during_initial_provisioning():
+    html = ADMIN_HTML.read_text(encoding="utf-8")
+    start = html.index("el('wizardConfirmBtn').addEventListener")
+    end = html.index("// ---------- PIN de monitoramento", start)
+    wizard = html[start:end]
+    assert "data.voicemail_pins" in wizard
+    assert "PINs de correio de voz" in wizard
+    assert "wizardCredentialsText').textContent" in wizard
+    assert ".innerHTML" not in wizard
+    assert "wizardCredentialsHideBtn" in html

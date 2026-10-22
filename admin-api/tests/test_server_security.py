@@ -481,3 +481,11 @@ def test_api_json_responses_disable_cache():
     source = SERVER_PY.read_text(encoding="utf-8")
     body = get_function_body(source, "_send_json")
     assert '"Cache-Control", "no-store"' in body
+
+def test_tenant_creation_pins_generated_before_writing_and_disclosed_only_on_creation():
+    source = SERVER_PY.read_text(encoding="utf-8")
+    body = get_function_body(source, "_handle_create_tenant")
+    assert "generate_tenant_voicemail_pins(tenant_id)" in body
+    assert body.index("generate_tenant_voicemail_pins(") < body.index("target_dir.mkdir(")
+    assert "render_tenant_voicemail(tid, voicemail_pins)" in body
+    assert body.count('"voicemail_pins": voicemail_pins') == 2

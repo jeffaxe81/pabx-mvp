@@ -33,7 +33,7 @@ from overflow import validate_overflow_timeout_input
 from tenants import (
     load_tenants, save_tenants, validate_tenant_creation_input,
     render_tenant_pjsip, render_tenant_queues, render_tenant_extensions, render_tenant_voicemail,
-    render_tenant_parking, validate_tenant_removal, generate_tenant_credentials,
+    render_tenant_parking, validate_tenant_removal, generate_tenant_credentials, generate_tenant_voicemail_pins,
 )
 from users import load_users, save_users, find_user, add_user, update_user, delete_user, public_user
 from totp import generate_secret, verify_totp, build_provisioning_uri
@@ -501,11 +501,12 @@ class Handler(BaseHTTPRequestHandler):
         # Geradas uma só vez para os arquivos e retornadas somente na
         # resposta de criação ao administrador autenticado.
         sip_credentials = generate_tenant_credentials(tenant_id)
+        voicemail_pins = generate_tenant_voicemail_pins(tenant_id)
         for subdir, filename_prefix, render_fn in (
             ("pjsip_tenants", "", lambda tid: render_tenant_pjsip(tid, sip_credentials)),
             ("queues_tenants", "", render_tenant_queues),
             ("extensions_tenants", "", render_tenant_extensions),
-            ("voicemail_tenants", "", render_tenant_voicemail),
+            ("voicemail_tenants", "", lambda tid: render_tenant_voicemail(tid, voicemail_pins)),
             ("parking_tenants", "", render_tenant_parking),
         ):
             target_dir = Path(ASTERISK_CONF_DIR, subdir)
@@ -520,14 +521,14 @@ class Handler(BaseHTTPRequestHandler):
         except Exception as exc:  # noqa: BLE001
             existing.append(cleaned)
             save_tenants(TENANTS_PATH, existing)
-            self._send_json(201, {"tenant": cleaned, "sip_credentials": sip_credentials, "reload_error": str(exc)})
+            self._send_json(201, {"tenant": cleaned, "sip_credentials": sip_credentials, "voicemail_pins": voicemail_pins, "reload_error": str(exc)})
             return
         finally:
             client.close()
 
         existing.append(cleaned)
         save_tenants(TENANTS_PATH, existing)
-        self._send_json(201, {"tenant": cleaned, "sip_credentials": sip_credentials, "reload": reload_result})
+        self._send_json(201, {"tenant": cleaned, "sip_credentials": sip_credentials, "voicemail_pins": voicemail_pins, "reload": reload_result})
 
     def _handle_generate_sound(self):
         """
