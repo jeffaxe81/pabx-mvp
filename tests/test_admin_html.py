@@ -546,3 +546,15 @@ def test_admin_text_cells_never_interpret_html_and_actions_keep_handlers():
     assert "button.setAttribute(" in body
     assert "button.addEventListener('click', handler)" in body
     assert ".innerHTML" not in body
+
+
+def test_extension_form_shows_new_sip_secret_once_and_hides_on_logout():
+    html = load_html()
+    assert '<input id="formPassword" type="password"' in html
+    assert 'id="extensionCredentialPanel"' in html
+    assert 'id="extensionCredentialHideBtn"' in html
+    assert "extensionCredentialText').textContent" in html
+    assert "data.provisioning.sip_password" in html
+    assert "el('extensionCredentialHideBtn').addEventListener('click', clearExtensionCredentials)" in html
+    logout = html[html.index("el('logoutBtn').addEventListener"):html.index("function loadExtensions")]
+    assert "clearExtensionCredentials()" in logout
