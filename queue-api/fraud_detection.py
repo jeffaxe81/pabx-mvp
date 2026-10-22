@@ -27,7 +27,20 @@ class CallRateTracker:
     def track_call(self, extension: str, destination: str):
         if not extension:
             return
-        self._calls.setdefault(extension, []).append((self._clock(), destination))
+        now = self._clock()
+        # Retenção deslizante de 24 h; poda somente quando o primeiro
+        # evento estiver vencido, evitando recomputar toda a lista a
+        # cada chamada (importante em ramais de alto tráfego).
+        horizon = now - 86400
+        calls = self._calls.setdefault(extension, [])
+        if calls and calls[0][0] < horizon:
+            expired = 0
+            while expired < len(calls) and calls[expired][0] < horizon:
+                expired += 1
+            del calls[:expired]
+        calls.append((now, destination))
+        if len(calls) > 10000:
+            del calls[:-10000]
 
     def is_abnormal(self, extension: str, window_seconds: int = 60, threshold: int = 10) -> bool:
         calls = self._calls.get(extension, [])
