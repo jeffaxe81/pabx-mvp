@@ -37,7 +37,15 @@ def parse_ami_login_result(response_text: str) -> bool:
     Success' - qualquer outra coisa (erro de autenticação, timeout,
     resposta vazia) conta como falha.
     """
-    return response_text.strip().startswith("Response: Success")
+    if not isinstance(response_text, str):
+        return False
+    # A primeira linha Response decide o login, evitando falso positivo
+    # com valores como "SuccessExtra" ou resposta posterior divergente.
+    for line in response_text.splitlines():
+        value = line.strip()
+        if value.startswith("Response:"):
+            return value == "Response: Success"
+    return False
 
 
 def summarize_http_health_checks(results: dict) -> dict:
