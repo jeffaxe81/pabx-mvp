@@ -655,3 +655,15 @@ dígitos para as caixas postais, além de senhas SIP fortes. Os PINs
 aparecem somente no resultado da criação para o administrador.
 Caixas existentes (inclusive t1/t2) não são alteradas automaticamente.
 Consulte o [Manual 74](docs/manual-74-voicemail-pins-seguros.md).
+
+## Conflitos de DID no wizard multiempresa
+
+O cadastro de uma nova empresa verifica também os DIDs já definidos
+diretamente no contexto `from-tdm-gateway` do `extensions.conf`.
+Se um DID já possuir rota fixa, a criação é recusada antes de gerar
+arquivos ou registrar informações no AstDB. Em caso de dialplan
+indisponível, a validação falha de forma segura.
+
+Ver o [Manual 75](docs/manual-75-did-estatico-colisao.md). A conferência
+de faixas de DIDs, regras da operadora e chamadas reais ainda depende
+da homologação.

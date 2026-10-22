@@ -342,3 +342,54 @@ def test_removal_fails_closed_on_invalid_registry():
         ok, error, cleaned = validate_tenant_removal("t3", existing)
         assert ok is False and cleaned is None
         assert error
+
+def test_parser_finds_only_explicit_inbound_dids_in_gateway_context():
+    from tenants import parse_static_inbound_dids
+    config = """
+[t1-internal]
+exten => 5511900009999,1,Dial(PJSIP/t1)
+[from-tdm-gateway]
+; exten => 5511900007777,1,NoOp(comentado)
+exten => 5511900001111,1,Set(TENANT=t1)
+ same => n,Goto(t1-internal,1001,1)
+exten => 5511900002222,1,Set(TENANT=t2)
+exten => _X.,1,Set(TENANT=${DB(tenant-did/${EXTEN})})
+[ura-principal]
+exten => 5511900008888,1,Answer()
+"""
+    assert parse_static_inbound_dids(config) == {
+        "5511900001111", "5511900002222"
+    }
+
+
+def test_parser_fails_closed_without_inbound_context():
+    import pytest
+    from tenants import parse_static_inbound_dids
+    with pytest.raises(ValueError, match="from-tdm-gateway"):
+        parse_static_inbound_dids("[t1-internal]\nexten => 123456789,1,Answer()")
+
+
+def test_create_tenant_rejects_did_that_has_static_dialplan_route():
+    record = {**VALID_INPUT, "did": "5511900001111"}
+    ok, error, cleaned = validate_tenant_creation_input(
+        record, existing=[], reserved_dids={"5511900001111", "5511900002222"}
+    )
+    assert not ok and cleaned is None
+    assert "rota estática" in error
+
+
+def test_create_tenant_allows_new_did_not_in_static_dialplan():
+    ok, error, cleaned = validate_tenant_creation_input(
+        VALID_INPUT, existing=[], reserved_dids={"5511900001111"}
+    )
+    assert ok and error is None
+    assert cleaned["did"] == VALID_INPUT["did"]
+
+
+def test_parser_reads_repository_real_inbound_context():
+    from pathlib import Path
+    from tenants import parse_static_inbound_dids
+    dialplan = (Path(__file__).resolve().parents[2] / "asterisk" / "extensions.conf").read_text(encoding="utf-8")
+    reserved = parse_static_inbound_dids(dialplan)
+    assert "5511900001111" in reserved
+    assert "5511900002222" in reserved

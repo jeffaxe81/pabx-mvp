@@ -67,7 +67,37 @@ def _valid_existing_records(existing) -> bool:
     )
 
 
-def validate_tenant_creation_input(data: dict, existing: list):
+def parse_static_inbound_dids(dialplan_text: str) -> set:
+    """Obtém DIDs fixos do contexto Asterisk [from-tdm-gateway].
+
+    O wizard não pode registrar no AstDB um DID que já tem roteamento
+    explícito neste contexto: essa regra terá precedência.
+    """
+    if not isinstance(dialplan_text, str):
+        raise ValueError("dialplan ilegível")
+    context_found = False
+    in_context = False
+    dids = set()
+    for line in dialplan_text.splitlines():
+        stripped = line.strip()
+        if stripped.startswith(";") or not stripped:
+            continue
+        section = re.fullmatch(r"\[([^\]]+)\]", stripped)
+        if section:
+            in_context = section.group(1).strip() == "from-tdm-gateway"
+            context_found = context_found or in_context
+            continue
+        if not in_context:
+            continue
+        match = re.match(r"^exten\s*=>\s*([0-9]{8,15})\s*,\s*1\s*,", stripped)
+        if match:
+            dids.add(match.group(1))
+    if not context_found:
+        raise ValueError("contexto from-tdm-gateway ausente")
+    return dids
+
+
+def validate_tenant_creation_input(data: dict, existing: list, reserved_dids=()):
     """Valida JSON antes de gerar arquivos Asterisk ou registrar DID no AMI."""
     if not isinstance(data, dict):
         return False, "dados do tenant devem ser um objeto JSON", None
@@ -98,6 +128,8 @@ def validate_tenant_creation_input(data: dict, existing: list):
         return False, "DID inválido (só dígitos, 8-15 caracteres)", None
     if any(t["did"] == did for t in existing):
         return False, f"o DID '{did}' já está registrado pra outro tenant", None
+    if did in reserved_dids:
+        return False, f"o DID '{did}' já possui rota estática no Asterisk", None
 
     raw_name = data.get("display_name")
     if not isinstance(raw_name, str):

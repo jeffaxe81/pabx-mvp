@@ -88,6 +88,8 @@ configurar, como testar manualmente, e limitações conhecidas.
 
 74. [PINs seguros de correio de voz por tenant](manual-74-voicemail-pins-seguros.md)
 
+75. [Prevenir conflito de DID estático entre empresas](manual-75-did-estatico-colisao.md)
+
 ## Regra de manutenção
 
 Toda vez que uma funcionalidade nova for implementada no projeto, um
