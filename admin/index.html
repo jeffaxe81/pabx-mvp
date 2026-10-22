@@ -552,6 +552,11 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     </div>
 
     <div id="tenantWizardResult" style="display:none; margin-top:14px; font-size:13px;"></div>
+    <div id="wizardCredentialsPanel" style="display:none; margin-top:12px;">
+      <p style="font-size:13px;">Credenciais SIP geradas para este tenant. Copie e armazene em local seguro; elas não serão exibidas novamente nesta tela.</p>
+      <pre id="wizardCredentialsText" style="white-space:pre-wrap; word-break:break-all; padding:12px; border:1px solid var(--border); border-radius:8px;"></pre>
+      <button class="btn-ghost" id="wizardCredentialsHideBtn" type="button">Ocultar credenciais</button>
+    </div>
     <div class="error-msg" id="tenantWizardError"></div>
   </div>
 
@@ -717,6 +722,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     apiFetch('/api/logout', { method: 'POST' }).finally(() => {
       token = null;
       myRole = null;
+      clearWizardCredentials();
       el('appScreen').style.display = 'none';
       el('loginScreen').style.display = 'flex';
     });
@@ -1071,6 +1077,12 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
       .catch((err) => { el('totpConfigError').textContent = err.message; });
   });
 
+  function clearWizardCredentials() {
+    el('wizardCredentialsText').textContent = '';
+    el('wizardCredentialsPanel').style.display = 'none';
+  }
+  el('wizardCredentialsHideBtn').addEventListener('click', clearWizardCredentials);
+
   // ---------- Wizard de preparação de ambiente por tenant (backlog #39) ----------
   let pendingTenantData = null;
 
@@ -1080,20 +1092,31 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 
   function renderTenantsTable(tenantList) {
     el('tenantsEmptyHint').style.display = tenantList.length === 0 ? 'block' : 'none';
-    el('tenantsTableBody').innerHTML = tenantList.map((t) => `
-      <tr>
-        <td class="mono">${t.tenant_id}</td>
-        <td class="mono">${t.did}</td>
-        <td>${t.display_name}</td>
-        <td class="actions"><button class="btn-danger" data-remove-tenant="${t.tenant_id}">Remover</button></td>
-      </tr>`).join('');
-
-    document.querySelectorAll('[data-remove-tenant]').forEach((btn) => {
-      btn.addEventListener('click', () => removeTenant(btn.dataset.removeTenant));
-    });
+    const table = el('tenantsTableBody');
+    table.replaceChildren();
+    for (const t of tenantList) {
+      const row = document.createElement('tr');
+      for (const key of ['tenant_id', 'did', 'display_name']) {
+        const cell = document.createElement('td');
+        cell.textContent = String(t[key] ?? '');
+        if (key !== 'display_name') cell.className = 'mono';
+        row.appendChild(cell);
+      }
+      const actions = document.createElement('td');
+      actions.className = 'actions';
+      const remove = document.createElement('button');
+      remove.className = 'btn-danger';
+      remove.textContent = 'Remover';
+      remove.setAttribute('data-remove-tenant', String(t.tenant_id));
+      remove.addEventListener('click', () => removeTenant(t.tenant_id));
+      actions.appendChild(remove);
+      row.appendChild(actions);
+      table.appendChild(row);
+    }
   }
 
   function removeTenant(tenantId) {
+    clearWizardCredentials();
     if (!confirm(`Remover o tenant "${tenantId}"? Isso apaga o dialplan, telefonistas, filas, vaga de estacionamento e QUALQUER ramal dinâmico criado dentro desse tenant - não dá pra desfazer.`)) return;
     el('tenantWizardError').textContent = '';
     apiFetch(`/api/tenants/${tenantId}`, { method: 'DELETE' })
@@ -1116,12 +1139,20 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
       display_name: el('wizardDisplayNameInput').value.trim(),
     };
 
-    el('wizardReviewList').innerHTML = `
-      <li><strong>ID do tenant:</strong> ${pendingTenantData.tenant_id}</li>
-      <li><strong>DID:</strong> ${pendingTenantData.did}</li>
-      <li><strong>Nome:</strong> ${pendingTenantData.display_name}</li>
-      <li>Serão criadas 2 telefonistas web, 3 filas (padrão/inglês/espanhol) e o dialplan completo desse tenant.</li>
-    `;
+    clearWizardCredentials();
+    const review = el('wizardReviewList');
+    review.replaceChildren();
+    const lines = [
+      `ID do tenant: ${pendingTenantData.tenant_id}`,
+      `DID: ${pendingTenantData.did}`,
+      `Nome: ${pendingTenantData.display_name}`,
+      'Serão criadas 2 telefonistas web, 3 filas (padrão/inglês/espanhol) e o dialplan completo desse tenant.',
+    ];
+    for (const line of lines) {
+      const li = document.createElement('li');
+      li.textContent = line;
+      review.appendChild(li);
+    }
     el('tenantWizardStep1').style.display = 'none';
     el('tenantWizardStep2').style.display = 'block';
     el('tenantWizardResult').style.display = 'none';
@@ -1137,9 +1168,16 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     apiFetch('/api/tenants', { method: 'POST', body: JSON.stringify(pendingTenantData) })
       .then((data) => {
         el('tenantWizardResult').style.display = 'block';
-        el('tenantWizardResult').innerHTML = data.reload_error
+        el('tenantWizardResult').textContent = data.reload_error
           ? `Tenant criado, mas o reload automático falhou (${data.reload_error}) - rode manualmente pelo Asterisk.`
-          : `Tenant "${data.tenant.tenant_id}" criado e recarregado com sucesso. Registre as telefonistas ${data.tenant.tenant_id}-recepcao / ${data.tenant.tenant_id}-recepcao-2 nos softphones.`;
+          : `Tenant "${data.tenant.tenant_id}" criado e recarregado com sucesso. Registre as telefonistas nos softphones.`;
+        clearWizardCredentials();
+        const creds = data.sip_credentials || {};
+        const ids = [`${data.tenant.tenant_id}-recepcao`, `${data.tenant.tenant_id}-recepcao-2`];
+        if (ids.every((id) => typeof creds[id] === 'string')) {
+          el('wizardCredentialsText').textContent = ids.map((id) => `${id}: ${creds[id]}`).join('\n');
+          el('wizardCredentialsPanel').style.display = 'block';
+        }
         el('tenantWizardStep1').style.display = 'block';
         el('tenantWizardStep2').style.display = 'none';
         el('wizardTenantIdInput').value = '';
