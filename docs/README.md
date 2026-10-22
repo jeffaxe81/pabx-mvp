@@ -93,6 +93,8 @@ configurar, como testar manualmente, e limitações conhecidas.
 76. [Proteção XSS nas tabelas administrativas](manual-76-xss-tabelas-admin.md)
 
 
+77. [Arquivos críticos obrigatórios no verificador de deploy](manual-77-arquivos-segredos-obrigatorios.md)
+
 ## Regra de manutenção
 
 Toda vez que uma funcionalidade nova for implementada no projeto, um
