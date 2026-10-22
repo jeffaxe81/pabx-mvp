@@ -128,8 +128,26 @@ def test_recordings_panel_uses_embedded_audio_player():
     render_start = html.index("function renderRecordings")
     render_end = html.index("el('refreshRecordingsBtn')", render_start)
     handler_body = html[render_start:render_end]
-    assert "<audio controls" in handler_body
+    assert "document.createElement('audio')" in handler_body
+    assert "audio.controls = true" in handler_body
     assert "/recordings/" in handler_body
+    assert "Authorization:" in handler_body
+    assert "response.blob()" in handler_body
+    assert "URL.createObjectURL(blob)" in handler_body
+
+
+def test_recordings_credentials_never_go_in_url_or_local_storage():
+    html = load_html()
+    render_start = html.index("// ---------- Gravações com autorização")
+    render_end = html.index("// ---------- Minha presença", render_start)
+    body = html[render_start:render_end]
+    assert 'id="recordingsToken"' in html
+    assert "Bearer ${token}" in body
+    assert "localStorage" not in body
+    assert "recordingApiIsSecure(apiUrl)" in body
+    assert "document.createElement('audio')" in body
+    assert "recordingObjectUrls.add(objectUrl)" in body
+    assert "URL.revokeObjectURL(url)" in body
 
 
 def test_answering_second_line_holds_the_first():

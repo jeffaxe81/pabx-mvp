@@ -707,3 +707,13 @@ uma única vez ao administrador para provisionamento e ocultado ao sair.
 O formulário não mostra a senha durante a digitação e o cadastro de
 ramais antigos preserva seus segredos existentes até uma rotação
 controlada. Veja o [Manual 79](docs/manual-79-ramais-validacao-segredos.md).
+
+## Acesso autenticado a gravações por tenant
+
+A listagem e a reprodução de gravações ficam bloqueadas sem um token
+Bearer válido, escopo de tenant e vínculo explícito do áudio à empresa.
+O Webphone carrega os áudios via requisições autenticadas e URLs Blob,
+sem divulgar tokens em parâmetros de URL. A política é armazenada em
+volume privado e o acesso fica desativado quando está ausente.
+Essa etapa não substitui SSO, TLS no proxy e homologação operacional.
+Ver o [Manual 80](docs/manual-80-acesso-gravacoes-tenant.md).
