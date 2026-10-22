@@ -52,6 +52,18 @@ def test_handles_empty_response():
     assert parse_ami_login_result("") is False
 
 
+
+def test_rejects_fake_success_prefix_and_later_success():
+    assert parse_ami_login_result("Response: SuccessExtra\r\n\r\n") is False
+    assert parse_ami_login_result(
+        "Response: Error\r\n\r\nResponse: Success\r\n\r\n"
+    ) is False
+
+
+def test_rejects_non_string_ami_response():
+    assert parse_ami_login_result(None) is False
+
+
 def test_tolerates_leading_whitespace_before_response_line():
     """.strip() já cobre isso - resposta com espaço/quebra de linha antes ainda é reconhecida."""
     assert parse_ami_login_result("\r\n  Response: Success\r\n") is True
