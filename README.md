@@ -566,3 +566,14 @@ node --test tests/ui_navigation.test.cjs
 
 O sincronizador embute o conteúdo nas páginas HTML para manter os
 servidores atuais e a PWA sem novas rotas ou dependências de frontend.
+
+## Segurança dos DIDs de entrada
+
+O contexto `from-tdm-gateway` só encaminha chamadas externas quando
+o DID identifica explicitamente um tenant: regras estáticas de t1/t2
+ou `tenant-did/<DID>` no AstDB, registrado pelo wizard. DIDs
+desconhecidos são **rejeitados**, e não encaminhados a t1.
+Consultar o [Manual 68](docs/manual-68-did-sem-tenant.md) antes
+de uma atualização: números que dependiam do fallback anterior
+precisam ser cadastrados, e o isolamento deve ser homologado com
+chamadas SIP reais.
