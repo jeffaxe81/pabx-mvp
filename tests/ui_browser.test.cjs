@@ -266,7 +266,7 @@ test('administration treats hostile API values as text, never HTML', async () =>
     });
     await login(page, 'admin');
     for (const id of ['extensionsTableBody', 'blocklistTableBody', 'vipTableBody', 'usersTableBody']) {
-      await page.locator('#' + id + ' tr').first().waitFor();
+      await page.locator('#' + id + ' tr').first().waitFor({ state: 'attached' });
       assert.equal(await page.locator('#' + id + ' img').count(), 0);
       assert.ok((await page.locator('#' + id).innerText()).includes(hostile));
     }
