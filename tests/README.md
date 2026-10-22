@@ -62,3 +62,23 @@ A workflow `.github/workflows/quality-gates.yml` executa esta suíte e as
 outras sete suítes Python em jobs separados nos PRs e pushes na `main`.
 O arquivo `test_ci_configuration.py` verifica a cobertura da matriz e as
 permissões mínimas. Instruções completas: `docs/manual-66-ci-e-validacao.md`.
+
+## Testes da interface AXE PABX
+
+Execute na raiz do repositório:
+
+```bash
+# Sincronização e navegação, sem navegador ou serviços externos
+python3 scripts/sync_ui.py --check
+node --test tests/ui_navigation.test.cjs
+
+# Opcional: HTML real em Chromium, APIs sintéticas e sem chamadas SIP
+npm install --no-save playwright
+npx playwright install chromium
+node --test tests/ui_browser.test.cjs
+```
+
+`test_ui_sync.py` é executado junto da suíte principal. Os testes Node
+verificam os links de navegação; a suíte de navegador verifica menu,
+foco, largura do discador, seções e restrições visuais por perfil.
+Detalhes no [manual 67](../docs/manual-67-interface-despacho.md).

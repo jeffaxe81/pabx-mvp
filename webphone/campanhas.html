@@ -39,10 +39,248 @@
   .status-chip { background: var(--panel-alt); padding: 3px 8px; border-radius: 10px; }
   .empty { color: var(--text-muted); font-size: 13px; }
 </style>
+<!-- AXE design:start -->
+<style id="axeDesign">
+/* AXE Dispatch reference: client/src/index.css and DashboardLayout.tsx,
+   jeffaxe81/dispatch @ 3aee47e. Embedded into both static servers. */
+:root {
+  --bg: #f5f7f9; --panel: #fff; --panel-alt: #f0f4f7; --border: #e2e6eb;
+  --text: #1e293b; --text-muted: #64748b;
+  --green: #16805a; --amber: #a5640a; --red: #be3449; --grey: #8893a5;
+  --axe-primary: #126b7c; --axe-primary-soft: #eaf4f6;
+  --axe-radius: .65rem; --axe-nav-width: 248px;
+}
+@supports (color: oklch(0.47 0.12 212)) {
+  :root { --axe-primary: oklch(0.47 0.12 212); --bg: oklch(0.975 0.004 220); --text: oklch(0.22 0.02 235); }
+}
+[hidden] { display: none !important; }
+body[data-axe-page] {
+  margin: 0; max-width: none; padding: 0; background: var(--bg); color: var(--text);
+  font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  font-size: 14px; line-height: 1.5; -webkit-font-smoothing: antialiased;
+}
+body.axe-menu-lock { overflow: hidden; }
+button, input, select, textarea { font: inherit; }
+button { transition: background-color .15s ease, border-color .15s ease; }
+button:disabled { opacity: .45; cursor: not-allowed; }
+a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+  outline: 2px solid var(--axe-primary); outline-offset: 3px;
+}
+.axe-skip-link {
+  position: fixed; top: -80px; left: 16px; z-index: 100;
+  padding: 10px 16px; border-radius: 8px; color: white; background: var(--axe-primary);
+}
+.axe-skip-link:focus { top: 12px; }
+.axe-shell { min-height: 100vh; }
+.axe-navigation {
+  position: fixed; inset: 0 auto 0 0; z-index: 50; width: var(--axe-nav-width);
+  display: flex; flex-direction: column; gap: 12px; padding: 16px 12px;
+  border-right: 1px solid var(--border); background: #fcfcfd; overflow-y: auto;
+}
+.axe-brand { display: flex; gap: 11px; align-items: center; padding: 2px 8px 14px; min-height: 58px; }
+.axe-brand-icon {
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  width: 36px; height: 36px; border-radius: 10px; color: #fff;
+  background: linear-gradient(135deg, #0369a1, #0d9488); box-shadow: 0 2px 5px #0c4a6e20;
+}
+.axe-brand-icon svg { width: 19px; height: 19px; }
+.axe-brand-copy { min-width: 0; line-height: 1.2; }
+.axe-brand-copy small { display: block; color: #0369a1; font-size: 9px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; }
+.axe-brand-copy strong { display: block; margin-top: 6px; font-size: 17px; font-weight: 600; letter-spacing: -.025em; white-space: nowrap; }
+.axe-nav-label { margin: 0; padding: 0 12px; font-size: 10px; font-weight: 600; color: var(--text-muted); letter-spacing: .1em; text-transform: uppercase; }
+.axe-links { display: flex; flex-direction: column; gap: 4px; }
+.axe-nav-link, .axe-section-button {
+  display: flex; align-items: center; gap: 12px; width: 100%; min-height: 42px;
+  padding: 10px 12px; border: 1px solid transparent; border-radius: 8px;
+  background: transparent; color: #475569; text-decoration: none;
+  font-size: 13px; font-weight: 400; text-align: left; white-space: nowrap;
+}
+.axe-nav-link svg, .axe-section-button svg { width: 18px; height: 18px; flex-shrink: 0; }
+.axe-nav-link:hover, .axe-section-button:hover { background: #f0f3f6; color: var(--text); }
+.axe-nav-link[aria-current=page], .axe-section-button[aria-pressed=true] {
+  color: var(--axe-primary); background: var(--axe-primary-soft); font-weight: 600;
+}
+.axe-admin-menu { padding-top: 12px; border-top: 1px solid var(--border); }
+.axe-admin-menu .axe-nav-label { margin-bottom: 8px; }
+.axe-section-button { min-height: 36px; padding-block: 8px; font-size: 12px; }
+.axe-section-button svg { width: 16px; height: 16px; }
+.axe-nav-footer { margin-top: auto; padding: 14px 8px 0; border-top: 1px solid var(--border); }
+.axe-nav-footer p { margin: 0 0 12px; font-size: 11px; color: var(--text-muted); }
+.axe-collapse {
+  display: flex; align-items: center; gap: 12px; padding: 9px 10px; width: 100%;
+  border: 1px solid var(--border); background: white; border-radius: 8px; color: var(--text-muted);
+  font-size: 12px; font-weight: 400;
+}
+.axe-collapse svg { width: 17px; height: 17px; flex-shrink: 0; }
+.axe-workspace { margin-left: var(--axe-nav-width); min-width: 0; }
+.axe-topbar {
+  display: flex; justify-content: space-between; align-items: center; gap: 12px;
+  position: sticky; top: 0; z-index: 30; min-height: 64px; padding: 10px 28px;
+  background: #f8fafaf5; border-bottom: 1px solid var(--border); backdrop-filter: blur(8px);
+}
+.axe-topbar-copy { min-width: 0; margin-right: auto; line-height: 1.3; }
+.axe-topbar-copy p { font-size: 13px; font-weight: 500; margin: 0; }
+.axe-topbar-copy small { display: block; font-size: 11px; color: var(--text-muted); margin-top: 3px; }
+.axe-product-badge { border: 1px solid #cde5e9; background: #eef8fa; color: #155e75; padding: 5px 10px; border-radius: 6px; font-size: 11px; white-space: nowrap; }
+.axe-mobile-toggle { display: none; padding: 8px; border: 1px solid var(--border); background: white; color: var(--text); border-radius: 8px; }
+.axe-mobile-toggle svg { display: block; width: 20px; height: 20px; }
+.axe-content { padding: 28px; min-width: 0; max-width: 1500px; margin: 0 auto; }
+.axe-page-heading { margin-bottom: 24px; }
+.axe-page-heading h1, .axe-content > h1 { font-size: 24px; font-weight: 600; letter-spacing: -.035em; margin: 0 0 6px; }
+.axe-page-heading p { margin: 0; color: var(--text-muted); font-size: 13px; }
+.axe-content .panel, .axe-content .form-card, .axe-content .filters, .axe-table-card {
+  background: var(--panel); border: 1px solid var(--border); border-radius: var(--axe-radius);
+  box-shadow: 0 1px 3px #0f172a04; padding: 22px;
+}
+.axe-content .panel h2, .axe-content .form-card h2 {
+  color: var(--text); font-size: 14px; font-weight: 600; text-transform: none; letter-spacing: -.01em;
+}
+.axe-content .form-card { margin-top: 0 !important; margin-bottom: 20px; }
+.axe-content .form-row + .form-row { margin-top: 16px; }
+.axe-content .grid { gap: 20px; grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr)); }
+.axe-content .metric-card { background: #f8fafc; border: 1px solid var(--border); border-radius: 9px; padding: 16px 12px; }
+.axe-content .metric-value { font-size: 25px; font-weight: 600; letter-spacing: -.04em; }
+.axe-content .metric-label { font-size: 11px; margin-top: 4px; }
+.axe-content .metrics-row, .axe-content .summary-grid { grid-template-columns: repeat(auto-fit, minmax(min(120px, 100%), 1fr)); gap: 12px; }
+.axe-content input, .axe-content select, .axe-content textarea {
+  background: white; border: 1px solid #d7dee5; border-radius: 7px; padding: 10px 12px;
+  color: var(--text); min-height: 40px; min-width: 0; max-width: 100%;
+}
+.axe-content label { color: #566477; font-size: 12px; font-weight: 500; }
+.axe-content .btn-primary, .axe-content #generateBtn {
+  background: var(--axe-primary); color: white; border: 1px solid var(--axe-primary); border-radius: 7px;
+}
+.axe-content .btn-primary:hover, .axe-content #generateBtn:hover { filter: brightness(.95); }
+.axe-content .btn-ghost { background: white; border: 1px solid #d7dee5; border-radius: 7px; color: #475569; }
+.axe-content .btn-ghost:hover { background: #f1f5f9; }
+.axe-content .btn-danger { border: 1px solid #f2cbd1; background: #fff1f3; color: #a9233b; border-radius: 7px; }
+.axe-content .call-btn, .axe-content #answerBtn, .axe-content #answerSecondLineBtn { background: var(--green); color: white; border-radius: 8px; }
+.axe-content #hangupBtn, .axe-content #declineBtn, .axe-content #declineSecondLineBtn { background: var(--red); color: white; }
+.axe-content .toggle-active { background: #ecfdf5; border-color: var(--green); color: var(--green); }
+.axe-table-scroll { width: 100%; overflow-x: auto; }
+.axe-content table { margin-bottom: 8px; }
+.axe-content th { background: #f8fafc; font-size: 10px; letter-spacing: .035em; color: #64748b; padding: 12px; }
+.axe-content td { font-size: 13px; padding: 13px 12px; }
+.axe-content tr:last-child td { border-bottom: 0; }
+.axe-content tbody tr:hover { background: #fafcfd; }
+.axe-content .filters { align-items: flex-end; gap: 16px; }
+.axe-content .filters > div { flex: 1 1 150px; min-width: 0; }
+.axe-content .filters input, .axe-content .filters select { width: 100%; }
+.axe-content .status-chip { background: #eff5f7; color: #335c68; padding: 5px 10px; border-radius: 6px; }
+.axe-content .empty, .axe-content .empty-hint { padding: 12px 0; }
+.axe-content .login-screen { min-height: calc(100svh - 150px); }
+.axe-content .login-card { border-radius: 14px; width: 400px; max-width: 100%; padding: 32px; box-shadow: 0 10px 40px #0f172a08; }
+.axe-content .login-card h1 { font-size: 22px; letter-spacing: -.035em; font-weight: 600; }
+.axe-content .login-card p { line-height: 1.7; }
+.axe-content .app-screen { max-width: none; padding: 0; }
+.axe-content .app-header { gap: 18px; flex-wrap: wrap; margin-bottom: 24px; }
+.axe-content .app-header h1 { font-size: 24px; letter-spacing: -.035em; }
+.axe-content .app-header > div { flex-wrap: wrap; }
+.axe-section-heading { font-size: 17px; font-weight: 600; margin: 0 0 16px; letter-spacing: -.025em; }
+.axe-table-card { margin-bottom: 20px; }
+.axe-content .app { min-height: calc(100vh - 200px); grid-template-columns: 240px minmax(290px, 1fr) 280px; gap: 20px; }
+.axe-content .app .sidebar, .axe-content .log-panel {
+  border: 1px solid var(--border); border-radius: var(--axe-radius); padding: 20px; min-width: 0;
+}
+.axe-content .app main { padding: 20px 8px; min-width: 0; justify-content: flex-start; }
+.axe-content .brand { font-size: 15px; font-weight: 600; }
+.axe-content .brand-sub { font-size: 12px; }
+.axe-content .call-card { width: 100%; max-width: 340px; border-radius: 12px; box-shadow: 0 5px 20px #0f172a05; }
+.axe-content .dialpad-display, .axe-content .call-btn { max-width: 100%; }
+.axe-content .key { border-radius: 10px; box-shadow: 0 1px 3px #0f172a06; }
+.axe-content .log-title { color: #475569; font-size: 12px; font-weight: 600; }
+.axe-content .transfer-row { flex-wrap: wrap; }
+.axe-content .transfer-row input { flex: 1 1 100%; }
+.axe-content .call-controls button { min-width: 80px; }
+.connection-hint { display: flex; flex-direction: column; align-items: center; text-align: center; margin-top: 70px; max-width: 320px; padding: 16px; }
+.connection-hint-icon { display: flex; align-items: center; justify-content: center; width: 66px; height: 66px; margin-bottom: 22px; border-radius: 20px; color: var(--axe-primary); background: var(--axe-primary-soft); }
+.connection-hint-icon svg { width: 30px; height: 30px; }
+.connection-hint h1 { margin: 0 0 10px; font-size: 21px; font-weight: 600; letter-spacing: -.035em; }
+.connection-hint p { margin: 0 0 18px; color: var(--text-muted); font-size: 13px; line-height: 1.7; }
+.connection-hint small { color: var(--text-muted); font-size: 11px; }
+.axe-collapsed { --axe-nav-width: 72px; }
+.axe-collapsed .axe-navigation { padding-inline: 10px; }
+.axe-collapsed .axe-brand { padding-inline: 6px; }
+.axe-collapsed .axe-brand-copy, .axe-collapsed .axe-nav-label,
+.axe-collapsed .axe-nav-link span, .axe-collapsed .axe-section-button span,
+.axe-collapsed .axe-nav-footer p, .axe-collapsed .axe-collapse span { display: none; }
+.axe-collapsed .axe-nav-link, .axe-collapsed .axe-section-button, .axe-collapsed .axe-collapse { justify-content: center; padding-inline: 8px; }
+.axe-collapsed .axe-nav-footer { padding-inline: 0; }
+@media (max-width: 1279px) and (min-width: 761px) {
+  .axe-content .app { grid-template-columns: 230px minmax(0, 1fr); }
+  .axe-content .log-panel { grid-column: 1 / -1; }
+}
+@media (max-width: 959px) {
+  .axe-content .app { grid-template-columns: minmax(0, 1fr); }
+  .axe-content .log-panel { grid-column: auto; }
+  .connection-hint { margin-top: 0; }
+}
+@media (max-width: 760px) {
+  .axe-shell, .axe-collapsed { --axe-nav-width: 248px; }
+  .axe-workspace { margin-left: 0; }
+  .axe-navigation { transform: translateX(-100%); transition: transform .2s ease; z-index: 60; }
+  .axe-menu-open .axe-navigation { transform: translateX(0); box-shadow: 8px 0 40px #0f172a25; }
+  .axe-menu-open .axe-brand-copy, .axe-menu-open .axe-nav-label, .axe-menu-open .axe-nav-link span,
+  .axe-menu-open .axe-section-button span, .axe-menu-open .axe-nav-footer p { display: block; }
+  .axe-menu-open .axe-nav-link, .axe-menu-open .axe-section-button { justify-content: flex-start; padding-inline: 12px; }
+  .axe-menu-open .axe-navigation { padding-inline: 12px; }
+  .axe-collapse { display: none; }
+  .axe-topbar { padding: 10px 16px; }
+  .axe-mobile-toggle { display: block; }
+  .axe-content { padding: 20px 16px; }
+  .axe-content .app { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  .axe-content .app main { padding: 20px 0; }
+  .axe-content .log-panel { grid-column: auto; }
+  .axe-content .panel, .axe-content .form-card, .axe-content .filters, .axe-table-card { padding: 18px; }
+  .axe-content .form-row { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+  .axe-content .form-row > div { min-width: 0; }
+  .axe-content input, .axe-content select, .axe-content textarea { font-size: 16px; }
+  .axe-content .login-card { padding: 26px 22px; }
+  .axe-content .app-header h1 { font-size: 22px; }
+  .axe-content .app-header > div { gap: 8px !important; }
+  .axe-content .panel div:has(> label > input[type=date]) { flex-wrap: wrap; }
+  .axe-content .metrics-row, .axe-content .summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .axe-content .metric-value { font-size: 22px; }
+  .axe-content .incoming-actions { flex-wrap: wrap; }
+  .axe-content .call-controls { gap: 8px; }
+  .axe-product-badge { font-size: 10px; padding: 5px 7px; }
+  .axe-backdrop { position: fixed; inset: 0; z-index: 55; width: 100%; height: 100%; border: 0; border-radius: 0; background: #0f172a66; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; }
+}
+</style>
+<!-- AXE design:end -->
 </head>
-<body>
+<body data-axe-page="campanhas">
+<!-- AXE shell:start -->
+<a class="axe-skip-link" href="#axeContent">Ir para o conteúdo</a>
+<div class="axe-shell" id="axeShell">
+  <aside class="axe-navigation" id="axeNavigation" aria-label="Menu do PABX">
+    <div class="axe-brand">
+      <span class="axe-brand-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 16.9v3a2 2 0 0 1-2.2 2A19.8 19.8 0 0 1 3.1 5.2 2 2 0 0 1 5.1 3h3a2 2 0 0 1 2 1.7c.1.9.3 1.8.6 2.6a2 2 0 0 1-.5 2.1L9 10.6a16 16 0 0 0 4.4 4.4l1.2-1.2a2 2 0 0 1 2.1-.5c.8.3 1.7.5 2.6.6a2 2 0 0 1 1.7 2z"/><path d="M15 3a6 6 0 0 1 6 6"/></svg></span>
+      <div class="axe-brand-copy"><small>AXE Sistemas</small><strong>AXE PABX</strong></div>
+    </div>
+    <p class="axe-nav-label">Portal operacional</p>
+    <nav class="axe-links" aria-label="Navegação principal"><a class="axe-nav-link" data-axe-link="telefonista" href="index.html" aria-label="Telefonista" title="Telefonista"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 16.9v3a2 2 0 0 1-2.2 2A19.8 19.8 0 0 1 3.1 5.2 2 2 0 0 1 5.1 3h3a2 2 0 0 1 2 1.7c.1.9.3 1.8.6 2.6a2 2 0 0 1-.5 2.1L9 10.6a16 16 0 0 0 4.4 4.4l1.2-1.2a2 2 0 0 1 2.1-.5c.8.3 1.7.5 2.6.6a2 2 0 0 1 1.7 2z"/><path d="M15 3a6 6 0 0 1 6 6"/></svg><span>Telefonista</span></a> <a class="axe-nav-link" data-axe-link="operacao" href="painel-operacional.html" aria-label="Painel operacional" title="Painel operacional"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span>Painel operacional</span></a> <a class="axe-nav-link" data-axe-link="campanhas" href="campanhas.html" aria-label="Campanhas" title="Campanhas" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 11 18-5v12L3 13zM7 14l1 6h4l-2-7"/></svg><span>Campanhas</span></a> <a class="axe-nav-link" data-axe-link="relatorios" href="relatorios.html" aria-label="Relatórios" title="Relatórios"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v18h18M8 16v-4M13 16V8M18 16V5"/></svg><span>Relatórios</span></a> <a class="axe-nav-link" data-axe-link="administracao" href="/" aria-label="Administração" title="Administração"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 3 7v5c0 5 9 9 9 9s9-4 9-9V7z"/><path d="m8 12 3 3 5-6"/></svg><span>Administração</span></a></nav>
 
-<h1>Campanhas de discagem automática</h1>
+    <div class="axe-nav-footer">
+      <p>Telefonia e atendimento<br>PABX-MVP</p>
+      <button type="button" class="axe-collapse" id="axeCollapse" aria-label="Recolher menu" aria-expanded="true" aria-controls="axeNavigation"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/></svg><span>Recolher menu</span></button>
+    </div>
+  </aside>
+  <div class="axe-workspace">
+    <header class="axe-topbar">
+      <button type="button" class="axe-mobile-toggle" id="axeMobileMenu" aria-label="Abrir menu" aria-controls="axeNavigation" aria-expanded="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+      <div class="axe-topbar-copy"><p>Portal operacional</p><small>AXE PABX · Campanhas</small></div>
+      <span class="axe-product-badge">PABX-MVP</span>
+    </header>
+    <main class="axe-content" id="axeContent" tabindex="-1">
+<!-- AXE shell:content -->
+<div class="axe-page-heading">
+  <h1>Campanhas de discagem automática</h1>
+  <p>Organize a discagem e acompanhe os retornos de chamada.</p>
+</div>
 
 <div class="panel">
   <h2>Nova campanha</h2>
@@ -73,6 +311,13 @@
   </div>
   <div id="callbacksList" style="margin-top:14px;"><div class="empty">Carregando...</div></div>
 </div>
+
+<!-- AXE shell:close -->
+    </main>
+  </div>
+</div>
+<button type="button" class="axe-backdrop" id="axeBackdrop" aria-label="Fechar menu" tabindex="-1" hidden></button>
+<!-- AXE shell:end -->
 
 <script>
 (function () {
@@ -213,5 +458,185 @@
 })();
 </script>
 
+<!-- AXE navigation:start -->
+<script>
+/* Shared portal navigation, embedded by scripts/sync_ui.py. */
+(function () {
+  'use strict';
+
+  function httpUrl(value, fallback) {
+    if (value) {
+      try {
+        const url = new URL(value);
+        if (['http:', 'https:'].includes(url.protocol) && !url.username && !url.password) return url;
+      } catch (_) { /* Invalid configuration falls back to the current portal. */ }
+    }
+    return fallback ? new URL(fallback) : null;
+  }
+
+  function buildPortalLinks(locationHref, options = {}) {
+    const current = new URL(locationHref);
+    const context = current.hash.startsWith('#axe?')
+      ? new URLSearchParams(current.hash.slice(5)) : new URLSearchParams();
+    const setting = (key) => current.searchParams.get(key) || context.get(key);
+    const defaultWeb = new URL(options.isAdmin ? '/' : './', current);
+    if (options.isAdmin) defaultWeb.port = '8082';
+    const web = httpUrl(setting('web'), defaultWeb.href);
+    web.search = ''; web.hash = '';
+    if (!web.pathname.endsWith('/')) web.pathname += '/';
+    const defaultAdmin = new URL('/', current);
+    defaultAdmin.port = '8091';
+    const admin = httpUrl(setting('admin'), defaultAdmin.href);
+    admin.search = ''; admin.hash = '';
+    const api = httpUrl(options.api !== undefined ? options.api : setting('api'));
+    const config = new URLSearchParams({ web: web.href, admin: admin.href });
+    if (api) config.set('api', api.href.replace(/\/$/, ''));
+    const links = {};
+    for (const [key, path] of Object.entries({
+      telefonista: 'index.html', operacao: 'painel-operacional.html',
+      campanhas: 'campanhas.html', relatorios: 'relatorios.html',
+    })) {
+      const url = new URL(path, web);
+      url.search = config.toString();
+      links[key] = url.href;
+    }
+    // admin-api accepts / and /index.html exactly; fragments do not reach it.
+    admin.hash = `axe?${config.toString()}`;
+    links.administracao = admin.href;
+    return links;
+  }
+
+  if (typeof module !== 'undefined' && module.exports) module.exports = { buildPortalLinks };
+  if (typeof document === 'undefined') return;
+
+  const page = document.body.dataset.axePage;
+  const shell = document.getElementById('axeShell');
+  if (!shell) return;
+  const nav = document.getElementById('axeNavigation');
+  const toggle = document.getElementById('axeCollapse');
+  const mobileToggle = document.getElementById('axeMobileMenu');
+  const backdrop = document.getElementById('axeBackdrop');
+  const mobile = window.matchMedia('(max-width: 760px)');
+  const apiInput = document.getElementById('queueApiUrl');
+  const storedApi = new URL(window.location.href).searchParams.get('api');
+  if (apiInput && httpUrl(storedApi)) apiInput.value = storedApi;
+
+  function updateLinks() {
+    const links = buildPortalLinks(window.location.href, {
+      isAdmin: page === 'administracao', api: apiInput ? apiInput.value.trim() : undefined,
+    });
+    document.querySelectorAll('[data-axe-link]').forEach((link) => {
+      if (link.href !== links[link.dataset.axeLink]) link.href = links[link.dataset.axeLink];
+      if (page === 'telefonista' && link.dataset.axeLink !== page) {
+        // Switching portal screens must not unload a live WebRTC call.
+        link.target = '_blank'; link.rel = 'noopener';
+        link.title = `${link.getAttribute('aria-label')} (abre em outra aba)`;
+      }
+    });
+  }
+  updateLinks();
+  const shortcutObserver = new MutationObserver(updateLinks);
+  document.querySelectorAll('#opsPanelLink, #reportsLink').forEach(link => {
+    shortcutObserver.observe(link, { attributes: true, attributeFilter: ['href'] });
+  });
+  if (apiInput) apiInput.addEventListener('input', updateLinks);
+  document.querySelectorAll('[data-axe-link][aria-current="page"]').forEach((link) => {
+    link.addEventListener('click', (event) => event.preventDefault());
+  });
+  document.querySelector('.axe-skip-link').addEventListener('click', (event) => {
+    // The admin portal configuration lives in the fragment; leave it intact.
+    event.preventDefault();
+    const content = document.getElementById('axeContent');
+    content.focus(); content.scrollIntoView({ block: 'start' });
+  });
+
+  const connectionHint = document.getElementById('connectionHint');
+  if (connectionHint) {
+    const views = ['idleView', 'incomingView', 'activeView', 'consultView'].map(id => document.getElementById(id));
+    const updateHint = () => { connectionHint.hidden = views.some(view => view.style.display && view.style.display !== 'none'); };
+    const observer = new MutationObserver(updateHint);
+    views.forEach(view => observer.observe(view, { attributes: true, attributeFilter: ['style'] }));
+    updateHint();
+  }
+
+  const storageKey = 'axe-pabx-navigation-collapsed';
+  function setCollapsed(collapsed) {
+    shell.classList.toggle('axe-collapsed', collapsed);
+    toggle.setAttribute('aria-expanded', String(!collapsed));
+    toggle.setAttribute('aria-label', collapsed ? 'Expandir menu' : 'Recolher menu');
+    toggle.title = toggle.getAttribute('aria-label');
+    try { localStorage.setItem(storageKey, String(collapsed)); } catch (_) { /* Storage is optional. */ }
+  }
+  try { setCollapsed(localStorage.getItem(storageKey) === 'true'); } catch (_) { setCollapsed(false); }
+  toggle.addEventListener('click', () => setCollapsed(!shell.classList.contains('axe-collapsed')));
+
+  function setMobileOpen(open, restoreFocus = false) {
+    shell.classList.toggle('axe-menu-open', open);
+    backdrop.hidden = !open;
+    mobileToggle.setAttribute('aria-expanded', String(open));
+    mobileToggle.setAttribute('aria-label', open ? 'Fechar menu' : 'Abrir menu');
+    nav.inert = mobile.matches && !open;
+    nav.setAttribute('aria-hidden', String(mobile.matches && !open));
+    document.body.classList.toggle('axe-menu-lock', open && mobile.matches);
+    if (open) nav.querySelector('a').focus();
+    else if (restoreFocus) mobileToggle.focus();
+  }
+  mobileToggle.addEventListener('click', () => setMobileOpen(!shell.classList.contains('axe-menu-open')));
+  backdrop.addEventListener('click', () => setMobileOpen(false, true));
+  mobile.addEventListener('change', () => setMobileOpen(false));
+  setMobileOpen(false);
+  document.addEventListener('keydown', (event) => {
+    if (!mobile.matches || !shell.classList.contains('axe-menu-open')) return;
+    if (event.key === 'Escape') { setMobileOpen(false, true); return; }
+    if (event.key !== 'Tab') return;
+    const items = [...nav.querySelectorAll('a, button')].filter((item) => item.getClientRects().length && !item.disabled);
+    const first = items[0]; const last = items[items.length - 1];
+    if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+    else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+  });
+
+  // Keep wide tables scrollable inside their card instead of expanding the page.
+  document.querySelectorAll('.axe-content table').forEach((table) => {
+    if (table.parentElement.classList.contains('axe-table-scroll')) return;
+    const wrapper = document.createElement('div');
+    wrapper.className = 'axe-table-scroll';
+    table.before(wrapper); wrapper.append(table);
+  });
+
+  if (page !== 'administracao') return;
+  const app = document.getElementById('appScreen');
+  const menu = document.getElementById('axeAdminMenu');
+  const role = document.getElementById('myRoleBadge');
+  const heading = document.getElementById('axeAdminHeading');
+  const sectionButtons = [...menu.querySelectorAll('[data-axe-section]')];
+  let selected = 'ramais';
+
+  function showSection(section) {
+    selected = section;
+    document.querySelectorAll('[data-axe-admin-group]').forEach((panel) => {
+      // hidden=false preserves inline role restrictions applied by the existing login.
+      panel.hidden = panel.dataset.axeAdminGroup !== section;
+    });
+    sectionButtons.forEach((button) => button.setAttribute('aria-pressed', String(button.dataset.axeSection === section)));
+    heading.textContent = sectionButtons.find((button) => button.dataset.axeSection === section).getAttribute('aria-label');
+  }
+  function updateAdminAccess() {
+    const loggedIn = app.style.display === 'block';
+    const isAdmin = role.textContent.trim() === 'admin';
+    menu.hidden = !loggedIn;
+    sectionButtons.forEach((button) => { button.hidden = button.hasAttribute('data-axe-admin-only') && !isAdmin; });
+    if (!loggedIn || sectionButtons.find((button) => button.dataset.axeSection === selected).hidden) showSection('ramais');
+  }
+  sectionButtons.forEach((button) => button.addEventListener('click', () => {
+    showSection(button.dataset.axeSection);
+    if (mobile.matches) setMobileOpen(false, true);
+    heading.focus();
+  }));
+  new MutationObserver(updateAdminAccess).observe(app, { attributes: true, attributeFilter: ['style'] });
+  new MutationObserver(updateAdminAccess).observe(role, { childList: true, characterData: true, subtree: true });
+  showSection('ramais'); updateAdminAccess();
+})();
+</script>
+<!-- AXE navigation:end -->
 </body>
 </html>

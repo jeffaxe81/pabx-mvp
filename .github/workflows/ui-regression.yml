@@ -1,0 +1,58 @@
+name: AXE PABX | regressão da interface
+
+"on":
+  pull_request:
+    paths:
+      - "ui/**"
+      - "webphone/**"
+      - "admin/index.html"
+      - "scripts/sync_ui.py"
+      - "tests/ui_*.cjs"
+      - ".github/workflows/ui-regression.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "ui/**"
+      - "webphone/**"
+      - "admin/index.html"
+      - "scripts/sync_ui.py"
+      - "tests/ui_*.cjs"
+      - ".github/workflows/ui-regression.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  navigation:
+    name: Node | navegação
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Testar links e preservação de contexto
+        run: node --test tests/ui_navigation.test.cjs
+
+  browser:
+    name: Chromium | responsividade e permissões
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Instalar Playwright fixado
+        run: npm install --no-save playwright@1.56.1
+      - name: Instalar Chromium e dependências
+        run: npx playwright install --with-deps chromium
+      - name: Rodar regressões de navegador com APIs sintéticas
+        run: node --test tests/ui_browser.test.cjs
