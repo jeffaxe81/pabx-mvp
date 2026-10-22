@@ -29,10 +29,48 @@ def test_check_secrets_flags_remaining_placeholder(tmp_path, monkeypatch):
     assert result["ok"] is False
 
 
-def test_check_secrets_skips_missing_files(tmp_path, monkeypatch):
-    monkeypatch.setattr(verify_deployment, "SECRET_FILES", [tmp_path / "nao-existe.yml"])
+def test_check_secrets_blocks_missing_files(tmp_path, monkeypatch):
+    missing = tmp_path / "nao-existe.yml"
+    monkeypatch.setattr(verify_deployment, "SECRET_FILES", [missing])
     result = verify_deployment.check_secrets()
-    assert result["ok"] is True  # nada encontrado = nada pra reclamar
+    assert result["ok"] is False
+    assert result["unavailable"] == [str(missing)]
+    assert result["remaining"] == {}
+
+
+def test_check_secrets_blocks_missing_file_even_if_others_are_clean(tmp_path, monkeypatch):
+    present = tmp_path / "manager.conf"
+    missing = tmp_path / "docker-compose.yml"
+    present.write_text("secret = seguro\n", encoding="utf-8")
+    monkeypatch.setattr(verify_deployment, "SECRET_FILES", [present, missing])
+    result = verify_deployment.check_secrets()
+    assert result["ok"] is False
+    assert result["unavailable"] == [str(missing)]
+
+
+def test_check_secrets_blocks_empty_file(tmp_path, monkeypatch):
+    file = tmp_path / "pjsip.conf"
+    file.write_text(" \n  ", encoding="utf-8")
+    monkeypatch.setattr(verify_deployment, "SECRET_FILES", [file])
+    result = verify_deployment.check_secrets()
+    assert result["ok"] is False
+    assert str(file) in result["unavailable"]
+
+
+def test_check_secrets_blocks_invalid_encoding(tmp_path, monkeypatch):
+    file = tmp_path / "manager.conf"
+    file.write_bytes(b"\xff")
+    monkeypatch.setattr(verify_deployment, "SECRET_FILES", [file])
+    result = verify_deployment.check_secrets()
+    assert result["ok"] is False
+    assert str(file) in result["unavailable"]
+
+
+def test_check_secrets_blocks_empty_required_file_list(monkeypatch):
+    monkeypatch.setattr(verify_deployment, "SECRET_FILES", [])
+    result = verify_deployment.check_secrets()
+    assert result["ok"] is False
+    assert result["unavailable"] == []
 
 
 # ---------- check_ami_login ----------
@@ -147,3 +185,21 @@ def test_main_reads_ami_secret_without_terminal_echo(capsys):
     login.assert_called_once_with("queue-api", "segredo-oculto")
     exit_mock.assert_called_once_with(0)
     assert "segredo-oculto" not in capsys.readouterr().out
+
+
+def test_main_reports_missing_config_without_exposing_any_secret(capsys, tmp_path):
+    missing = str(tmp_path / "manager.conf")
+    result = {"ok": False, "remaining": {}, "unavailable": [missing]}
+    with (
+        patch("verify_deployment.getpass", return_value="segredo-oculto"),
+        patch("verify_deployment.check_secrets", return_value=result),
+        patch("verify_deployment.check_ami_login", return_value=True),
+        patch("verify_deployment.check_http_services", return_value={"all_healthy": True, "healthy": ["api"], "unhealthy": {}}),
+        patch("verify_deployment.sys.exit") as finish,
+    ):
+        verify_deployment.main()
+    output = capsys.readouterr().out
+    assert "Arquivo ausente, vazio ou ilegível" in output
+    assert missing in output
+    assert "segredo-oculto" not in output
+    finish.assert_called_once_with(1)
