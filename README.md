@@ -682,4 +682,4 @@ agora criam elementos DOM com `textContent`, evitando interpretar
 valores vindos das APIs como HTML. Um teste real de navegador injeta
 um payload HTML simulado e verifica que ele não é executado, sem
 alterar dados operacionais ou iniciar chamadas.
-Veja o [Manual 76](docs/manual-76-tabelas-admin-seguras.md).
+Veja o [Manual 76](docs/manual-76-xss-tabelas-admin.md).
