@@ -674,3 +674,12 @@ As listas de ramais, números bloqueados, destinos VIP e usuários
 renderizam dados da API como **texto**, sem interpolação de HTML.
 Os testes de navegador incluem entradas adversariais que não podem
 executar código. Veja o [Manual 76](docs/manual-76-xss-tabelas-admin.md).
+
+## Segurança das tabelas administrativas
+
+As tabelas de ramais, números bloqueados, clientes VIP e usuários
+agora criam elementos DOM com `textContent`, evitando interpretar
+valores vindos das APIs como HTML. Um teste real de navegador injeta
+um payload HTML simulado e verifica que ele não é executado, sem
+alterar dados operacionais ou iniciar chamadas.
+Veja o [Manual 76](docs/manual-76-tabelas-admin-seguras.md).
