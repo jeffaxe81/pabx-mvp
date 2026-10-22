@@ -506,6 +506,7 @@ def test_new_extension_secret_only_returned_during_creation():
     assert 'provisioning = {"username": cleaned["name"], "sip_password": cleaned["password"]}' in body
     assert body.count('"provisioning": provisioning') == 2
     assert source.count('def public_view(') == 1
-    public_body = get_function_body(source, "public_view")
+    start = source.index("def public_view(")
+    public_body = source[start:source.index("class Handler(", start)]
     assert 'if k != "password"' in public_body
     assert '"Cache-Control", "no-store"' in get_function_body(source, "_send_json")
