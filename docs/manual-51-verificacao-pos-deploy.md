@@ -84,3 +84,11 @@ quando o primeiro bloco de resposta termina e contém `Response: Success`
 exato. Timeout, EOF, resposta incompleta ou excessiva e prefixos como
 `SuccessExtra` são falhas. A senha não aparece no terminal nem
 é salva nos relatórios. Veja `docs/manual-70-verificador-ami.md`.
+
+## Complemento — Manual 77 (arquivos críticos ausentes)
+
+A verificação de segredos agora reprova um deploy quando os arquivos
+obrigatórios estiverem ausentes, vazios ou ilegíveis. No fluxo antigo,
+um arquivo que não existia era silenciosamente ignorado. O resultado
+negativo informa o caminho afetado, sem imprimir segredos.
+Veja [Manual 77](manual-77-arquivos-segredos-obrigatorios.md).
