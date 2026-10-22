@@ -53,7 +53,8 @@ def load_recording_policy(path):
         if (
             not isinstance(digest, str) or not HEX_SHA256.fullmatch(digest)
             or digest in seen or not isinstance(tenant, str) or not TENANT.fullmatch(tenant)
-            or role not in ROLES or type(expiry) not in (int, float)
+            or not isinstance(role, str) or role not in ROLES
+            or type(expiry) not in (int, float)
             or not math.isfinite(expiry) or expiry <= 0
         ):
             return None
