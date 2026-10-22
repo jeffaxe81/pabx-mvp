@@ -60,3 +60,11 @@ depois de ocultar ou sair.
 **Limitações:** testes automatizados são estáticos/mockados; a
 conclusão dessa PR não comprova registro SIP, qualidade RTP, failover
 ou implantação operacional.
+
+## PINs de caixa postal (Manual 74)
+
+Na criação de novos tenants, além das credenciais SIP, o wizard gera
+dois PINs aleatórios e distintos de oito dígitos para as caixas postais.
+Eles são exibidos no mesmo painel de provisionamento e precisam ser
+guardados em cofre; a listagem não os devolve. Caixas antigas não
+são migradas automaticamente.
