@@ -17,12 +17,19 @@ def validate_vip_input(data: dict):
     Valida o número do cliente e o ramal de destino. Retorna
     (ok, error_message, cleaned_data).
     """
+    if not isinstance(data, dict):
+        return False, "dados VIP inválidos", None
     raw_number = data.get("number") or ""
+    if not isinstance(raw_number, str):
+        return False, "número de telefone inválido", None
     digits = re.sub(r"[^0-9]", "", raw_number.strip())
     if not NUMBER_RE.match(digits):
         return False, "número de telefone inválido", None
 
-    target_extension = (data.get("target_extension") or "").strip()
+    target_extension = data.get("target_extension") or ""
+    if not isinstance(target_extension, str):
+        return False, "ramal de destino inválido (ex: 1000, 1010)", None
+    target_extension = target_extension.strip()
     if not EXTENSION_RE.match(target_extension):
         return False, "ramal de destino inválido (ex: 1000, 1010)", None
 
