@@ -20,7 +20,12 @@ def validate_monitoring_pin_input(data: dict):
     (mas não impede escolher isso, a responsabilidade é de quem
     configura).
     """
-    pin = (data.get("pin") or "").strip()
+    if not isinstance(data, dict):
+        return False, "PIN deve ter de 4 a 10 dígitos numéricos", None
+    pin = data.get("pin")
+    if not isinstance(pin, str):
+        return False, "PIN deve ter de 4 a 10 dígitos numéricos", None
+    pin = pin.strip()
     if not PIN_RE.match(pin):
         return False, "PIN deve ter de 4 a 10 dígitos numéricos", None
     return True, None, pin
