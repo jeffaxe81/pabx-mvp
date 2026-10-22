@@ -10,7 +10,9 @@ e a chamada AMI (registrar o DID no AstDB) ficam isoladas no
 server.py, mesmo padrão do resto do projeto.
 """
 import json
+import os
 import re
+import tempfile
 from pathlib import Path
 
 TENANT_ID_RE = re.compile(r"^t([3-9]|[1-9][0-9]+)$")  # t3, t4, ... - t1/t2 já existem manualmente
@@ -32,7 +34,23 @@ def load_tenants(path) -> list:
 
 
 def save_tenants(path, tenants: list):
-    Path(path).write_text(json.dumps(tenants, indent=2, ensure_ascii=False), encoding="utf-8")
+    """Publica JSON de forma atômica para evitar arquivo truncado."""
+    destination = Path(path)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w", encoding="utf-8", dir=destination.parent,
+            prefix=f".{destination.name}.", delete=False,
+        ) as handle:
+            temporary = handle.name
+            json.dump(tenants, handle, indent=2, ensure_ascii=False)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, destination)
+    finally:
+        if temporary is not None and os.path.exists(temporary):
+            os.unlink(temporary)
 
 
 def validate_tenant_creation_input(data: dict, existing: list):
