@@ -47,12 +47,16 @@ def verify_totp(secret_b32: str, code: str, timestamp: float = None, step: int =
     Verifica um código, tolerando +-`window` períodos de 30s pra
     absorver diferença de relógio entre o celular e o servidor.
     """
-    if not secret_b32 or not code:
+    if not secret_b32 or not isinstance(code, str):
+        return False
+    code = code.strip()
+    if len(code) != DEFAULT_DIGITS or not code.isascii() or not code.isdecimal():
+        return False
+    if not isinstance(step, int) or step <= 0 or not isinstance(window, int) or window < 0:
         return False
 
     ts = timestamp if timestamp is not None else time.time()
     counter = int(ts // step)
-    code = code.strip()
 
     for offset in range(-window, window + 1):
         try:
