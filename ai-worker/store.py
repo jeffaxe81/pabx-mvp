@@ -25,13 +25,16 @@ class TranscriptStore:
             if not line:
                 continue
             try:
-                records.append(json.loads(line))
+                record = json.loads(line)
+                if isinstance(record, dict):
+                    records.append(record)
             except json.JSONDecodeError:
                 continue
         return records
 
     def find_by_filename(self, filename: str):
-        return next((r for r in self.load_all() if r.get("filename") == filename), None)
+        # Em JSONL append-only, a revisão mais recente prevalece.
+        return next((r for r in reversed(self.load_all()) if r.get("filename") == filename), None)
 
     def already_processed(self, filename: str) -> bool:
         return self.find_by_filename(filename) is not None
