@@ -608,3 +608,13 @@ python3 scripts/verify_deployment.py
 
 **Importante:** login AMI aceito não substitui os testes de chamada
 real, isolamento entre tenants nem verificação de qualidade RTP.
+
+## Wizard multiempresa — validação defensiva
+
+Na criação e remoção de empresas, o `admin-api` recusa payloads JSON de
+formato inesperado, IDs inválidos, DIDs com letras e nomes de exibição
+com caracteres de controle. O cadastro deve permanecer íntegro antes
+de qualquer gravação em arquivos ou mapeamento AstDB.
+
+Consultar o [Manual 71](docs/manual-71-validacao-wizard-tenants.md) para
+os testes e as limitações desta proteção.
