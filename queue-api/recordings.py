@@ -46,12 +46,15 @@ def list_recordings(directory, limit=50, caller_number=None, destination=None, s
     quando nenhum filtro de atendente/número/período é usado.
     """
     path = Path(directory)
-    if not path.exists():
+    if not path.is_dir() or not isinstance(limit, int) or limit <= 0:
         return []
 
+    # Links simbólicos podem apontar para gravações fora do volume
+    # autorizado. A listagem nunca deve publicar seus metadados.
     files = [
         f for f in path.iterdir()
-        if f.is_file() and f.suffix.lower() in ALLOWED_EXTENSIONS
+        if f.is_file() and not f.is_symlink()
+        and f.suffix.lower() in ALLOWED_EXTENSIONS
     ]
     files.sort(key=lambda f: f.stat().st_mtime, reverse=True)
 
@@ -102,7 +105,10 @@ def safe_recording_path(directory, filename: str):
     if not isinstance(filename, str) or not filename or "/" in filename or "\\" in filename:
         return None
     base = Path(directory).resolve()
-    candidate = (base / filename).resolve()
+    raw_candidate = base / filename
+    if raw_candidate.is_symlink():
+        return None
+    candidate = raw_candidate.resolve()
 
     if base not in candidate.parents and candidate != base:
         return None
