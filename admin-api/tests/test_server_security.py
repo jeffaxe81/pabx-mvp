@@ -498,3 +498,14 @@ def test_tenant_wizard_rejects_static_did_before_side_effects():
     assert body.index("parse_static_inbound_dids(") < body.index("target_dir.mkdir(")
     assert body.index("validate_tenant_creation_input(") < body.index("target_dir.mkdir(")
     assert '"não foi possível verificar os DIDs estáticos"' in body
+
+
+def test_new_extension_secret_only_returned_during_creation():
+    source = SERVER_PY.read_text(encoding="utf-8")
+    body = get_function_body(source, "_handle_create_extension")
+    assert 'provisioning = {"username": cleaned["name"], "sip_password": cleaned["password"]}' in body
+    assert body.count('"provisioning": provisioning') == 2
+    assert source.count('def public_view(') == 1
+    public_body = get_function_body(source, "public_view")
+    assert 'if k != "password"' in public_body
+    assert '"Cache-Control", "no-store"' in get_function_body(source, "_send_json")
