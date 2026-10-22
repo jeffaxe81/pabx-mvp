@@ -48,11 +48,24 @@ AMI_PORT = 5038
 
 
 def check_secrets() -> dict:
+    """Reprova arquivos críticos ausentes, vazios ou ilegíveis."""
     contents = {}
+    unavailable = []
     for path in SECRET_FILES:
-        if path.exists():
-            contents[str(path)] = path.read_text(encoding="utf-8")
-    return check_no_placeholder_secrets(contents)
+        try:
+            if not path.is_file():
+                raise OSError("não é arquivo regular")
+            content = path.read_text(encoding="utf-8")
+            if not content.strip():
+                raise ValueError("arquivo vazio")
+            contents[str(path)] = content
+        except (OSError, UnicodeError, ValueError):
+            # Nunca registrar conteúdo ou segredos; apenas o caminho.
+            unavailable.append(str(path))
+    result = check_no_placeholder_secrets(contents)
+    result["unavailable"] = sorted(unavailable)
+    result["ok"] = bool(contents) and result["ok"] and not unavailable
+    return result
 
 
 def check_ami_login(username: str, secret: str) -> bool:
@@ -103,10 +116,12 @@ def main():
     if secrets_result["ok"]:
         print("   OK - nenhum placeholder 'troque_esta_senha_*' encontrado.\n")
     else:
-        print("   FALHOU - ainda há placeholders. Rode scripts/generate_secrets.py primeiro:")
+        print("   FALHOU - segredos não validados em todos os arquivos obrigatórios.")
+        for path in secrets_result.get("unavailable", []):
+            print(f"     Arquivo ausente, vazio ou ilegível: {path}")
         for path, placeholders in secrets_result["remaining"].items():
-            print(f"     {path}: {sorted(placeholders)}")
-        print()
+            print(f"     Placeholders em {path}: {sorted(placeholders)}")
+        print("   Confirme os arquivos de configuração e rode scripts/generate_secrets.py se necessário.\n")
 
     print("2. AMI (login com AMI_USERNAME=queue-api)...")
     ami_ok = check_ami_login("queue-api", getpass("   AMI_SECRET do queue-api (entrada oculta): "))
