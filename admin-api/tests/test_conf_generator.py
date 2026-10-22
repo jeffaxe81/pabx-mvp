@@ -121,3 +121,15 @@ def test_no_password_leaks_into_hints_or_dial_files():
     hints = render_extensions_dynamic_hints(SAMPLE)
     assert "senha-forte" not in dial
     assert "senha-forte" not in hints
+
+def test_voicemail_dynamic_uses_persisted_pin_for_new_extension():
+    extension = [{**SAMPLE[0], "voicemail_pin": "87654321"}]
+    content = render_voicemail_dynamic(extension)
+    assert "recepcao-3 => 87654321,Recepção 3" in content
+    assert "recepcao-3 => 1234" not in content
+
+
+def test_voicemail_pin_does_not_leak_to_pjsip_or_dialplan():
+    extension = [{**SAMPLE[0], "voicemail_pin": "87654321"}]
+    assert "87654321" not in render_pjsip_dynamic(extension)
+    assert "87654321" not in render_extensions_dynamic_dial(extension)

@@ -48,6 +48,7 @@ def validate_extension_input(data: dict, existing: list, editing_name: str = Non
                 and e["number"].isdecimal())
         )
         or (e.get("tenant") is not None and not isinstance(e["tenant"], str))
+        or (e.get("voicemail_pin") is not None and not isinstance(e["voicemail_pin"], str))
         for e in existing
     ):
         return False, "cadastro de ramais existente é inválido", None
@@ -131,6 +132,28 @@ def validate_extension_input(data: dict, existing: list, editing_name: str = Non
         ):
             return False, "e-mail inválido para configuração de voicemail", None
 
+    # O PIN de voicemail não pode ser escolhido por JSON externo.
+    # Para ramais já existentes sem campo persistido, preservamos
+    # temporariamente o PIN legado 1234 até rotação administrada.
+    if editing_name is None:
+        if "voicemail_pin" in data:
+            return False, "PIN de voicemail gerado somente pelo servidor", None
+        old_pins = {
+            e.get("voicemail_pin") for e in existing
+            if e.get("tenant", DEFAULT_TENANT) == tenant
+        }
+        voicemail_pin = ""
+        for _ in range(20):
+            candidate = str(secrets.randbelow(90_000_000) + 10_000_000)
+            if candidate not in old_pins:
+                voicemail_pin = candidate
+                break
+        if not voicemail_pin:
+            return False, "não foi possível gerar PIN de voicemail", None
+    else:
+        previous = next((e for e in existing if e["name"] == editing_name), None)
+        voicemail_pin = previous.get("voicemail_pin", "1234") if previous else "1234"
+
     return True, None, {
         "name": name,
         "number": number,
@@ -138,6 +161,7 @@ def validate_extension_input(data: dict, existing: list, editing_name: str = Non
         "password": password,
         "email": email,
         "tenant": tenant,
+        "voicemail_pin": voicemail_pin,
     }
 
 
@@ -153,6 +177,10 @@ def add_extension(path, data: dict):
 
 
 def update_extension(path, name: str, data: dict):
+    if not isinstance(data, dict):
+        return False, "dados do ramal devem ser um objeto JSON", None
+    if "voicemail_pin" in data:
+        return False, "PIN de voicemail não editável pela API", None
     existing = load_store(path)
     if not any(e["name"] == name for e in existing):
         return False, f"ramal '{name}' não encontrado", None

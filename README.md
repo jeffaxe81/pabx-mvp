@@ -717,3 +717,12 @@ sem divulgar tokens em parâmetros de URL. A política é armazenada em
 volume privado e o acesso fica desativado quando está ausente.
 Essa etapa não substitui SSO, TLS no proxy e homologação operacional.
 Ver o [Manual 80](docs/manual-80-acesso-gravacoes-tenant.md).
+
+## PIN de voicemail dos novos ramais
+
+A criação de um ramal pelo painel administrativo gera agora um PIN
+aleatório de oito dígitos para seu correio de voz, além da senha SIP.
+Os dois segredos são apresentados somente no resultado inicial do
+cadastro. Ramais antigos sem PIN persistido mantêm o comportamento
+anterior e **precisam de rotação administrada**, sem troca automática.
+Confira o [Manual 81](docs/manual-81-pins-voicemail-ramais.md).

@@ -503,10 +503,21 @@ def test_tenant_wizard_rejects_static_did_before_side_effects():
 def test_new_extension_secret_only_returned_during_creation():
     source = SERVER_PY.read_text(encoding="utf-8")
     body = get_function_body(source, "_handle_create_extension")
-    assert 'provisioning = {"username": cleaned["name"], "sip_password": cleaned["password"]}' in body
+    assert '"sip_password": cleaned["password"]' in body
+    assert '"voicemail_pin": cleaned["voicemail_pin"]' in body
     assert body.count('"provisioning": provisioning') == 2
     assert source.count('def public_view(') == 1
     start = source.index("def public_view(")
     public_body = source[start:source.index("class Handler(", start)]
     assert 'if k != "password"' in public_body
     assert '"Cache-Control", "no-store"' in get_function_body(source, "_send_json")
+
+def test_public_view_hides_voicemail_pin_from_reads_and_edits():
+    source = SERVER_PY.read_text(encoding="utf-8")
+    start = source.index("def public_view(")
+    body = source[start:source.index("class Handler(", start)]
+    assert 'if k != "password" and k != "voicemail_pin"' in body
+    creation = get_function_body(source, "_handle_create_extension")
+    assert '"voicemail_pin": cleaned["voicemail_pin"]' in creation
+    update = get_function_body(source, "_handle_update_extension")
+    assert '"voicemail_pin":' not in update

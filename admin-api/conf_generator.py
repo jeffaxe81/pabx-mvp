@@ -68,7 +68,10 @@ def render_voicemail_dynamic(extensions: list) -> str:
     lines = [AUTO_GENERATED_HEADER]
     for ext in extensions:
         email = ext.get("email", "")
-        lines.append(f"{ext['name']} => 1234,{ext['display_name']},{email}")
+        # Compatibilidade: ramais anteriores à política de PIN aleatório
+        # podem não ter voicemail_pin; exigem migração/rotação manual.
+        pin = ext.get("voicemail_pin") or "1234"
+        lines.append(f"{ext['name']} => {pin},{ext['display_name']},{email}")
     return "\n".join(lines) + ("\n" if extensions else "")
 
 

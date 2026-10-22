@@ -331,7 +331,7 @@ test('new extension exposes generated SIP password once, with hide and logout cl
           contentType: 'application/json',
           body: JSON.stringify({
             extension: { name: 'novo-ramal', number: 1109, display_name: 'Novo Ramal' },
-            provisioning: { username: 'novo-ramal', sip_password: sipSecret },
+            provisioning: { username: 'novo-ramal', sip_password: sipSecret, voicemail_pin: '87654321' },
             reload: { pjsip: 'Success' },
           }),
         });
@@ -346,7 +346,7 @@ test('new extension exposes generated SIP password once, with hide and logout cl
     await page.locator('#saveBtn').click();
     await page.locator('#extensionCredentialPanel').waitFor({ state: 'visible' });
     assert.equal(await page.locator('#extensionCredentialText').innerText(),
-      'novo-ramal: ' + sipSecret);
+      'Ramal: novo-ramal\nSenha SIP: ' + sipSecret + '\nPIN correio de voz: 87654321');
     await page.locator('#extensionCredentialHideBtn').click();
     assert.equal(await page.locator('#extensionCredentialText').innerText(), '');
     assert.equal(await page.locator('#extensionCredentialPanel').isVisible(), false);

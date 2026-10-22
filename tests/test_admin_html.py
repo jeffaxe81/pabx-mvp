@@ -558,3 +558,13 @@ def test_extension_form_shows_new_sip_secret_once_and_hides_on_logout():
     assert "el('extensionCredentialHideBtn').addEventListener('click', clearExtensionCredentials)" in html
     logout = html[html.index("el('logoutBtn').addEventListener"):html.index("function loadExtensions")]
     assert "clearExtensionCredentials()" in logout
+
+def test_dynamic_extension_creation_shows_voicemail_pin_once():
+    html = load_html()
+    start = html.index("el('saveBtn').addEventListener")
+    end = html.index("function deleteExtension(", start)
+    creation = html[start:end]
+    assert "data.provisioning.voicemail_pin" in creation
+    assert "PIN correio de voz" in creation
+    assert "extensionCredentialText').textContent" in creation
+    assert "extensionCredentialText').innerHTML" not in creation

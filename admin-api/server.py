@@ -135,8 +135,9 @@ def regenerate_and_reload(extra_ami_actions=None):
 
 
 def public_view(extension: dict) -> dict:
-    """Remove a senha antes de mandar pro navegador."""
-    return {k: v for k, v in extension.items() if k != "password"}
+    """Não expõe senha SIP nem PIN de voicemail nas listagens."""
+    return {k: v for k, v in extension.items()
+            if k != "password" and k != "voicemail_pin"}
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -788,7 +789,11 @@ class Handler(BaseHTTPRequestHandler):
 
         # Enviar credenciais só nesta resposta de criação (nunca na
         # listagem ou em public_view) para permitir provisionamento.
-        provisioning = {"username": cleaned["name"], "sip_password": cleaned["password"]}
+        provisioning = {
+            "username": cleaned["name"],
+            "sip_password": cleaned["password"],
+            "voicemail_pin": cleaned["voicemail_pin"],
+        }
         try:
             reload_result = regenerate_and_reload(
                 extra_ami_actions=[("register_extension_mapping", (cleaned["number"], cleaned["name"], cleaned["tenant"]))]
