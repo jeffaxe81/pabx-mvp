@@ -76,6 +76,8 @@ configurar, como testar manualmente, e limitações conhecidas.
 
 68. [Rejeitar chamadas com DID desconhecido](manual-68-did-sem-tenant.md)
 
+69. [Diagnóstico somente leitura do SIP/Asterisk](manual-69-diagnostico-sip.md)
+
 ## Regra de manutenção
 
 Toda vez que uma funcionalidade nova for implementada no projeto, um
