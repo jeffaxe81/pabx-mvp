@@ -697,3 +697,13 @@ O índice de gravações da API ignora links simbólicos; a leitura
 individual também rejeita aliases. A mudança inclui regressões
 automatizadas, sem alterar o fluxo de chamadas SIP.
 Consulte o [Manual 78](docs/manual-78-indice-gravacoes-seguro.md).
+
+## Cadastro de ramais — validação de dados e senha SIP
+
+O painel administrativo rejeita payloads JSON de tipos inválidos e
+campos que poderiam introduzir diretivas em PJSIP ou voicemail.
+Novos ramais sem senha recebem um segredo SIP aleatório forte, mostrado
+uma única vez ao administrador para provisionamento e ocultado ao sair.
+O formulário não mostra a senha durante a digitação e o cadastro de
+ramais antigos preserva seus segredos existentes até uma rotação
+controlada. Veja o [Manual 79](docs/manual-79-ramais-validacao-segredos.md).
