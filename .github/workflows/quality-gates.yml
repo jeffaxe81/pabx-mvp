@@ -1,0 +1,60 @@
+name: AXE PABX | validação estática
+
+"on":
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pabx-quality-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  static-tests:
+    name: pytest | ${{ matrix.component }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - component: configuracoes-web
+            directory: .
+          - component: admin-api
+            directory: admin-api
+          - component: queue-api
+            directory: queue-api
+          - component: ai-worker
+            directory: ai-worker
+          - component: asterisk-agi
+            directory: asterisk/agi
+          - component: asterisk-scripts
+            directory: asterisk/scripts
+          - component: backup
+            directory: backup
+          - component: scripts
+            directory: scripts
+
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Dependências de teste (sem subir serviços)
+        run: python -m pip install -r tests/requirements.txt
+      - name: Testar ${{ matrix.component }}
+        working-directory: ${{ matrix.directory }}
+        run: python -m pytest -q tests
