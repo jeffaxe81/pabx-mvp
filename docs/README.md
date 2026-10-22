@@ -78,3 +78,7 @@ novo manual numerado deve ser adicionado aqui **antes** de considerar
 a funcionalidade concluída — não depois, "quando der tempo". Isso está
 registrado como regra permanente no prompt master
 (`prompt-base-pabx.md`).
+
+
+- [Manual 66 — CI e validação das entregas](manual-66-ci-e-validacao.md):
+  oito suítes automáticas em PRs, execução local, gates e homologação SIP.
