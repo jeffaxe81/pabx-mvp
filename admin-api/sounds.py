@@ -36,7 +36,14 @@ def list_sound_files(directory) -> list:
         return []
 
     entries = []
+    base = directory.resolve()
     for path in directory.glob("*.wav"):
+        # Não publicar nomes inseguros, symlinks ou arquivos fora da
+        # pasta de sons do tenant via listagem da API.
+        if not is_safe_sound_filename(path.name) or path.is_symlink() or not path.is_file():
+            continue
+        if path.resolve().parent != base:
+            continue
         stat = path.stat()
         entries.append({
             "filename": path.name,
