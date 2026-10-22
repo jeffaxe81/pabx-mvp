@@ -92,7 +92,6 @@ configurar, como testar manualmente, e limitações conhecidas.
 
 76. [Proteção XSS nas tabelas administrativas](manual-76-xss-tabelas-admin.md)
 
-76. [Tabelas administrativas seguras](manual-76-tabelas-admin-seguras.md)
 
 ## Regra de manutenção
 
