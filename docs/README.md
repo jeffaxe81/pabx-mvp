@@ -84,6 +84,8 @@ configurar, como testar manualmente, e limitações conhecidas.
 
 72. [Credenciais SIP seguras no wizard de tenants](manual-72-segredos-sip-wizard.md)
 
+73. [Matriz de homologação e critérios de GO](manual-73-gates-homologacao.md)
+
 ## Regra de manutenção
 
 Toda vez que uma funcionalidade nova for implementada no projeto, um
