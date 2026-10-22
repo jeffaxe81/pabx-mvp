@@ -35,40 +35,91 @@ def save_store(path, extensions: list):
 
 
 def validate_extension_input(data: dict, existing: list, editing_name: str = None):
-    """
-    Valida os campos de um ramal antes de criar/editar. Retorna
-    (ok, error_message, cleaned_data).
-    """
-    name = (data.get("name") or "").strip().lower()
-    if not NAME_RE.match(name):
-        return False, "nome do ramal deve ter 3-40 caracteres (letras minúsculas, números, hífen)", None
+    """Rejeita JSON de tipos incorretos e valores que quebram .conf."""
+    if not isinstance(data, dict):
+        return False, "dados do ramal devem ser um objeto JSON", None
+    if not isinstance(existing, list) or any(
+        not isinstance(e, dict)
+        or not isinstance(e.get("name"), str)
+        or not isinstance(e.get("number"), (int, str))
+        or (e.get("tenant") is not None and not isinstance(e["tenant"], str))
+        for e in existing
+    ):
+        return False, "cadastro de ramais existente é inválido", None
 
+    raw_name = data.get("name")
+    if not isinstance(raw_name, str):
+        return False, "nome do ramal deve ser texto", None
+    name = raw_name.strip().lower()
+    if not NAME_RE.fullmatch(name) or "\r" in raw_name or "\n" in raw_name:
+        return False, "nome do ramal deve ter 3-40 caracteres (letras minúsculas, números, hífen)", None
     if any(e["name"] == name for e in existing if e["name"] != editing_name):
         return False, f"já existe um ramal chamado '{name}'", None
 
-    tenant = (data.get("tenant") or DEFAULT_TENANT).strip()
+    raw_tenant = data.get("tenant", DEFAULT_TENANT)
+    if raw_tenant is None:
+        raw_tenant = DEFAULT_TENANT
+    if not isinstance(raw_tenant, str):
+        return False, "tenant deve ser texto", None
+    tenant = raw_tenant.strip()
     if tenant not in VALID_TENANTS:
         return False, f"tenant inválido - use um de: {sorted(VALID_TENANTS)}", None
 
+    raw_number = data.get("number")
+    if isinstance(raw_number, bool) or not (
+        isinstance(raw_number, int)
+        or (isinstance(raw_number, str) and raw_number.isascii()
+            and raw_number.isdecimal())
+    ):
+        return False, "número do ramal inválido", None
     try:
-        number = int(data.get("number"))
+        number = int(raw_number)
     except (TypeError, ValueError):
         return False, "número do ramal inválido", None
-
     if number not in EXTENSION_NUMBER_RANGE:
         return False, f"número deve estar entre {EXTENSION_NUMBER_RANGE.start} e {EXTENSION_NUMBER_RANGE.stop - 1}", None
 
-    # Números podem repetir ENTRE tenants (contextos isolados) - só
-    # precisa ser único dentro do mesmo tenant.
-    if any(e["number"] == number and e.get("tenant", DEFAULT_TENANT) == tenant for e in existing if e["name"] != editing_name):
+    # Números repetidos são permitidos em tenants diferentes.
+    if any(
+        int(e["number"]) == number and e.get("tenant", DEFAULT_TENANT) == tenant
+        for e in existing if e["name"] != editing_name
+    ):
         return False, f"já existe um ramal com o número {number} no tenant {tenant}", None
 
-    display_name = (data.get("display_name") or name).strip()
-    if not display_name:
-        return False, "nome de exibição obrigatório", None
+    raw_display = data.get("display_name")
+    if raw_display is None or raw_display == "":
+        raw_display = name
+    if not isinstance(raw_display, str):
+        return False, "nome de exibição deve ser texto", None
+    display_name = raw_display.strip()
+    if not 1 <= len(display_name) <= 60 or not display_name.isprintable() or any(
+        ch in ";=,<>[]" for ch in display_name
+    ):
+        return False, "nome de exibição inválido (1-60 caracteres, sem delimitadores de configuração)", None
 
-    password = data.get("password") or secrets.token_urlsafe(12)
-    email = (data.get("email") or "").strip()
+    raw_password = data.get("password")
+    if raw_password is None or raw_password == "":
+        password = secrets.token_urlsafe(24)
+    elif not isinstance(raw_password, str):
+        return False, "senha SIP deve ser texto", None
+    elif not 12 <= len(raw_password) <= 128 or not re.fullmatch(
+        r"[A-Za-z0-9._~!@#$%^&*()+\-=]{12,128}", raw_password
+    ):
+        return False, "senha SIP deve ter 12-128 caracteres sem espaços ou delimitadores inseguros", None
+    else:
+        password = raw_password
+
+    raw_email = data.get("email")
+    if raw_email is None or raw_email == "":
+        email = ""
+    elif not isinstance(raw_email, str):
+        return False, "e-mail deve ser texto", None
+    else:
+        email = raw_email.strip()
+        if len(email) > 254 or not re.fullmatch(
+            r"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,63}", email
+        ):
+            return False, "e-mail inválido para configuração de voicemail", None
 
     return True, None, {
         "name": name,
