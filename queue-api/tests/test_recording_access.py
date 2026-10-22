@@ -42,6 +42,10 @@ def test_policy_loads_only_valid_schema(tmp_path):
     obj["credentials"][0]["expires_at"] = True
     p.write_text(json.dumps(obj))
     assert load_recording_policy(p) is None
+    obj["credentials"][0]["expires_at"] = 4102444800
+    obj["credentials"][0]["role"] = ["admin"]
+    p.write_text(json.dumps(obj))
+    assert load_recording_policy(p) is None
 
 
 def test_missing_manifest_tenant_and_filename_never_fallback():
