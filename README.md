@@ -629,3 +629,21 @@ para evitar interpretação de HTML de dados de cadastro.
 
 Veja o [Manual 72](docs/manual-72-segredos-sip-wizard.md). Os exemplos
 estáticos t1/t2 continuam exigindo troca de segredos antes de produção.
+
+## Homologação operacional e critérios de GO
+
+O CI do GitHub não substitui a validação de ligações em laboratório.
+Para registrar **13 cenários obrigatórios** (SIP/TLS, RTP/SRTP, DID,
+isolamento, fila/URA, gravações, restauração e contingência) e
+calcular o percentual de evidências aprovadas, use:
+
+```bash
+python3 scripts/homologation_gate.py --file /caminho/privado/evidencias.json
+```
+
+Copie o [modelo de evidências](docs/modelo-homologacao-pabx.json) para
+um diretório privado e informe o SHA completo do commit testado.
+A ferramenta só declara **apto para revisão de GO** quando todos
+os cenários estiverem marcados como aprovados com referência de
+evidência; ela não faz chamadas nem verifica o conteúdo das provas.
+Veja [Manual 73](docs/manual-73-gates-homologacao.md).

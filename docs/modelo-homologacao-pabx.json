@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "source_commit": null,
+  "checks": {
+    "sip_tls_transport": {
+      "status": "pending",
+      "evidence": ""
+    },
+    "sip_registration": {
+      "status": "pending",
+      "evidence": ""
+    },
+    "internal_call": {
+      "status": "pending",
+      "evidence": ""
+    },
+    "rtp_two_way": {
+      "status": "pending",
+      "evidence": ""
+    },
+    "srtp_encryption": {
+      "status": "pending",
+      "evidence": ""
+    },
+    "did_known": {
+      "status": "pending",
+      "evidence": ""
+    },
+    "did_unknown": {
+      "status": "pending",
+      "evidence": ""
+    },
+    "tenant_isolation": {
+      "status": "pending",
+      "evidence": ""
+    },
+    "queue_ura": {
+      "status": "pending",
+      "evidence": ""
+    },
+    "attended_transfer": {
+      "status": "pending",
+      "evidence": ""
+    },
+    "recordings": {
+      "status": "pending",
+      "evidence": ""
+    },
+    "backup_restore": {
+      "status": "pending",
+      "evidence": ""
+    },
+    "failover": {
+      "status": "pending",
+      "evidence": ""
+    }
+  }
+}
