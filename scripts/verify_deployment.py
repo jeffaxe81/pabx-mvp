@@ -58,14 +58,14 @@ def check_secrets() -> dict:
 def check_ami_login(username: str, secret: str) -> bool:
     """Consulta login AMI: valida cabeçalhos e lê até o bloco terminar."""
     if not all(isinstance(value, str) and value and
-               not any(ch in value for ch in "\\r\\n")
+               not any(ch in value for ch in "\r\n")
                for value in (username, secret)):
         return False
     try:
         with socket.create_connection((AMI_HOST, AMI_PORT), timeout=5) as sock:
             sock.settimeout(5)
             sock.recv(1024)  # banner de boas-vindas do Asterisk
-            action = f"Action: Login\\r\\nUsername: {username}\\r\\nSecret: {secret}\\r\\n\\r\\n"
+            action = f"Action: Login\r\nUsername: {username}\r\nSecret: {secret}\r\n\r\n"
             sock.sendall(action.encode("utf-8"))
             payload = bytearray()
             for _ in range(8):  # máximo 8 blocos de recepção
@@ -75,7 +75,7 @@ def check_ami_login(username: str, secret: str) -> bool:
                 payload.extend(chunk)
                 if len(payload) > 16_384:
                     return False
-                if b"\\r\\n\\r\\n" in payload:
+                if b"\r\n\r\n" in payload:
                     return parse_ami_login_result(payload.decode("utf-8", errors="replace"))
             return False  # resposta incompleta ou conexão encerrada
     except (OSError, ValueError):
