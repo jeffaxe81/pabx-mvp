@@ -54,3 +54,11 @@ Toda nova funcionalidade implementada neste projeto deve vir com:
 
 Isso está registrado como regra permanente no prompt master
 (`prompt-base-pabx.md`).
+
+
+## Integração contínua
+
+A workflow `.github/workflows/quality-gates.yml` executa esta suíte e as
+outras sete suítes Python em jobs separados nos PRs e pushes na `main`.
+O arquivo `test_ci_configuration.py` verifica a cobertura da matriz e as
+permissões mínimas. Instruções completas: `docs/manual-66-ci-e-validacao.md`.

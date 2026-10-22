@@ -519,3 +519,16 @@ como testar manualmente, limitações conhecidas). Índice completo em
 - Painel web para cadastro de ramais/tenants (hoje é tudo manual nos
   arquivos `.conf`)
 - Suporte a mais fabricantes no auto-provisionamento
+
+
+## Qualidade e integração contínua
+
+O GitHub Actions executa testes estáticos Python (Python 3.12) em oito suítes
+independentes para cada PR e push na `main`: configurações/interface,
+`admin-api`, `queue-api`, `ai-worker`, AGI, scripts do Asterisk,
+backup e scripts operacionais. Veja [Manual 66](docs/manual-66-ci-e-validacao.md)
+para execução local, critérios de revisão e limites da validação.
+
+**CI verde não equivale à homologação de telefonia**: testes de registro SIP,
+RTP/SRTP, URA, AMI e isolamento multiempresa exigem ambiente de integração
+com Asterisk e clientes SIP reais antes da implantação.
