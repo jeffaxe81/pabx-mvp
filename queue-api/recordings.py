@@ -97,8 +97,12 @@ def safe_recording_path(directory, filename: str):
     None se o arquivo não existir ou não estiver dentro do diretório
     permitido.
     """
+    # Não transformar um caminho arbitrário no seu basename: rejeite
+    # completamente componentes de diretório enviados pelo cliente.
+    if not isinstance(filename, str) or not filename or "/" in filename or "\\" in filename:
+        return None
     base = Path(directory).resolve()
-    candidate = (base / Path(filename).name).resolve()
+    candidate = (base / filename).resolve()
 
     if base not in candidate.parents and candidate != base:
         return None
@@ -131,7 +135,7 @@ def delete_expired_recordings(directory, retention_days: int, clock=time.time):
     deleted = []
 
     for f in path.iterdir():
-        if not f.is_file() or f.suffix.lower() not in ALLOWED_EXTENSIONS:
+        if f.is_symlink() or not f.is_file() or f.suffix.lower() not in ALLOWED_EXTENSIONS:
             continue
         if f.stat().st_mtime < cutoff:
             f.unlink()
