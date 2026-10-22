@@ -130,11 +130,12 @@ fechando esse buraco de cobertura permanentemente.
 - **606 testes no total**, em 7 suítes
 
 ## Limitações conhecidas (honestidade técnica)
-- **`from-tdm-gateway` não tem tabela real de faixas de DID por
-  tenant** — o "pega-tudo" pra números não mapeados assume tenant 1.
-  Em produção de verdade com múltiplos tenants recebendo ligação
-  externa sem DID específico, isso precisaria de uma tabela real
-  (DID → tenant), não implementada aqui
+- **Roteamento DID exige vínculo explícito**: os dois DIDs de
+  demonstração t1/t2 são estáticos; o wizard usa a família AstDB
+  `tenant-did` para empresas adicionais. DIDs sem mapeamento são
+  rejeitados por segurança (manual 68), sem cair no tenant 1.
+  O cadastro correto de faixas e DIDs reais continua sendo requisito
+  de implantação.
 - **Fora de horário e feriado continuam só em português** (mesma
   limitação já aceita no manual 35, atendimento multilíngue) — vale
   pros dois tenants igualmente
