@@ -27,7 +27,9 @@ def sanitize_phone_number(raw: str):
     has_plus = raw.startswith("+")
     digits = re.sub(r"[^0-9]", "", raw)
 
-    if len(digits) < 8:
+    # E.164 admite até 15 dígitos. Recusa entradas longas antes de
+    # montar a ação AMI, evitando discagem ambígua e truncamento.
+    if not 8 <= len(digits) <= 15:
         return None
 
     return ("+" if has_plus else "") + digits
