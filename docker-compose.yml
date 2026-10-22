@@ -85,6 +85,12 @@ services:
       PICKUP_ALLOWED_EXTENSIONS: "t1-recepcao,t1-recepcao-2,t2-recepcao,t2-recepcao-2"
       PICKUP_CONTEXT: "pickup-target"
       RECORDINGS_DIR: "/app/recordings"
+      # Gravações: padrão fechado. Catálogo deve ser criado em
+      # volume privado /app/data, NUNCA versionado com credenciais.
+      RECORDINGS_ACCESS_POLICY_PATH: "/app/data/recording_access.json"
+      # Separar por vírgula as origens exatas do Webphone HTTPS,
+      # ex: "https://pabx.exemplo.com" (vazio = CORS negado).
+      RECORDINGS_CORS_ORIGINS: ""
       # Retenção de gravações (backlog #15) - 0 = desabilitado (nunca
       # apaga nada sozinho). Defina em dias (ex: "90") pra ativar o
       # expurgo automático diário.

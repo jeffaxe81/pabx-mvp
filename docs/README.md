@@ -99,6 +99,8 @@ configurar, como testar manualmente, e limitações conhecidas.
 
 79. [Validação segura de ramais e credenciais SIP](manual-79-ramais-validacao-segredos.md)
 
+80. [Credenciais e isolamento de gravações por tenant](manual-80-acesso-gravacoes-tenant.md)
+
 ## Regra de manutenção
 
 Toda vez que uma funcionalidade nova for implementada no projeto, um

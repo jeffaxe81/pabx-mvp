@@ -17,12 +17,15 @@ import os
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import urlparse, parse_qs
+from urllib.parse import urlparse, parse_qs, unquote
 
 from ami_client import AMIClient
 from queue_state import QueueStateTracker
 from recordings import list_recordings, safe_recording_path
 from recordings import delete_expired_recordings
+from recording_access import (
+    load_recording_policy, authenticate_recordings, can_read_recording, allowed_browser_origin,
+)
 from missed_calls import parse_missed_call_event, MissedCallsLog
 from notifiers import dispatch_notifications
 from click_to_call import build_originate_action, validate_click_to_call_request
@@ -59,6 +62,8 @@ HTTP_PORT = int(os.environ.get("HTTP_PORT", "8090"))
 SLA_THRESHOLD_SECONDS = int(os.environ.get("SLA_THRESHOLD_SECONDS", "20"))
 SLA_HISTORY_PATH = os.environ.get("SLA_HISTORY_PATH", "/app/data/sla_history.jsonl")
 RECORDINGS_DIR = os.environ.get("RECORDINGS_DIR", "/app/recordings")
+RECORDINGS_ACCESS_POLICY_PATH = os.environ.get("RECORDINGS_ACCESS_POLICY_PATH", "/app/data/recording_access.json")
+RECORDINGS_CORS_ORIGINS = set(filter(None, (v.strip() for v in os.environ.get("RECORDINGS_CORS_ORIGINS", "").split(","))))
 # Retenção de gravações (backlog #15) - 0 (padrão) = desabilitado.
 # Apagar gravação é irreversível, então isso é opt-in de propósito.
 RECORDINGS_RETENTION_DAYS = int(os.environ.get("RECORDINGS_RETENTION_DAYS", "0"))
@@ -265,6 +270,44 @@ def check_call_volume(event: dict):
 
 
 class Handler(BaseHTTPRequestHandler):
+    # Rotas de gravações têm política e CORS separados das APIs antigas.
+    # Elas jamais herdam o Access-Control-Allow-Origin: * de _send_json.
+    def _is_recording_route(self):
+        path = urlparse(self.path).path
+        return path == "/api/recordings" or path.startswith("/recordings/")
+
+    def _recordings_headers(self):
+        origin = self.headers.get("Origin", "")
+        if origin and allowed_browser_origin(origin, RECORDINGS_CORS_ORIGINS):
+            self.send_header("Access-Control-Allow-Origin", origin)
+        self.send_header("Vary", "Origin")
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("X-Content-Type-Options", "nosniff")
+
+    def _send_recordings_json(self, status, payload):
+        body = b"" if status == 204 else json.dumps(payload).encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json")
+        if status == 401:
+            self.send_header("WWW-Authenticate", "Bearer")
+        self._recordings_headers()
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        if body:
+            self.wfile.write(body)
+
+    def _require_recording_identity(self):
+        origin = self.headers.get("Origin")
+        if origin is not None and not allowed_browser_origin(origin, RECORDINGS_CORS_ORIGINS):
+            self._send_recordings_json(403, {"error": "origem não permitida"})
+            return None
+        policy = load_recording_policy(RECORDINGS_ACCESS_POLICY_PATH)
+        identity = authenticate_recordings(self.headers.get("Authorization"), policy)
+        if not identity:
+            self._send_recordings_json(401, {"error": "credencial de gravação inválida ou não configurada"})
+            return None
+        return policy, identity
+
     def _send_json(self, status: int, payload: dict):
         body = json.dumps(payload).encode("utf-8")
         self.send_response(status)
@@ -277,12 +320,24 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_OPTIONS(self):
+        if self._is_recording_route():
+            origin = self.headers.get("Origin")
+            if not allowed_browser_origin(origin, RECORDINGS_CORS_ORIGINS):
+                self._send_recordings_json(403, {"error": "origem não permitida"})
+                return
+            self.send_response(204)
+            self._recordings_headers()
+            self.send_header("Access-Control-Allow-Methods", "GET, OPTIONS")
+            self.send_header("Access-Control-Allow-Headers", "Authorization")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
         self._send_json(204, {})
 
     def do_GET(self):
         if self.path.startswith("/api/queue"):
             self._send_json(200, {"waiting": state.waiting_list()})
-        elif self.path.startswith("/api/recordings"):
+        elif urlparse(self.path).path == "/api/recordings":
             self._handle_list_recordings()
         elif self.path.startswith("/api/missed-calls"):
             self._send_json(200, {"missed_calls": missed_calls_log.list()})
@@ -374,28 +429,45 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json(200, aggregate(records))
 
     def _handle_list_recordings(self):
+        access = self._require_recording_identity()
+        if access is None:
+            return
+        policy, principal = access
         query = parse_qs(urlparse(self.path).query)
-        recordings = list_recordings(
-            RECORDINGS_DIR,
+        all_recordings = list_recordings(
+            RECORDINGS_DIR, limit=10000,
             caller_number=query.get("caller_number", [None])[0],
             destination=query.get("destination", [None])[0],
             start_date=query.get("start_date", [None])[0],
             end_date=query.get("end_date", [None])[0],
         )
-        self._send_json(200, {"recordings": recordings})
+        recordings = [
+            entry for entry in all_recordings
+            if can_read_recording(policy, principal, entry["filename"])
+        ][:50]
+        self._send_recordings_json(200, {"recordings": recordings})
 
     def _serve_recording_file(self):
-        filename = self.path[len("/recordings/"):]
+        access = self._require_recording_identity()
+        if access is None:
+            return
+        policy, principal = access
+        filename = unquote(urlparse(self.path).path[len("/recordings/"):])
+        # Responder 404 para qualquer gravação fora do escopo, sem
+        # revelar sequer se o arquivo existe em outro tenant.
+        if not can_read_recording(policy, principal, filename):
+            self._send_recordings_json(404, {"error": "gravacao nao encontrada"})
+            return
         resolved = safe_recording_path(RECORDINGS_DIR, filename)
         if resolved is None:
-            self._send_json(404, {"error": "gravacao nao encontrada"})
+            self._send_recordings_json(404, {"error": "gravacao nao encontrada"})
             return
 
         content_type = "audio/wav" if resolved.suffix.lower() == ".wav" else "application/octet-stream"
         data = resolved.read_bytes()
         self.send_response(200)
         self.send_header("Content-Type", content_type)
-        self.send_header("Access-Control-Allow-Origin", "*")
+        self._recordings_headers()
         self.send_header("Content-Length", str(len(data)))
         self.end_headers()
         self.wfile.write(data)

@@ -841,6 +841,9 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
       <input id="recordingsSearchInput" placeholder="Buscar por número..." style="font-size:12px; padding:6px 8px;">
       <button class="btn-ghost" id="recordingsSearchBtn" style="padding:6px 10px; font-size:11px;">Buscar</button>
     </div>
+    <label for="recordingsToken">Credencial de gravações (por tenant)</label>
+    <input id="recordingsToken" type="password" autocomplete="off" spellcheck="false"
+           placeholder="Cole a credencial temporária autorizada" style="font-size:12px;">
     <div id="recordingsList">
       <div class="log-empty">Nenhuma gravação encontrada.</div>
     </div>
@@ -862,6 +865,9 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   'use strict';
 
   let ua = null;
+  // URLs de áudio existem só na memória desta sessão, nunca em storage.
+  const recordingObjectUrls = new Set();
+  let recordingsRequestEpoch = 0;
   let myExtension = null; // ramal com o qual esta sessão está registrada
   let crmScreenPopUrl = null; // template com {numero}, ex: https://crm.com/c?tel={numero}
   // Multi-chamada: até 2 linhas simultâneas. Cada posição é null ou
@@ -1197,6 +1203,9 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     stopMetricsPolling();
     clearInterval(timerInterval);
     myExtension = null;
+    recordingsRequestEpoch += 1;
+    el('recordingsToken').value = '';
+    clearRecordingPlayers();
     if (ua) ua.stop();
     setStatus('', 'Desconectado');
     el('connectForm').style.display = 'block';
@@ -1371,39 +1380,119 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
       </div>`).join('')}</div>`;
   }
 
-  // ---------- Gravações (player embutido) ----------
-  function fetchRecordings() {
-    const apiUrl = el('queueApiUrl').value.trim();
-    if (!apiUrl) return;
-
-    const search = el('recordingsSearchInput').value.trim();
-    const query = search ? `?caller_number=${encodeURIComponent(search)}` : '';
-
-    fetch(`${apiUrl}/api/recordings${query}`)
-      .then((res) => res.json())
-      .then((data) => renderRecordings(apiUrl, data.recordings || []))
-      .catch(() => {
-        el('recordingsList').innerHTML = '<div class="log-empty">API de gravações indisponível.</div>';
-      });
+  // ---------- Gravações com autorização e áudio em Blob ----------
+  function recordingApiIsSecure(apiUrl) {
+    try {
+      const url = new URL(apiUrl);
+      if (url.username || url.password) return false;
+      return url.protocol === 'https:' ||
+        (url.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(url.hostname));
+    } catch (error) {
+      return false;
+    }
   }
 
-  function renderRecordings(apiUrl, recordings) {
-    if (recordings.length === 0) {
-      el('recordingsList').innerHTML = '<div class="log-empty">Nenhuma gravação encontrada.</div>';
+  function clearRecordingPlayers() {
+    for (const url of recordingObjectUrls) URL.revokeObjectURL(url);
+    recordingObjectUrls.clear();
+    el('recordingsList').replaceChildren();
+  }
+
+  function recordingMessage(message) {
+    clearRecordingPlayers();
+    const hint = document.createElement('div');
+    hint.className = 'log-empty';
+    hint.textContent = message;
+    el('recordingsList').appendChild(hint);
+  }
+
+  async function fetchRecordings() {
+    const apiUrl = el('queueApiUrl').value.trim();
+    const token = el('recordingsToken').value.trim();
+    const epoch = ++recordingsRequestEpoch;
+    if (!apiUrl || !token) {
+      recordingMessage('Informe a credencial de gravações para listar os áudios autorizados.');
+      return;
+    }
+    if (!recordingApiIsSecure(apiUrl)) {
+      recordingMessage('Use HTTPS para acessar gravações fora do próprio computador.');
       return;
     }
 
-    el('recordingsList').innerHTML = recordings.map((rec) => {
-      const sizeKb = Math.round(rec.size_bytes / 1024);
-      const when = new Date(rec.modified_at).toLocaleString('pt-BR');
-      return `<div class="recording-item">
-        <div class="meta">
-          <span>${when}</span>
-          <span>${sizeKb} KB</span>
-        </div>
-        <audio controls preload="none" src="${apiUrl}/recordings/${encodeURIComponent(rec.filename)}"></audio>
-      </div>`;
-    }).join('');
+    const search = el('recordingsSearchInput').value.trim();
+    const query = search ? `?caller_number=${encodeURIComponent(search)}` : '';
+    try {
+      const res = await fetch(`${apiUrl}/api/recordings${query}`, {
+        headers: { Authorization: `Bearer ${token}` }, cache: 'no-store',
+      });
+      if (!res.ok) throw new Error('Não autorizado ou API indisponível');
+      const data = await res.json();
+      if (epoch !== recordingsRequestEpoch) return;
+      renderRecordings(apiUrl, data.recordings || []);
+    } catch (error) {
+      if (epoch === recordingsRequestEpoch) recordingMessage('Sem acesso às gravações. Verifique a credencial e as permissões.');
+    }
+  }
+
+  function renderRecordings(apiUrl, recordings) {
+    clearRecordingPlayers();
+    if (!Array.isArray(recordings) || recordings.length === 0) {
+      recordingMessage('Nenhuma gravação autorizada encontrada.');
+      return;
+    }
+
+    for (const rec of recordings) {
+      if (!rec || typeof rec.filename !== 'string') continue;
+      const item = document.createElement('div');
+      item.className = 'recording-item';
+      const meta = document.createElement('div');
+      meta.className = 'meta';
+      const time = document.createElement('span');
+      time.textContent = new Date(rec.modified_at).toLocaleString('pt-BR');
+      const size = document.createElement('span');
+      size.textContent = `${Math.round(Number(rec.size_bytes || 0) / 1024)} KB`;
+      meta.append(time, size);
+
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'btn-ghost';
+      button.textContent = 'Carregar áudio';
+      const audio = document.createElement('audio');
+      audio.controls = true;
+      audio.preload = 'none';
+      audio.hidden = true;
+      const message = document.createElement('div');
+      message.className = 'log-empty';
+      item.append(meta, button, audio, message);
+      el('recordingsList').appendChild(item);
+
+      button.addEventListener('click', async () => {
+        const token = el('recordingsToken').value.trim();
+        if (!token || button.disabled || !recordingApiIsSecure(apiUrl)) return;
+        button.disabled = true;
+        message.textContent = 'Obtendo áudio autorizado…';
+        const epoch = recordingsRequestEpoch;
+        try {
+          const response = await fetch(`${apiUrl}/recordings/${encodeURIComponent(rec.filename)}`, {
+            headers: { Authorization: `Bearer ${token}` }, cache: 'no-store',
+          });
+          if (!response.ok) throw new Error('Acesso negado');
+          const blob = await response.blob();
+          if (epoch !== recordingsRequestEpoch || !item.isConnected) return;
+          const objectUrl = URL.createObjectURL(blob);
+          recordingObjectUrls.add(objectUrl);
+          audio.src = objectUrl;
+          audio.hidden = false;
+          button.textContent = 'Áudio carregado';
+          message.textContent = '';
+        } catch (error) {
+          if (epoch === recordingsRequestEpoch && item.isConnected) {
+            message.textContent = 'Não foi possível abrir a gravação.';
+            button.disabled = false;
+          }
+        }
+      });
+    }
   }
 
   el('refreshRecordingsBtn').addEventListener('click', fetchRecordings);
