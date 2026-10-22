@@ -371,7 +371,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
       </div>
       <div>
         <label for="formPassword">Senha SIP (em branco = gera automático)</label>
-        <input id="formPassword" type="text">
+        <input id="formPassword" type="password" autocomplete="new-password">
       </div>
     </div>
     <div class="form-row">
@@ -383,6 +383,11 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     <button class="btn-primary" id="saveBtn" style="width:auto;">Salvar</button>
     <button class="btn-ghost" id="cancelEditBtn" style="display:none; margin-top:18px; margin-left:8px;">Cancelar edição</button>
     <div class="error-msg" id="formError"></div>
+    <div id="extensionCredentialPanel" style="display:none; margin-top:12px;">
+      <p>Credenciais SIP deste novo ramal. Guarde em cofre seguro; a senha não será exibida novamente.</p>
+      <pre id="extensionCredentialText" style="white-space:pre-wrap; overflow-wrap:anywhere; padding:12px; border:1px solid var(--border); border-radius:8px;"></pre>
+      <button class="btn-ghost" id="extensionCredentialHideBtn" type="button">Ocultar credenciais</button>
+    </div>
   </div>
 
   <div class="form-card" data-axe-admin-group="atendimento" style="margin-top:24px;">
@@ -723,6 +728,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
       token = null;
       myRole = null;
       clearWizardCredentials();
+      clearExtensionCredentials();
       el('appScreen').style.display = 'none';
       el('loginScreen').style.display = 'flex';
     });
@@ -768,6 +774,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   }
 
   function startEdit(ext) {
+    clearExtensionCredentials();
     editingName = ext.name;
     el('formTitle').textContent = `Editando: ${ext.name}`;
     el('formName').value = ext.name;
@@ -780,6 +787,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   }
 
   function resetForm() {
+    clearExtensionCredentials();
     editingName = null;
     el('formTitle').textContent = 'Novo ramal';
     el('formName').value = '';
@@ -792,6 +800,12 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     el('formError').textContent = '';
   }
 
+  function clearExtensionCredentials() {
+    el('extensionCredentialText').textContent = '';
+    el('extensionCredentialPanel').style.display = 'none';
+  }
+
+  el('extensionCredentialHideBtn').addEventListener('click', clearExtensionCredentials);
   el('cancelEditBtn').addEventListener('click', resetForm);
 
   el('saveBtn').addEventListener('click', () => {
@@ -810,7 +824,14 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
       : apiFetch('/api/extensions', { method: 'POST', body: JSON.stringify(payload) });
 
     request
-      .then(() => { resetForm(); loadExtensions(); })
+      .then((data) => {
+        resetForm();
+        loadExtensions();
+        if (!editingName && data.provisioning && typeof data.provisioning.sip_password === 'string') {
+          el('extensionCredentialText').textContent = `${data.provisioning.username}: ${data.provisioning.sip_password}`;
+          el('extensionCredentialPanel').style.display = 'block';
+        }
+      })
       .catch((err) => { el('formError').textContent = err.message; });
   });
 
