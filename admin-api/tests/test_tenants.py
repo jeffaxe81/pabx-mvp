@@ -216,3 +216,67 @@ def test_removal_is_case_and_whitespace_tolerant():
     ok, error, record = validate_tenant_removal("  T3  ", existing)
     assert ok is True
     assert record["tenant_id"] == "t3"
+
+# ---------- segurança de entrada no wizard ----------
+
+def test_creation_rejects_payloads_that_are_not_json_objects():
+    for payload in (None, [], "t3", 99, True):
+        ok, error, cleaned = validate_tenant_creation_input(payload, [])
+        assert ok is False
+        assert cleaned is None
+        assert error
+
+
+def test_creation_rejects_wrong_field_types_without_exception():
+    for field, value in (
+        ("tenant_id", 3),
+        ("tenant_id", ["t3"]),
+        ("did", 5511900003333),
+        ("did", {"number": "5511900003333"}),
+        ("display_name", ["Empresa"]),
+        ("display_name", None),
+    ):
+        data = {**VALID_INPUT, field: value}
+        ok, error, cleaned = validate_tenant_creation_input(data, [])
+        assert ok is False
+        assert cleaned is None
+        assert error
+
+
+def test_creation_rejects_letters_and_control_characters_in_did():
+    for bad in ("abc5511900003333", "5511900003333xyz",
+                "5511900003333\nAction: Command", "5511900003333;rm -rf /"):
+        ok, _, cleaned = validate_tenant_creation_input(
+            {**VALID_INPUT, "did": bad}, []
+        )
+        assert ok is False and cleaned is None
+
+
+def test_creation_rejects_control_characters_in_display_name():
+    ok, error, cleaned = validate_tenant_creation_input(
+        {**VALID_INPUT, "display_name": "Empresa C\r\nsecret=abc"}, []
+    )
+    assert ok is False and cleaned is None
+    assert "nome" in error
+
+
+def test_creation_fails_closed_on_corrupted_existing_tenant_records():
+    for existing in (None, {}, "not-json", [None], [{}], [{"tenant_id": "t4"}]):
+        ok, error, cleaned = validate_tenant_creation_input(VALID_INPUT, existing)
+        assert ok is False and cleaned is None
+        assert "cadastro" in error
+
+
+def test_removal_rejects_nonstring_and_invalid_tenant_id():
+    records = [{"tenant_id": "t3", "did": "5511900003333", "display_name": "Empresa C"}]
+    for bad in (None, [], 3, "../t3", "t3/../../manager.conf", "t3\n"):
+        # Espaço é tolerado, mas quebras de linha ou caminho não são.
+        ok, _, cleaned = validate_tenant_removal(bad, records)
+        assert ok is False and cleaned is None
+
+
+def test_removal_fails_closed_on_invalid_registry():
+    for existing in (None, {}, [{}], [{"tenant_id": "t3"}]):
+        ok, error, cleaned = validate_tenant_removal("t3", existing)
+        assert ok is False and cleaned is None
+        assert error
