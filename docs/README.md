@@ -78,6 +78,8 @@ configurar, como testar manualmente, e limitações conhecidas.
 
 69. [Diagnóstico somente leitura do SIP/Asterisk](manual-69-diagnostico-sip.md)
 
+70. [Segurança da verificação AMI](manual-70-verificador-ami.md)
+
 ## Regra de manutenção
 
 Toda vez que uma funcionalidade nova for implementada no projeto, um

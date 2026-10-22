@@ -17,6 +17,7 @@ Uso:
 """
 import socket
 import sys
+from getpass import getpass
 import urllib.request
 import urllib.error
 from pathlib import Path
@@ -55,15 +56,29 @@ def check_secrets() -> dict:
 
 
 def check_ami_login(username: str, secret: str) -> bool:
-    """Tenta logar no AMI com as credenciais informadas - True se aceito."""
+    """Consulta login AMI: valida cabeçalhos e lê até o bloco terminar."""
+    if not all(isinstance(value, str) and value and
+               not any(ch in value for ch in "\r\n")
+               for value in (username, secret)):
+        return False
     try:
         with socket.create_connection((AMI_HOST, AMI_PORT), timeout=5) as sock:
+            sock.settimeout(5)
             sock.recv(1024)  # banner de boas-vindas do Asterisk
             action = f"Action: Login\r\nUsername: {username}\r\nSecret: {secret}\r\n\r\n"
             sock.sendall(action.encode("utf-8"))
-            response = sock.recv(4096).decode("utf-8", errors="replace")
-            return parse_ami_login_result(response)
-    except OSError:
+            payload = bytearray()
+            for _ in range(8):  # máximo 8 blocos de recepção
+                chunk = sock.recv(4096)
+                if not chunk:
+                    break
+                payload.extend(chunk)
+                if len(payload) > 16_384:
+                    return False
+                if b"\r\n\r\n" in payload:
+                    return parse_ami_login_result(payload.decode("utf-8", errors="replace"))
+            return False  # resposta incompleta ou conexão encerrada
+    except (OSError, ValueError):
         return False
 
 
@@ -94,7 +109,7 @@ def main():
         print()
 
     print("2. AMI (login com AMI_USERNAME=queue-api)...")
-    ami_ok = check_ami_login("queue-api", input("   Cole aqui o AMI_SECRET atual do queue-api (docker-compose.yml): ").strip())
+    ami_ok = check_ami_login("queue-api", getpass("   AMI_SECRET do queue-api (entrada oculta): "))
     print("   OK - login aceito.\n" if ami_ok else "   FALHOU - login recusado ou Asterisk inacessível na porta 5038.\n")
 
     print("3. Serviços HTTP...")

@@ -593,3 +593,18 @@ A saída é um relatório JSON e a documentação está no
 [Manual 69](docs/manual-69-diagnostico-sip.md).
 Este diagnóstico **não** homologa registro SIP, áudio, RTP/SRTP,
 URA, contingência nem isolamento entre tenants durante chamadas reais.
+
+## Checagem segura da autenticação AMI
+
+O verificador pós-implantação agora solicita o segredo AMI com
+digitação oculta e processa respostas TCP fragmentadas, evitando
+falsos resultados e recusando campos inválidos. Executa somente
+uma ação de login, sem mudanças na configuração do Asterisk.
+Consulte o [Manual 70](docs/manual-70-verificador-ami.md).
+
+```bash
+python3 scripts/verify_deployment.py
+```
+
+**Importante:** login AMI aceito não substitui os testes de chamada
+real, isolamento entre tenants nem verificação de qualidade RTP.
