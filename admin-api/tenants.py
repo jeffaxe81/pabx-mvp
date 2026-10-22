@@ -53,30 +53,55 @@ def save_tenants(path, tenants: list):
             os.unlink(temporary)
 
 
-def validate_tenant_creation_input(data: dict, existing: list):
-    """
-    Valida os dados de um tenant novo. Retorna (ok, error_message,
-    cleaned_data). t1 e t2 são os exemplos estáticos originais do
-    projeto - o wizard só cria a partir de t3 em diante, de propósito
-    (evita colidir com a configuração manual já existente).
-    """
-    tenant_id = (data.get("tenant_id") or "").strip().lower()
-    if not TENANT_ID_RE.match(tenant_id):
-        return False, "id do tenant deve seguir o padrão 't3', 't4', ... (t1/t2 já existem)", None
+def _valid_existing_records(existing) -> bool:
+    """Uma lista corrompida não pode liberar criação/remoção por engano."""
+    return (
+        isinstance(existing, list)
+        and all(
+            isinstance(item, dict)
+            and isinstance(item.get("tenant_id"), str)
+            and isinstance(item.get("did"), str)
+            for item in existing
+        )
+    )
 
+
+def validate_tenant_creation_input(data: dict, existing: list):
+    """Valida JSON antes de gerar arquivos Asterisk ou registrar DID no AMI."""
+    if not isinstance(data, dict):
+        return False, "dados do tenant devem ser um objeto JSON", None
+    if not _valid_existing_records(existing):
+        return False, "cadastro de tenants existente é inválido", None
+
+    raw_tenant = data.get("tenant_id")
+    if not isinstance(raw_tenant, str):
+        return False, "id do tenant deve ser texto", None
+    tenant_id = raw_tenant.strip().lower()
+    if not TENANT_ID_RE.fullmatch(tenant_id):
+        return False, "id do tenant deve seguir o padrão 't3', 't4', ... (t1/t2 já existem)", None
     if any(t["tenant_id"] == tenant_id for t in existing):
         return False, f"o tenant '{tenant_id}' já foi criado", None
 
-    did = re.sub(r"[^0-9]", "", data.get("did") or "")
-    if not DID_RE.match(did):
+    raw_did = data.get("did")
+    if not isinstance(raw_did, str):
+        return False, "DID inválido (deve ser texto)", None
+    raw_did = raw_did.strip()
+    # Aceitar formatação telefônica conhecida, mas não letras ou lixo
+    # arbitrário que antes era silenciosamente descartado por re.sub().
+    if not re.fullmatch(r"[0-9+().\-\s]+", raw_did):
+        return False, "DID inválido (caracteres não permitidos)", None
+    did = re.sub(r"[^0-9]", "", raw_did)
+    if not DID_RE.fullmatch(did):
         return False, "DID inválido (só dígitos, 8-15 caracteres)", None
-
     if any(t["did"] == did for t in existing):
         return False, f"o DID '{did}' já está registrado pra outro tenant", None
 
-    display_name = (data.get("display_name") or "").strip()
-    if not DISPLAY_NAME_RE.match(display_name):
-        return False, "nome de exibição obrigatório (2-60 caracteres)", None
+    raw_name = data.get("display_name")
+    if not isinstance(raw_name, str):
+        return False, "nome de exibição deve ser texto", None
+    display_name = raw_name.strip()
+    if not DISPLAY_NAME_RE.fullmatch(display_name) or not display_name.isprintable():
+        return False, "nome de exibição obrigatório (2-60 caracteres, sem controles)", None
 
     return True, None, {
         "tenant_id": tenant_id,
@@ -86,15 +111,16 @@ def validate_tenant_creation_input(data: dict, existing: list):
 
 
 def validate_tenant_removal(tenant_id: str, existing: list):
-    """
-    Retorna (ok, error_message, tenant_record). Só permite remover um
-    tenant que o wizard de fato criou (t3+, existe na lista) - nunca
-    t1/t2 (exemplos estáticos, não gerenciados pelo wizard) nem um
-    tenant que nunca existiu.
-    """
-    tenant_id = (tenant_id or "").strip().lower()
+    """Exclusão só aceita IDs t3+ de registros válidos do wizard."""
+    if not isinstance(tenant_id, str):
+        return False, "id do tenant deve ser texto", None
+    tenant_id = tenant_id.strip().lower()
     if tenant_id in ("t1", "t2"):
         return False, "t1/t2 são exemplos estáticos do projeto - não gerenciados pelo wizard, não podem ser removidos por aqui", None
+    if not TENANT_ID_RE.fullmatch(tenant_id):
+        return False, "id do tenant inválido", None
+    if not _valid_existing_records(existing):
+        return False, "cadastro de tenants existente é inválido", None
 
     match = next((t for t in existing if t["tenant_id"] == tenant_id), None)
     if not match:
