@@ -56,3 +56,9 @@ Em laboratório, verificar transporte TCP AMI, credenciais com
 privilégios mínimos, `pjsip show endpoints`, `dialplan show`,
 registro SIP/TLS, chamadas e isolamento multiempresa, seguindo a
 matriz de 13 critérios do Manual 73. Não houve deploy nesta entrega.
+
+## Complemento — consulta de listas (Manual 91)
+
+O cliente `DBGetTree` agora reutiliza o framing do Manual 90 para
+aguardar o evento terminal da consulta e evitar esperar artificialmente
+um timeout. Consulte o [Manual 91](manual-91-ami-dbgettree-eventos.md).

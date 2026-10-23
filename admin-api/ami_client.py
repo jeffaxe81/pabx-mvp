@@ -21,7 +21,7 @@ class AMIClient:
         self.username = username
         self.secret = secret
         self._sock = None
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
         self._recv_buffer = b""
         self._last_frame = b""
 
@@ -148,35 +148,52 @@ class AMIClient:
             "Action": "DBPut", "Family": f"config-{tenant}", "Key": "overflow-timeout-segundos", "Val": str(seconds),
         })
 
-    def get_overflow_timeout(self, tenant: str = "t1"):
-        """
-        Diferente de get_holiday_mode (que só precisa saber
-        sim/não) - aqui precisamos do VALOR de verdade, então usamos
-        DBGetTree (mesma técnica de list_blocked_numbers/list_vips)
-        em vez de DBGet, que não devolve o valor na resposta imediata.
-        Retorna None se não configurado (dialplan cai no padrão global).
+    def _read_db_tree(self, family: str):
+        """Aguarda o evento DBGetTreeComplete, sem depender de timeout.
+
+        DBGetTree emite resposta inicial + eventos com o mesmo ActionID.
+        As consultas ficam serializadas com as outras ações AMI.
         """
         with self._lock:
-            self._sock.sendall(build_action({
-                "Action": "DBGetTree", "Family": f"config-{tenant}",
-            }).encode("utf-8"))
-            self._sock.settimeout(2.0)
-            data = b""
-            try:
-                while True:
-                    chunk = self._sock.recv(4096)
-                    if not chunk:
-                        break
-                    data += chunk
-            except socket.timeout:
-                pass
-            finally:
-                self._sock.settimeout(None)
+            result = self._send_action({"Action": "DBGetTree", "Family": family})
+            if result.get("Response") != "Success":
+                raise ConnectionError("Consulta AstDB não autorizada ou falhou")
+            action_id = result["ActionID"]
+            entries = []
+            unrelated = 0
+            for _ in range(2048):
+                blocks = parse_ami_blocks(self._read_frame().decode(
+                    "utf-8", errors="replace"
+                ))
+                if not blocks:
+                    raise ConnectionError("Evento AMI vazio")
+                event = blocks[0]
+                if event.get("ActionID") != action_id:
+                    # Outras notificações podem aparecer entre as
+                    # respostas de uma listagem, mas são limitadas.
+                    unrelated += 1
+                    if unrelated > 32:
+                        raise ConnectionError("Excesso de eventos AMI não relacionados")
+                    continue
+                event_name = event.get("Event")
+                if event_name == "DBGetTreeComplete":
+                    return entries
+                if event_name in ("DBGetTreeResponse", "DBGetTreeEntry"):
+                    if len(entries) >= 1000:
+                        raise ConnectionError("Listagem AstDB excede o limite")
+                    key = event.get("Key", "")
+                    if isinstance(key, str) and key.startswith("/" + family + "/"):
+                        entries.append(event)
+                    continue
+                raise ConnectionError("Evento inesperado durante listagem AstDB")
+            raise ConnectionError("Listagem AstDB sem evento de conclusão")
 
-        blocks = parse_ami_blocks(data.decode("utf-8", errors="replace"))
-        for block in blocks:
-            if block.get("Key", "").endswith("/overflow-timeout-segundos"):
-                return block.get("Val")
+    def get_overflow_timeout(self, tenant: str = "t1"):
+        """Valor configurado do overflow ou None, com evento final confirmado."""
+        items = self._read_db_tree(f"config-{tenant}")
+        for item in items:
+            if item["Key"] == f"/config-{tenant}/overflow-timeout-segundos":
+                return item.get("Val")
         return None
 
     def set_vip(self, number: str, target_extension: str, tenant: str = "t1"):
@@ -191,58 +208,20 @@ class AMIClient:
         })
 
     def list_vips(self, tenant: str = "t1"):
-        """
-        Igual a list_blocked_numbers, mas precisa capturar Key E Val -
-        o destino de cada cliente VIP é o que importa, não só o número.
-        """
-        with self._lock:
-            self._sock.sendall(build_action({
-                "Action": "DBGetTree", "Family": f"vip-{tenant}",
-            }).encode("utf-8"))
-            self._sock.settimeout(2.0)
-            data = b""
-            try:
-                while True:
-                    chunk = self._sock.recv(4096)
-                    if not chunk:
-                        break
-                    data += chunk
-            except socket.timeout:
-                pass
-            finally:
-                self._sock.settimeout(None)
-
-        blocks = parse_ami_blocks(data.decode("utf-8", errors="replace"))
+        """Lista VIPs somente da família do tenant solicitado."""
+        items = self._read_db_tree(f"vip-{tenant}")
         return [
-            {"number": b["Key"].split("/")[-1], "target_extension": b.get("Val", "")}
-            for b in blocks if b.get("Key")
+            {"number": item["Key"].rsplit("/", 1)[-1],
+             "target_extension": item.get("Val", "")}
+            for item in items
         ]
 
     def list_blocked_numbers(self, tenant: str = "t1"):
-        """
-        DBGetTree retorna uma Action ID com múltiplos eventos
-        DBGetTreeEntry - simplificado aqui: lê tudo que vier do socket
-        num intervalo curto, já que é uma lista pequena por natureza.
-        """
-        with self._lock:
-            self._sock.sendall(build_action({
-                "Action": "DBGetTree", "Family": f"blocklist-{tenant}",
-            }).encode("utf-8"))
-            self._sock.settimeout(2.0)
-            data = b""
-            try:
-                while True:
-                    chunk = self._sock.recv(4096)
-                    if not chunk:
-                        break
-                    data += chunk
-            except socket.timeout:
-                pass
-            finally:
-                self._sock.settimeout(None)
-
-        blocks = parse_ami_blocks(data.decode("utf-8", errors="replace"))
-        return [b["Key"].split("/")[-1] for b in blocks if b.get("Key")]
+        """Números bloqueados somente da família do tenant solicitado."""
+        return [
+            item["Key"].rsplit("/", 1)[-1]
+            for item in self._read_db_tree(f"blocklist-{tenant}")
+        ]
 
     def register_extension_mapping(self, number: str, name: str, tenant: str = "t1"):
         """
