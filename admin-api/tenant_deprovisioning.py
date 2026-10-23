@@ -8,6 +8,7 @@ from conf_generator import render_pjsip_dynamic
 from store import load_store, save_store
 from tenants import save_tenants
 from tenant_provisioning import RELOAD_COMPONENTS
+from tenant_registry_recovery import snapshot_registry, restore_registry
 
 
 class TenantRemovalError(RuntimeError):
@@ -79,8 +80,11 @@ def remove_tenant(root, registry_path, store_path, existing, record, client_fact
     ]
     did_attempted = False
     store_touched = False
+    registry_save_started = False
+    registry_snapshot = None
     client = None
     try:
+        registry_snapshot = snapshot_registry(registry_path)
         with retired_config_files(tenant_config_paths(root, record["tenant_id"])):
             with published_conf_batch(root / "generated", {
                 "pjsip_dynamic.conf": render_pjsip_dynamic(remaining_extensions),
@@ -98,10 +102,16 @@ def remove_tenant(root, registry_path, store_path, existing, record, client_fact
                 if removed_count:
                     store_touched = True
                     save_store(store_path, remaining_extensions)
+                registry_save_started = True
                 save_tenants(registry_path, remaining_tenants)
         return {"removed_extensions": removed_count, "reload": reload_result}
     except Exception as exc:
         rollback_incomplete = isinstance(exc, FileRestoreError)
+        if registry_save_started:
+            try:
+                restore_registry(registry_path, registry_snapshot)
+            except (OSError, ValueError):
+                rollback_incomplete = True
         if store_touched:
             try:
                 save_store(store_path, old_extensions)
