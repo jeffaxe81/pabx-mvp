@@ -118,9 +118,12 @@ def provision_tenant(root, registry_path, existing, cleaned, sip_credentials, vo
         rollback_incomplete = False
         if attempted_did:
             try:
-                if client is None:
-                    client = client_factory()
-                    client.connect_and_login()
+                # Uma falha de rede pode invalidar o socket original.
+                # A compensação usa uma conexão independente.
+                if client is not None:
+                    client.close()
+                client = client_factory()
+                client.connect_and_login()
                 client.unregister_tenant_did(cleaned["did"])
                 compensating_reload = client.reload_pjsip_and_dialplan()
                 if not isinstance(compensating_reload, dict) or any(
