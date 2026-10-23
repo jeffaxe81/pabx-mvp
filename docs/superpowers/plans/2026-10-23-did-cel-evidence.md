@@ -44,12 +44,21 @@
 
 - [x] Testar preparação privada, cursor e aceites sem CEL; observar RED.
 - [x] Integrar leitura limitada, ciclo completo e CDR correlacionado no prazo do runner; verificar GREEN.
-- [ ] Publicar PR dependente da #57 e executar laboratório real; corrigir causas comprovadas.
+- [x] Publicar PR dependente da #57 e executar laboratório real; corrigir causas comprovadas.
 
 ### Task 3: Revisão e evidência
 
 **Files:** docs/manual-105-cel-dids.md; docs/README.md; README.md.
 
-- [ ] Executar oito suítes Python, Node/navegador e CI real no SHA publicado.
-- [ ] Revisão independente com correção dos achados importantes/críticos.
-- [ ] Documentar evidência, falhas e limites; conferir árvore Git publicada.
+- [x] Executar oito suítes Python, Node/navegador e CI real no SHA publicado.
+- [x] Revisão independente com correção dos achados importantes/críticos.
+- [x] Documentar evidência, falhas e limites; conferir árvore Git publicada.
+
+## Evidência e decisões finais
+
+- Implementação 7eb771e: 1.439 Python, 19 Node e 24 Chromium aprovados localmente.
+- CI estática 40010571117: oito jobs aprovados. CI real 40010571089: quatro jobs aprovados, incluindo 113/113 DID/CEL.
+- Revisão independente concluída; dois achados tratados como importantes, corrigidos com regressões RED→GREEN e suíte completa. Nenhum crítico ou menor adiado.
+- Reutilizar os filtros de CDR da PR57 evita divergência; o custo dessa decisão é exigir validação da integração conjunta, comprovada na CI.
+- Protótipos locais anteriores ficaram em checkpoints; a entrega complementa somente o runner da PR57. O custo é depender da integração dessa PR antes da presente.
+- O programa permanece 7/16 (43,8%); sem GO operacional ou merge automático.

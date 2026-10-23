@@ -80,8 +80,29 @@ contêm somente nomes fixos de cenário e diagnósticos booleanos. O container
   aplicações proibidas e BRIDGE_EXIT agora também reprovam. A consistência
   do ciclo foi reforçada para recusar eventos fora de ordem ou duplicados,
   com regressões observadas em RED→GREEN.
-- A revisão independente e a execução final serão registradas após a
-  aprovação dos critérios. Nenhum marco é promovido por testes de fixture.
+
+## Evidência final
+
+Implementação verificada: `7eb771e4ad5a62797148c3f5711b11390b08a466`.
+
+A [CI real 40010571089](https://github.com/jeffaxe81/pabx-mvp/actions/runs/40010571089)
+aprovou os quatro jobs: **22/22** registros TLS, **70/70** chamadas/SRTP/CDR,
+**138/138** aceites do Webphone WSS/DTLS-SRTP e **113/113** aceites DID/CEL.
+Todos os cenários CEL foram aprovados, com auditoria de aplicações ativa e
+container removido ao final. A
+[CI estática 40010571117](https://github.com/jeffaxe81/pabx-mvp/actions/runs/40010571117)
+aprovou as oito suítes Python.
+
+A verificação local final aprovou **1.439 testes Python**, **19 Node** e
+**24 Chromium de interface**. Esta PR acrescenta 52 casos de teste em
+relação à implementação base da #57. A revisão independente encontrou um
+achado importante e um inicialmente menor, reclassificado como importante
+pelo risco de aceitar evidência inconsistente. Ambos foram corrigidos na
+mesma rodada com regressões RED→GREEN e suíte completa verde. Não há achados
+críticos ou menores adiados. A árvore publicada foi comparada à árvore Git local.
+
+Esta auditoria complementa os marcos 6–7 já registrados: o programa permanece
+em **7/16 (43,8%)**. Os marcos 8–16 continuam pendentes.
 
 ## Limites
 
