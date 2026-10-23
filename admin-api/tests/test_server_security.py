@@ -559,3 +559,12 @@ def test_tenant_options_only_show_name_not_did_to_supervisor():
     assert '_require_role({"admin", "supervisor"})' in segment
     assert '"display_name"' in segment
     assert '"did"' not in segment
+
+def test_tenant_removal_prunes_shared_pjsip_dynamic_before_ami_reload():
+    source = load_source()
+    body = get_function_body(source, "_handle_remove_tenant")
+    remove_at = body.index('delete_extensions_by_tenant(STORE_PATH, record["tenant_id"])')
+    pjsip_at = body.index('"pjsip_dynamic.conf"', remove_at)
+    reload_at = body.index('client.reload_pjsip_and_dialplan()', pjsip_at)
+    assert remove_at < pjsip_at < reload_at
+    assert "render_pjsip_dynamic(remaining_extensions)" in body
