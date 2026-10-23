@@ -14,7 +14,8 @@ import time
 
 from .sip_tls import SipTLS
 
-IMAGE = 'andrius/asterisk:22.11.0_debian-trixie'
+IMAGE = ('andrius/asterisk:22.11.0_debian-trixie@sha256:'
+         'd6333b8b331563c5887b98b12da9371ef48317e657d17d81770fe085f335041d')
 
 
 def load_file(name, path):
@@ -103,8 +104,18 @@ def cli(container, text):
     return command(['docker', 'exec', container, 'asterisk', '-rx', text]).stdout
 
 
+def diagnose(raw):
+    return {
+        'missing_template': 'Inheritance requested, but category' in raw,
+        'permission_denied': 'Permission denied' in raw,
+        'database_unavailable': 'Unable to open Asterisk database' in raw,
+        'config_unreadable': 'Unable to open specified master config file' in raw,
+    }
+
+
 def summarize(checks):
-    required = {'real_runtime', 'tls_transport', 'wss_transport', 'container_removed'}
+    required = {'real_runtime', 'tls_transport', 'wss_transport', 'container_removed',
+                'checkout_clean', 'runtime_mounts', 'source_label'}
     required.update(name+':'+tid for tid in ('t1', 't2', 't3')
                     for name in ('context', 'register', 'contact', 'unregister', 'wrong_password'))
     passed = sum(value is True for value in checks.values())
@@ -121,6 +132,11 @@ def run(root, report):
                   timestamp_utc=datetime.now(timezone.utc).isoformat(), checks={},
                   sip_call_tested=False, rtp_tested=False, srtp_tested=False,
                   live_tenant_isolation_tested=False, backup_restore_tested=False)
+    clean = command(['git', '-C', str(root), 'diff', '--quiet', 'HEAD', '--',
+                     'asterisk', 'admin-api/tenants.py', 'scripts/secrets_generator.py', 'lab'], check=False)
+    report['checks']['checkout_clean'] = clean.returncode == 0
+    if clean.returncode != 0:
+        raise RuntimeError('checkout do laboratório contém alterações não commitadas')
     name = 'axe-lab-' + secrets.token_hex(6)
     started = False
     with tempfile.TemporaryDirectory(prefix='axe-pabx-lab-') as folder:
@@ -142,6 +158,14 @@ def run(root, report):
             started = True
             if result.returncode:
                 raise RuntimeError('inicialização do container falhou')
+            container_data = json.loads(command(['docker','inspect',name]).stdout)[0]
+            report['checks']['source_label'] = (
+                container_data['Config']['Labels'].get('io.axe.pabx.source-commit') == source
+                and container_data['Image'] == image_data['Id'])
+            report['checks']['runtime_mounts'] = any(
+                mount.get('Type') == 'bind' and mount.get('Destination') == '/etc/asterisk'
+                and mount.get('Source') == str(prepared['conf']) and mount.get('RW') is False
+                for mount in container_data['Mounts'])
             ready = False
             for _ in range(40):
                 result = command(['docker', 'exec', name, 'asterisk', '-rx',
@@ -170,13 +194,16 @@ def run(root, report):
                               prepared['credentials'][endpoint])
                 try:
                     report['tls_version'] = peer.connection.version()
+                    report['phase'] = 'register:'+tenant
                     report['checks']['register:'+tenant] = peer.register() == 200
                     report['checks']['contact:'+tenant] = endpoint+'/' in cli(name, 'pjsip show contacts')
+                    report['phase'] = 'unregister:'+tenant
                     report['checks']['unregister:'+tenant] = peer.register(expires=0) == 200
                 finally:
                     peer.close()
                 peer = SipTLS('127.0.0.1', 5061, prepared['ca'], endpoint, secrets.token_hex(24))
                 try:
+                    report['phase'] = 'wrong_password:'+tenant
                     report['checks']['wrong_password:'+tenant] = peer.register() in (401,403)
                 finally:
                     peer.close()
@@ -184,13 +211,7 @@ def run(root, report):
             if started:
                 logs = command(['docker','logs',name], check=False)
                 raw = logs.stdout + logs.stderr
-                report['startup_diagnostics'] = [line[:250] for line in raw.splitlines()
-                    if any(term in line for term in ('does not exist', 'Unable to open', 'Unable to load',
-                        'Unable to create', 'No such file', 'Permission denied', 'Cannot open', 'not found'))
-                    and not any(term in line.lower() for term in ('password', 'secret', 'auth', 'nonce'))][:12]
-                # Somente erros com nomes de templates; nunca linhas SIP, chaves ou áudio.
-                report['missing_templates'] = sorted(set(re.findall(
-                    r"Inheritance requested, but category '([A-Za-z0-9_!,-]+)' does not exist", raw)))
+                report['startup_diagnostics'] = diagnose(raw)
                 cleaned = command(['docker','rm','--force','--volumes',name], check=False)
                 report['checks']['container_removed'] = cleaned.returncode == 0
     report.update(summarize(report['checks']))
@@ -208,6 +229,11 @@ def main(argv=None):
         success = False
         report['success'] = False
         report['error_type'] = type(exc).__name__
+        known_errors = {'REGISTER inicial deve exigir autenticação': 'challenge_expected',
+                        'resposta de outra transação SIP': 'transaction_mismatch',
+                        'desafio REGISTER ausente ou ambíguo': 'challenge_missing',
+                        'Content-Length SIP inválido': 'content_length_invalid'}
+        report['error_reason'] = known_errors.get(str(exc), 'other')
     args.report.parent.mkdir(parents=True, exist_ok=True)
     args.report.write_text(json.dumps(report, indent=2, sort_keys=True)+'\n')
     checks = report.get('checks', {})
@@ -216,7 +242,7 @@ def main(argv=None):
     for key, passed in checks.items():
         print(f"  {key}: {'PASS' if passed else 'FAIL'}")
     if report.get('error_type'):
-        print('Falha: '+report['error_type'])
+        print('Falha: '+report['error_type']+' / '+report['error_reason'])
     return 0 if success else 1
 
 

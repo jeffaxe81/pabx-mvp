@@ -76,12 +76,28 @@ def test_sip_client_rejects_non_loopback_target_before_connecting(tmp_path):
 def test_summary_requires_every_named_check_and_never_approves_empty_results():
     from lab.asterisk_lab import summarize
     checks = {'real_runtime': True, 'tls_transport': True, 'wss_transport': True,
-              'container_removed': True}
+              'container_removed': True, 'checkout_clean': True,
+              'runtime_mounts': True, 'source_label': True}
     for tid in ('t1', 't2', 't3'):
         for name in ('context', 'register', 'contact', 'unregister', 'wrong_password'):
             checks[name+':'+tid] = True
-    assert summarize(checks) == {'passed': 19, 'total': 19, 'success': True}
+    assert summarize(checks) == {'passed': 22, 'total': 22, 'success': True}
     assert summarize({})['success'] is False
     assert summarize({**checks, 'register:t2': False})['success'] is False
     assert summarize({k:v for k,v in checks.items() if k != 'contact:t3'})['success'] is False
     assert summarize({**checks, 'unregister:t1': 1})['success'] is False
+
+
+def test_startup_diagnostics_never_copy_raw_lines_or_credentials():
+    from lab.asterisk_lab import diagnose
+    import json
+    raw = ("Unable to open Asterisk database '/private/SECRET_PRIVATE': unable to open database file\n"
+           "Inheritance requested, but category 'endpoint-base!' does not exist\n"
+           "Unable to open pid file '/run/SECRET_PRIVATE': Permission denied\n"
+           'Authorization: Digest response="SECRET_PRIVATE"\n')
+    result = diagnose(raw)
+    assert result['missing_template'] is True
+    assert result['permission_denied'] is True
+    assert result['database_unavailable'] is True
+    assert 'SECRET_PRIVATE' not in json.dumps(result)
+    assert all(type(value) is bool for value in result.values())
