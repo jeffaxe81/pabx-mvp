@@ -908,3 +908,4 @@ Veja o [Manual 100](docs/manual-100-release-evidence.md).
 107. [Gravações: isolamento ACL por tenant](docs/manual-107-gravacoes-isolamento-acl.md)
 108. [Roteamento seguro de filas por empresa](docs/manual-108-filas-por-tenant.md)
 109. [Negativas SIP reais entre empresas](docs/manual-109-negativas-sip-entre-empresas.md)
+110. [Catálogo ACL de gravações com leitura atômica](docs/manual-110-catalogo-acl-atomico.md)
