@@ -131,3 +131,8 @@ def test_incoming_bye_with_wrong_dialogue_is_rejected():
     finally:
         client.close()
         server.close()
+
+
+def test_contact_transport_is_case_insensitive_for_asterisk_wire_format():
+    from lab.sip_calls import contact_uri
+    assert contact_uri({'contact':['<sip:asterisk@127.0.0.1:5061;transport=TLS>']}) == 'sip:asterisk@127.0.0.1:5061;transport=TLS'

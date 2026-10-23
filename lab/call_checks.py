@@ -92,7 +92,12 @@ def exercise_calls(container, prepared, report):
                 resources.callback(right.close)
                 checks['call_register'+suffix] = caller.register() == 200 and callee.register() == 200
                 pending = executor.submit(callee.answer, right)
-                caller_dialog = caller.dial(destination, left)
+                try:
+                    caller_dialog = caller.dial(destination, left)
+                except Exception:
+                    if pending.done():
+                        pending.result()  # Preserve a causa da ponta chamada, não só timeout.
+                    raise
                 callee_dialog = pending.result(timeout=14)
                 checks['call_established'+suffix] = True
                 report['phase'] = 'media'+suffix

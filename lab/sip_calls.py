@@ -23,7 +23,7 @@ def tag(value):
 
 def contact_uri(headers):
     value = single(headers, 'contact')
-    match = re.fullmatch(r'<(sip:[A-Za-z0-9_.-]+@127\.0\.0\.1(?::[0-9]{1,5})?(?:;transport=tls)?)>', value)
+    match = re.fullmatch(r'<(sip:[A-Za-z0-9_.-]+@127\.0\.0\.1(?::[0-9]{1,5})?(?:;transport=(?i:tls))?)>', value)
     if not match:
         raise ValueError('contato SIP fora do loopback')
     return match[1]
