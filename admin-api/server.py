@@ -39,6 +39,7 @@ from users import load_users, save_users, find_user, add_user, update_user, dele
 from totp import generate_secret, verify_totp, build_provisioning_uri
 
 HTTP_PORT = int(os.environ.get("HTTP_PORT", "8091"))
+MAX_JSON_BODY_BYTES = 64 * 1024  # Limite de entrada para APIs administrativas
 STORE_PATH = os.environ.get("STORE_PATH", "/app/data/extensions_store.json")
 TENANTS_PATH = os.environ.get("TENANTS_PATH", "/app/data/tenants.json")
 
@@ -169,11 +170,40 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def _read_json_body(self):
-        length = int(self.headers.get("Content-Length", 0))
-        try:
-            return json.loads(self.rfile.read(length) or b"{}")
-        except json.JSONDecodeError:
+        """JSON administrativo: tamanho limitado, enquadramento sem ambiguidade.
+
+        Em corpo inválido, fecha a conexão para que bytes sobrando
+        não sejam tratados como uma nova requisição HTTP.
+        """
+        def reject():
+            self.close_connection = True
             return None
+
+        if self.headers.get("Transfer-Encoding") is not None:
+            return reject()
+        lengths = self.headers.get_all("Content-Length", [])
+        if len(lengths) > 1:
+            return reject()
+        raw_length = lengths[0] if lengths else "0"
+        if not isinstance(raw_length, str) or not raw_length.isascii() or not raw_length.isdecimal():
+            return reject()
+        try:
+            length = int(raw_length)
+        except ValueError:
+            return reject()
+        if length > MAX_JSON_BODY_BYTES:
+            return reject()
+
+        try:
+            raw = self.rfile.read(length)
+            if len(raw) != length:
+                return reject()
+            decoded = json.loads(raw or b"{}")
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError, ValueError):
+            return reject()
+        if not isinstance(decoded, dict):
+            return reject()
+        return decoded
 
     def _authenticated_username(self):
         auth_header = self.headers.get("Authorization", "")
