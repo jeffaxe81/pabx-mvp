@@ -106,7 +106,7 @@ def validate_persisted_extensions(extensions: list, tenant_ids: set) -> None:
             raise ValueError("registro de ramal invalido")
         tenant = ext.get("tenant", "t1")
         if not isinstance(tenant, str) or tenant not in tenant_ids:
-            raise ValueError("ramal pertence a tenant nao provisionado")
+            raise ValueError("ramal pertence a tenant não provisionado")
         name = ext.get("name")
         if not isinstance(name, str) or not _NAME.fullmatch(name):
             raise ValueError("identificador de ramal invalido")
@@ -131,6 +131,14 @@ def validate_persisted_extensions(extensions: list, tenant_ids: set) -> None:
             number_ok = 1100 <= parsed_number <= 1199
         else:
             number_ok, parsed_number = False, -1
+        # O painel só cria 1100-1199. O laboratório usa números 1001
+        # e 1002 em t2/t3 para provar as chamadas reais, sem usurpar
+        # endpoints numéricos já existentes nos contextos estáticos.
+        if (not number_ok and parsed_number in (1001, 1002)):
+            number_ok = (
+                tenant not in ("t1", "t2")
+                or (tenant == "t2" and parsed_number == 1002)
+            )
         if not number_ok:
             raise ValueError("numero de ramal invalido")
         if (tenant, parsed_number) in extensions_by_tenant:
@@ -174,13 +182,16 @@ def render_all(extensions: list, tenant_ids=None) -> dict:
     validate_persisted_extensions(extensions, allowed)
 
     by_tenant = {tid: [] for tid in allowed}
+    normalized = []
     for extension in extensions:
         tenant = extension.get("tenant", "t1")
-        if tenant not in by_tenant:
-            raise ValueError(f"ramal pertence a tenant não provisionado: {tenant}")
-        by_tenant[tenant].append(extension)
+        # O legado sem chave 'tenant' pertence a t1. Cópia evita
+        # alterar snapshot do cadastro durante publicação de arquivos.
+        ready = {**extension, "tenant": tenant}
+        by_tenant[tenant].append(ready)
+        normalized.append(ready)
 
-    files = {"pjsip_dynamic.conf": render_pjsip_dynamic(extensions)}
+    files = {"pjsip_dynamic.conf": render_pjsip_dynamic(normalized)}
     for tenant in sorted(allowed):
         tenant_extensions = by_tenant[tenant]
         files[f"extensions_dynamic_dial-{tenant}.conf"] = render_extensions_dynamic_dial(tenant_extensions)
