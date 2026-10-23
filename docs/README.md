@@ -129,6 +129,8 @@ configurar, como testar manualmente, e limitações conhecidas.
 
 94. [Criação de tenant com compensação de DID e arquivos](manual-94-tenant-create-compensation.md)
 
+95. [Remoção compensável de tenants e ramais](manual-95-remocao-tenant-compensavel.md)
+
 ## Regra de manutenção
 
 Toda vez que uma funcionalidade nova for implementada no projeto, um
