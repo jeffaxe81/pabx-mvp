@@ -185,3 +185,17 @@ def test_main_fails_when_live_asterisk_not_available(capsys):
     report = json.loads(capsys.readouterr().out)
     assert exit_code == 1
     assert not report["ready_for_call_homologation"]
+
+def test_cli_can_bind_report_to_operator_declared_sha_without_verifying_deployment(capsys):
+    with patch("asterisk_lab_audit.run_cli", return_value=snapshots({})):
+        result = lab.main(["--runtime", "local", "--source-commit", "A" * 40])
+    assert result == 0
+    report = json.loads(capsys.readouterr().out)
+    assert report["source_commit"] == "a" * 40
+    assert report["source_commit_verified_by_this_tool"] is False
+
+
+def test_cli_rejects_invalid_source_commit():
+    with pytest.raises(SystemExit) as raised:
+        lab.main(["--source-commit", "not-a-sha"])
+    assert raised.value.code == 2

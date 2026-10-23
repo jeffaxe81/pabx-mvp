@@ -178,7 +178,10 @@ def main(argv=None):
     parser.add_argument("--container", default="pabx-mvp")
     parser.add_argument("--tenant-registry", help="Arquivo tenants.json privado para verificar t3+")
     parser.add_argument("--timeout", type=int, default=8)
+    parser.add_argument("--source-commit", help="SHA de 40 caracteres do release implantado (declarado pelo operador)")
     args = parser.parse_args(argv)
+    if args.source_commit is not None and not re.fullmatch(r"[0-9a-fA-F]{40}", args.source_commit):
+        parser.error("source-commit deve ser SHA Git completo de 40 caracteres")
     try:
         expected = read_expected_tenants(args.tenant_registry)
         commands = planned_commands(expected)
@@ -189,6 +192,8 @@ def main(argv=None):
         parser.error(f"auditoria inválida: {type(exc).__name__}")
     report["timestamp_utc"] = datetime.now(timezone.utc).isoformat()
     report["runtime"] = args.runtime
+    report["source_commit"] = args.source_commit.lower() if args.source_commit else None
+    report["source_commit_verified_by_this_tool"] = False
     print(json.dumps(report, indent=2, sort_keys=True, ensure_ascii=False))
     return 0 if report["ready_for_call_homologation"] else 1
 
