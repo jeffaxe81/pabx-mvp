@@ -191,7 +191,7 @@ def run(root, report):
                 # Somente erros com nomes de templates; nunca linhas SIP, chaves ou áudio.
                 report['missing_templates'] = sorted(set(re.findall(
                     r"Inheritance requested, but category '([A-Za-z0-9_!,-]+)' does not exist", raw)))
-                cleaned = command(['docker','rm','--force',name], check=False)
+                cleaned = command(['docker','rm','--force','--volumes',name], check=False)
                 report['checks']['container_removed'] = cleaned.returncode == 0
     report.update(summarize(report['checks']))
     return report['success']

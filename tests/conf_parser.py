@@ -7,13 +7,13 @@ reais do pjsip.conf:
 1. O mesmo nome de seção aparece várias vezes (ex: [t1-1001] como
    endpoint, depois de novo como auth, depois de novo como aor).
 2. Herança de templates: `[t1-1001](endpoint-secure)` herda chaves de
-   `[endpoint-secure](endpoint-base!)`, que por sua vez herda de
+   `[endpoint-secure](!,endpoint-base)`, que por sua vez herda de
    `[endpoint-base](!)`. Uma chave como `webrtc=yes` pode não estar
    escrita literalmente no bloco do endpoint final - ela só existe no
    template. Os testes precisam enxergar isso.
 
 Para os testes, cada seção vira um dict com: name, template_ref (nome
-do template do qual herda, sem o sufixo "!", ou None) e text (o texto
+do template do qual herda, com "!" como marcador separado, ou None) e text (o texto
 cru do bloco, sem herança resolvida).
 """
 import re
@@ -40,9 +40,12 @@ def parse_blocks(path: Path):
             name = match.group(1)
             template_raw = match.group(2)
             template_ref = None
-            if template_raw and template_raw != "!":
-                # remove o sufixo "!" (marca "esta seção também é template")
-                template_ref = template_raw.rstrip("!") or None
+            if template_raw:
+                tokens = [value.strip() for value in template_raw.split(',')]
+                parents = [value for value in tokens if value != '!']
+                if any('!' in value for value in parents) or len(parents) > 1:
+                    raise ValueError('herança de template Asterisk inválida ou não suportada')
+                template_ref = parents[0] if parents else None
 
             current = {"name": name, "template_ref": template_ref, "text": []}
         else:
