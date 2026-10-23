@@ -164,3 +164,38 @@ def test_missing_application_events_cannot_prove_a_clean_negative_path():
     from lab.did_evidence import evaluate_trace
     rows = [row for row in trace_rows() if row[0]!='APP_START']
     assert evaluate_trace(csv_text(rows))['no_side_effects'] is False
+
+
+@pytest.mark.parametrize('event,application', [('APP_END','Dial'),('APP_END','Record'),
+                                             ('APP_END','VoiceMail'),('APP_END','Answer'),
+                                             ('BRIDGE_EXIT','')])
+def test_explicit_forbidden_end_event_blocks_rejection_even_if_start_is_missing(event,application):
+    from lab.did_evidence import evaluate_trace, evaluate_cdr
+    rows = trace_rows()
+    extra = list(rows[1]); extra[0] = event; extra[4] = application
+    rows.insert(1,extra)
+    result = evaluate_trace(csv_text(rows))
+    valid = all(result[key] for key in ('well_formed','correlated','complete','isolated',
+                                        'never_answered','no_delivery','no_side_effects','cause_21'))
+    assert not (valid and all(evaluate_cdr(csv_text([cdr_row()]),result).values()))
+
+
+@pytest.mark.parametrize('mutation', ['reversed','duplicate_start','duplicate_hangup','duplicate_end','early_link_end'])
+def test_lifecycle_must_be_unique_and_ordered(mutation):
+    from lab.did_evidence import evaluate_trace
+    rows = trace_rows()
+    if mutation=='reversed': rows.reverse()
+    elif mutation=='early_link_end': rows.insert(1,rows.pop())
+    else:
+        name = {'duplicate_start':'CHAN_START','duplicate_hangup':'HANGUP','duplicate_end':'CHAN_END'}[mutation]
+        rows.insert(1,list(next(row for row in rows if row[0]==name)))
+    assert evaluate_trace(csv_text(rows))['complete'] is False
+
+
+def test_positive_dial_application_end_does_not_count_as_another_dial():
+    from lab.did_evidence import evaluate_trace
+    rows = trace_rows('t1')
+    end = list(rows[3]); end[0] = 'APP_END'
+    rows.insert(-3,end)
+    result = evaluate_trace(csv_text(rows),'t1')
+    assert result['one_dial'] is True and result['routed'] is True

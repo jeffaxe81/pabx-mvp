@@ -1,4 +1,4 @@
-# Manual 104 — Trilha CEL e CDR da mesma chamada de DID
+# Manual 105 — Trilha CEL e CDR da mesma chamada de DID
 
 ## Finalidade
 
@@ -27,7 +27,7 @@ retorna código de saída 1. Os outros modos não habilitam CEL.
 
 | Prova | Aceite exigido |
 |---|---|
-| Ciclo | CHAN_START, HANGUP, CHAN_END e LINKEDID_END presentes |
+| Ciclo | Um CHAN_START, HANGUP e CHAN_END por canal, nessa ordem, antes do LINKEDID_END |
 | Correlação | Uniqueid/linkedid coerentes, canal constante por uniqueid |
 | DID conhecido | Somente duas pernas, ponte e destino 1001 da empresa correta |
 | DID rejeitado | Causa 21, nenhuma resposta, ponte ou nova perna |
@@ -74,7 +74,12 @@ contêm somente nomes fixos de cenário e diagnósticos booleanos. O container
   [main/cel.c — Asterisk 22.11.0](https://github.com/asterisk/asterisk/blob/22.11.0/main/cel.c).
 - Um teste herdado de cleanup iniciava seu timeout antes de o processo Node
   instalar o handler de sinal. A fixture agora confirma prontidão antes do
-  timeout, com atraso de partida simulado; processos e sinais continuam reais.
+  timeout, conforme correção herdada da PR #56.
+- A revisão independente identificou eventos de término sem o início
+  correspondente que podiam passar pela prova negativa. APP_END de
+  aplicações proibidas e BRIDGE_EXIT agora também reprovam. A consistência
+  do ciclo foi reforçada para recusar eventos fora de ordem ou duplicados,
+  com regressões observadas em RED→GREEN.
 - A revisão independente e a execução final serão registradas após a
   aprovação dos critérios. Nenhum marco é promovido por testes de fixture.
 

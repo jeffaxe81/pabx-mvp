@@ -19,32 +19,59 @@ function isRemoteAudioPlaying(audio, track) {
     && !audio.paused && audio.readyState >= 2 && !audio.muted && audio.volume > 0);
 }
 
-function describeStats(rows) {
+async function verifyRemoteCertificate(certificate, sdp) {
+  if (!(certificate instanceof ArrayBuffer) || certificate.byteLength === 0 || certificate.byteLength > 65536
+      || typeof sdp !== 'string' || sdp.length > 65536) return false;
+  const sections = sdp.replace(/\r/g,'').split('\nm=');
+  const audio = sections.slice(1).filter(section => section.startsWith('audio '));
+  if (audio.length !== 1) return false;
+  const fingerprints = audio[0].match(/^a=fingerprint:.*$/gm) || sections[0].match(/^a=fingerprint:.*$/gm) || [];
+  if (fingerprints.length !== 1) return false;
+  const match = fingerprints[0].match(/^a=fingerprint:sha-256[ \t]+((?:[0-9a-f]{2}:){31}[0-9a-f]{2})[ \t]*$/i);
+  if (!match) return false;
+  try {
+    const digest = new Uint8Array(await crypto.subtle.digest('SHA-256',certificate));
+    const actual = [...digest].map(byte => byte.toString(16).padStart(2,'0')).join('');
+    return actual === match[1].replace(/:/g,'').toLowerCase();
+  } catch (_) { return false; }
+}
+
+function describeStats(rows,remoteFingerprintVerified=false) {
   const reports = new Map(rows.map(row => [row.id,row]));
   const outbound = rows.find(row => row.type === 'outbound-rtp' && row.kind === 'audio');
   const inbound = rows.find(row => row.type === 'inbound-rtp' && row.kind === 'audio');
   const transport = reports.get(outbound?.transportId);
   const pair = reports.get(transport?.selectedCandidatePairId);
   const state = (value,allowed) => allowed.includes(value) ? value : 'unknown';
+  const algorithm = id => {
+    const value = reports.get(id)?.fingerprintAlgorithm;
+    return value === undefined ? 'missing' : state(value,['sha-1','sha-256','sha-384','sha-512']);
+  };
   return { outbound:Boolean(outbound),inbound:Boolean(inbound),
     dtls:state(transport?.dtlsState,['new','connecting','connected','closed','failed']),
     pair:state(pair?.state,['frozen','waiting','in-progress','failed','succeeded']),
     nominated:pair?.nominated === true,
     local_sha256:reports.get(transport?.localCertificateId)?.fingerprintAlgorithm === 'sha-256',
     remote_sha256:reports.get(transport?.remoteCertificateId)?.fingerprintAlgorithm === 'sha-256',
+    local_algorithm:algorithm(transport?.localCertificateId),
+    remote_algorithm:algorithm(transport?.remoteCertificateId),
+    remote_certificate_verified:remoteFingerprintVerified === true,
     cipher_supported:CIPHERS.has(transport?.srtpCipher) };
 }
 
-function assessStats(rows) {
+function assessStats(rows,remoteFingerprintVerified=false) {
   const reports = new Map(rows.map(row => [row.id,row]));
   const outbound = rows.find(row => row.type === 'outbound-rtp' && row.kind === 'audio');
   const inbound = rows.find(row => row.type === 'inbound-rtp' && row.kind === 'audio');
   const transport = reports.get(outbound?.transportId);
   const pair = reports.get(transport?.selectedCandidatePairId);
-  const certificates = [reports.get(transport?.localCertificateId),reports.get(transport?.remoteCertificateId)];
+  const local = reports.get(transport?.localCertificateId),remote = reports.get(transport?.remoteCertificateId);
+  // O certificado remoto pode faltar no getStats. Só usar a prova nativa
+  // DER/SDP nesse caso; uma estatística presente com outro hash reprova.
+  const remoteSha256 = remote ? remote.fingerprintAlgorithm === 'sha-256' : remoteFingerprintVerified === true;
   const dtls = Boolean(transport?.dtlsState === 'connected' && inbound?.transportId === outbound?.transportId
     && pair?.state === 'succeeded' && pair?.nominated === true
-    && certificates.every(cert => cert?.fingerprintAlgorithm === 'sha-256'));
+    && local?.fingerprintAlgorithm === 'sha-256' && remoteSha256);
   const cipher = CIPHERS.get(transport?.srtpCipher) || '';
   const sent = Number.isFinite(outbound?.packetsSent) ? outbound.packetsSent : 0;
   const received = Number.isFinite(inbound?.packetsReceived) ? inbound.packetsReceived : 0;
@@ -91,6 +118,7 @@ function watchWebSocket(page, expected) {
 
 async function instrument(page, hz) {
   await page.addInitScript('window.__axeRemoteAudioPlaying = '+isRemoteAudioPlaying.toString()+';');
+  await page.addInitScript('window.__axeVerifyRemoteCertificate = '+verifyRemoteCertificate.toString()+';');
   await page.addInitScript(({ hz }) => {
     const state = window.__axeLab = { pcs:[], contexts:[] };
     const NativePC = window.RTCPeerConnection;
@@ -117,7 +145,15 @@ async function mediaProof(page) {
     const state = window.__axeLab, pc = state.pcs.at(-1);
     if (!pc) return { stats:[], peak_hz:0, rms:0, audio_attached:false, local_ice:false };
     const stats = [...(await pc.getStats()).values()];
-    const track = pc.getReceivers().find(receiver => receiver.track?.kind === 'audio')?.track;
+    const receiver = pc.getReceivers().find(receiver => receiver.track?.kind === 'audio');
+    const track = receiver?.track;
+    let remote_fingerprint_verified = false;
+    if (receiver?.transport?.state === 'connected') {
+      try {
+        remote_fingerprint_verified = await window.__axeVerifyRemoteCertificate(
+          receiver.transport.getRemoteCertificates()[0],pc.remoteDescription?.sdp);
+      } catch (_) {}
+    }
     const audio = document.querySelector('#remoteAudio');
     const audio_attached = window.__axeRemoteAudioPlaying(audio,track);
     if (audio_attached && state.analyserTrack !== track.id) {
@@ -138,11 +174,12 @@ async function mediaProof(page) {
       peak_hz = peak*state.analyser.context.sampleRate/state.analyser.fftSize;
       rms = Math.sqrt(samples.reduce((sum,value) => sum+value*value,0)/samples.length);
     }
-    return { stats, peak_hz, rms, audio_attached,
+    return { stats, peak_hz, rms, audio_attached,remote_fingerprint_verified,
       local_ice:(pc.getConfiguration().iceServers || []).length === 0 };
   });
-  return { ...assessStats(raw.stats), peak_hz:raw.peak_hz, rms:raw.rms,
-           audio_attached:raw.audio_attached, local_ice:raw.local_ice,diagnostics:describeStats(raw.stats) };
+  return { ...assessStats(raw.stats,raw.remote_fingerprint_verified), peak_hz:raw.peak_hz, rms:raw.rms,
+           audio_attached:raw.audio_attached, local_ice:raw.local_ice,
+           diagnostics:describeStats(raw.stats,raw.remote_fingerprint_verified) };
 }
 
 async function run(inputFile, outputFile) {
@@ -208,12 +245,15 @@ async function run(inputFile, outputFile) {
         const establishedAt = performance.now();
         report.phase = 'media'+suffix;
         let left, right;
-        for (let attempt=0;attempt<60;attempt++) {
+        // Confirmação SIP precede ICE/DTLS. O runner pode atrasar os callbacks;
+        // aguardar o estado real de mídia, sempre com prazo máximo explícito.
+        const mediaDeadline = performance.now()+20000;
+        do {
           [left,right] = await Promise.all(pages.map(mediaProof));
           if ([left,right].every(p => p.rtp && p.audio_attached && p.rms > 0.015)
               && Math.abs(left.peak_hz-880)<70 && Math.abs(right.peak_hz-440)<70) break;
           await new Promise(resolve => setTimeout(resolve,100));
-        }
+        } while (performance.now()<mediaDeadline);
         diagnostics[tenant+':'+direction] = {left:left.diagnostics,right:right.diagnostics};
         delete left.diagnostics; delete right.diagnostics;
         const proofs = [left,right];
@@ -253,7 +293,7 @@ async function run(inputFile, outputFile) {
   return report.success;
 }
 
-module.exports = { assessStats, isRemoteAudioPlaying, describeStats };
+module.exports = { assessStats, isRemoteAudioPlaying, describeStats, verifyRemoteCertificate };
 if (require.main === module) {
   run(process.argv[2],process.argv[3]).then(success => { process.exitCode = success ? 0 : 1; })
     .catch(() => { process.exitCode = 1; });

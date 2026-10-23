@@ -78,7 +78,7 @@ def evaluate_trace(raw,tenant=None):
     rows = parse_cel(raw)
     result = {key:False for key in ('well_formed','correlated','complete','routed','isolated',
                                    'never_answered','no_delivery','no_side_effects','cause_21','entered_ura',
-                                   'ingress_context','one_dial','dial_destination','bridge_both')}
+                                   'ingress_context','one_dial','dial_destination','bridge_both','lifecycle_consistent')}
     if not rows:
         return result
     result['well_formed'] = True
@@ -96,10 +96,21 @@ def evaluate_trace(raw,tenant=None):
                             and identities=={row['uniqueid'] for row in starts}
                             and len(starts)==len(identities)
                             and all(channels.get(row['uniqueid'])==row['channel'] for row in rows))
-    result['complete'] = (result['correlated'] and sum(row['event']=='LINKEDID_END' for row in rows)==1 and all(
-        any(row['event']==event and row['uniqueid']==identity for row in rows)
-        for identity in identities for event in ('HANGUP','CHAN_END')))
-    applications = [row for row in rows if row['event']=='APP_START']
+    lifecycle_events = ('CHAN_START','HANGUP','CHAN_END')
+    positions = {identity:{event:[] for event in lifecycle_events} for identity in identities}
+    linked_end = []
+    for index,row in enumerate(rows):
+        if row['event'] in lifecycle_events:
+            positions[row['uniqueid']][row['event']].append(index)
+        elif row['event']=='LINKEDID_END':
+            linked_end.append(index)
+    result['lifecycle_consistent'] = (len(linked_end)==1
+        and all(all(len(events[name])==1 for name in lifecycle_events)
+                and events['CHAN_START'][0]<events['HANGUP'][0]<events['CHAN_END'][0]<linked_end[0]
+                for events in positions.values()))
+    result['complete'] = result['correlated'] and result['lifecycle_consistent']
+    applications = [row for row in rows if row['event'] in ('APP_START','APP_END')]
+    application_starts = [row for row in applications if row['event']=='APP_START']
     result['entered_ura'] = any(row['context']=='ura-principal' for row in rows)
     if tenant:
         destinations = [row for row in starts if re.fullmatch(r'PJSIP/'+tenant+r'-1001-[0-9a-f]+',row['channel'])]
@@ -110,7 +121,7 @@ def evaluate_trace(raw,tenant=None):
         result['isolated'] = (len(starts)==2 and len(destinations)==1
                               and all(row['context'] in allowed for row in rows)
                               and all(row['account'] in ('',tenant) for row in rows))
-        dial = [row for row in applications if row['application'].lower()=='dial']
+        dial = [row for row in application_starts if row['application'].lower()=='dial']
         bridge_ids = {row['uniqueid'] for row in rows if row['event']=='BRIDGE_ENTER'}
         result.update(ingress_context=origin['context']=='from-tdm-gateway',one_dial=len(dial)==1,
                       dial_destination=len(dial)==1 and dial[0]['data'].split(',')[0]=='PJSIP/'+tenant+'-1001',
@@ -121,11 +132,11 @@ def evaluate_trace(raw,tenant=None):
         result['isolated'] = all(row['context']=='from-tdm-gateway' and not row['account'] for row in rows)
         result['never_answered'] = (not any(row['event']=='ANSWER' for row in rows)
                                     and not any(row['application'].lower()=='answer' for row in applications))
-        result['no_delivery'] = (len(starts)==1 and not any(row['event']=='BRIDGE_ENTER' for row in rows)
+        result['no_delivery'] = (len(starts)==1 and not any(row['event'] in ('BRIDGE_ENTER','BRIDGE_EXIT') for row in rows)
                                  and not any(row['application'].lower() in ('dial','queue') for row in applications))
         result['no_side_effects'] = (result['isolated'] and bool(applications)
                                      and all(row['application'].lower() in SAFE_REJECTION_APPS for row in applications)
-                                     and any(row['application'].lower()=='hangup' and row['data']=='21' for row in applications))
+                                     and any(row['application'].lower()=='hangup' and row['data']=='21' for row in application_starts))
         hangups = [row for row in rows if row['event']=='HANGUP' and row['uniqueid']==origin['uniqueid']]
         result['cause_21'] = len(hangups)==1 and _cause(hangups[0]['extra'])==21
     return result

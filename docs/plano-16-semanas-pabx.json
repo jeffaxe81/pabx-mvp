@@ -68,8 +68,8 @@
       "area": "media",
       "acceptance": "Áudio bidirecional, criptografia negociada e evidência segura",
       "status": "done",
-      "pr_number": 57,
-      "ci_run_id": 40007838427,
+      "pr_number": 56,
+      "ci_run_id": 40008037655,
       "requires_lab": true
     },
     {

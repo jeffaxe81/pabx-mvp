@@ -72,8 +72,10 @@ def browser_failure_details(details):
     if not isinstance(details,dict): return {}
     result={}
     states={'dtls':{'unknown','new','connecting','connected','closed','failed'},
-            'pair':{'unknown','frozen','waiting','in-progress','failed','succeeded'}}
-    flags={'outbound','inbound','nominated','local_sha256','remote_sha256','cipher_supported'}
+            'pair':{'unknown','frozen','waiting','in-progress','failed','succeeded'},
+            'local_algorithm':{'missing','unknown','sha-1','sha-256','sha-384','sha-512'},
+            'remote_algorithm':{'missing','unknown','sha-1','sha-256','sha-384','sha-512'}}
+    flags={'outbound','inbound','nominated','local_sha256','remote_sha256','cipher_supported','remote_certificate_verified'}
     for tenant in TENANTS:
         for direction in DIRECTIONS:
             identity=tenant+':'+direction
@@ -130,7 +132,7 @@ def prepare_webrtc(root,prepared,source):
     prepared.update(webrtc_input=target,webrtc_source=source)
 
 
-def run_browser(root,input_file,output_file,*,timeout=160):
+def run_browser(root,input_file,output_file,*,timeout=240):
     with subprocess.Popen(['node',str(Path(root)/'lab/webrtc_browser.cjs'),str(input_file),str(output_file)],
                           stdout=subprocess.PIPE,stderr=subprocess.PIPE,start_new_session=True) as process:
         try: process.communicate(timeout=timeout)

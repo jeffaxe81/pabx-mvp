@@ -32,8 +32,8 @@
 
 **Interfaces:** `npm ci --ignore-scripts`; `node scripts/build_webphone_sip.cjs [--check]` produz/compara um bundle local JsSIP, sem dependência de CDN durante chamadas.
 
-- [ ] Reproduzir disponibilidade da dependência atual; testes de carregamento e bundle real em navegador.
-- [ ] Gerar bundle com versão e licença, testar regressões da interface.
+- [x] Reproduzir disponibilidade da dependência atual; testes de carregamento e bundle real em navegador.
+- [x] Gerar bundle com versão e licença, testar regressões da interface.
 
 ### Task 2: Laboratório WSS e WebRTC
 
@@ -41,14 +41,24 @@
 
 **Interfaces:** `--webrtc` exige `--calls`; acrescenta aceites explícitos de WSS/DTLS/áudio/CDR nas seis chamadas de t1/t2/t3. O runner Node recebe somente caminho privado e escreve JSON sanitizado; Python valida esse JSON antes de incorporá-lo ao relatório.
 
-- [ ] Escrever testes de verificação WSS/relatório incompleto/negação de certificado; observar RED→GREEN.
-- [ ] Operar a UI real, comparar tom remoto e obter estatísticas reais de transporte; executar em CI.
-- [ ] Corrigir causas comprovadas em runtime, preservando critérios de aceite e acrescentando regressões.
+- [x] Escrever testes de verificação WSS/relatório incompleto/negação de certificado; observar RED→GREEN.
+- [x] Operar a UI real, comparar tom remoto e obter estatísticas reais de transporte; executar em CI.
+- [x] Corrigir causas comprovadas em runtime, preservando critérios de aceite e acrescentando regressões.
 
 ### Task 3: Revisão, evidências e entrega
 
 **Files:** docs/manual-103-webrtc-real.md, docs/README.md, README.md, docs/plano-16-semanas-pabx.json.
 
-- [ ] Rodar oito suítes Python, Node/navegador e laboratório real no SHA publicado.
-- [ ] Revisão independente, corrigir achados importantes com regressões.
-- [ ] Registrar somente aceites comprovados, verificar árvore publicada e apresentar PR para revisão.
+- [x] Rodar oito suítes Python, Node/navegador e laboratório real no SHA publicado.
+- [x] Revisão independente, corrigir achados importantes com regressões.
+- [x] Registrar somente aceites comprovados, verificar árvore publicada e apresentar PR para revisão.
+
+## Resultado verificado
+
+- Código publicado em `27025101bc4a39e09d9d666b6afb093aedd090f4`.
+- CI real 40008037655: 22/22 de registro, 70/70 de chamadas TLS/SDES e 138/138 do Webphone WSS/DTLS.
+- CI estática 40008037783: oito suítes Python aprovadas (1.370 testes).
+- CI de interface 40008037781: 19 Node e 24 Chromium aprovados.
+- Revisão independente: quatro achados importantes corrigidos com regressões; nenhum crítico.
+- Diagnóstico de execução: permissão nativa ICE, nomes IANA SRTP e certificado DER/SDP para estatística ausente.
+- Marco 6 concluído, 6/16 (37,5%); revisão via PR #56, sem integração automática em main ou GO.
