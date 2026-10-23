@@ -23,7 +23,7 @@ from urllib.parse import urlparse, parse_qs
 
 from auth import hash_password, verify_password, SessionStore
 from store import add_extension, update_extension, delete_extension, load_store, delete_extensions_by_tenant
-from conf_generator import render_all
+from conf_generator import render_all, render_pjsip_dynamic
 from ami_client import AMIClient
 from blocklist import validate_blocklist_number
 from vip import validate_vip_input
@@ -976,6 +976,14 @@ class Handler(BaseHTTPRequestHandler):
         ):
             Path(ASTERISK_CONF_DIR, filename).unlink(missing_ok=True)
         removed_extensions_count = delete_extensions_by_tenant(STORE_PATH, record["tenant_id"])
+        # O PJSIP é um arquivo compartilhado: remover o JSON do tenant
+        # não basta. Sem atualizar isto, endpoints antigos continuam
+        # disponíveis mesmo após excluir a empresa.
+        if removed_extensions_count:
+            remaining_extensions = load_store(STORE_PATH)
+            Path(ASTERISK_CONF_DIR, "pjsip_dynamic.conf").write_text(
+                render_pjsip_dynamic(remaining_extensions), encoding="utf-8"
+            )
 
         client = AMIClient(AMI_HOST, AMI_PORT, AMI_USERNAME, AMI_SECRET)
         try:
