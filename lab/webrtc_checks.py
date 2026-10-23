@@ -132,7 +132,7 @@ def prepare_webrtc(root,prepared,source):
     prepared.update(webrtc_input=target,webrtc_source=source)
 
 
-def run_browser(root,input_file,output_file,*,timeout=160):
+def run_browser(root,input_file,output_file,*,timeout=240):
     with subprocess.Popen(['node',str(Path(root)/'lab/webrtc_browser.cjs'),str(input_file),str(output_file)],
                           stdout=subprocess.PIPE,stderr=subprocess.PIPE,start_new_session=True) as process:
         try: process.communicate(timeout=timeout)

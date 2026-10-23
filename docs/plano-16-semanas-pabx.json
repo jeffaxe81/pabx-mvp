@@ -78,9 +78,9 @@
       "title": "Homologar DIDs conhecidos/desconhecidos",
       "area": "routing",
       "acceptance": "Encaminhamento correto e rejeição fail-closed com sinalização",
-      "status": "planned",
-      "pr_number": null,
-      "ci_run_id": null,
+      "status": "done",
+      "pr_number": 57,
+      "ci_run_id": 40009695151,
       "requires_lab": true
     },
     {

@@ -64,9 +64,10 @@ credenciais, chaves, CDR completo ou arquivos de áudio.
 ## Limites
 
 O marco 5 do programa só pode ser concluído após CI real bem-sucedida.
-WSS/DTLS do Webphone continua pendente no marco 6; este teste usa
-TLS e SDES-SRTP. Também permanecem pendentes os aceites completos de
-DID, isolamento funcional cruzado, filas, URA, transferência, gravações,
+Este teste usa TLS e SDES-SRTP. A homologação posterior de WSS/DTLS
+e dos DIDs está registrada no [Manual 104](manual-104-webrtc-dids-reais.md).
+Permanecem pendentes os aceites completos de isolamento funcional
+cruzado, filas, URA, transferência, gravações,
 restauração, carga e operação em servidor de homologação.
 `operational_go_authorized` permanece `false`.
 
@@ -102,4 +103,5 @@ aprovou as oito suítes Python. A validação local final passou em
 **1.361 testes Python e 7 Node**. A revisão independente teve três
 achados importantes, corrigidos com regressões; nenhum crítico ou
 menor adiado. O marco 5 está concluído, totalizando **5 de 16 marcos**.
-O marco 6 continua em andamento até a prova de WSS/DTLS.
+Naquele checkpoint, o marco 6 continuava em andamento. Sua conclusão
+posterior e a do marco 7 estão documentadas no Manual 104.

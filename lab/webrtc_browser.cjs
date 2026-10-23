@@ -245,12 +245,15 @@ async function run(inputFile, outputFile) {
         const establishedAt = performance.now();
         report.phase = 'media'+suffix;
         let left, right;
-        for (let attempt=0;attempt<60;attempt++) {
+        // Confirmação SIP precede ICE/DTLS. O runner pode atrasar os callbacks;
+        // aguardar o estado real de mídia, sempre com prazo máximo explícito.
+        const mediaDeadline = performance.now()+20000;
+        do {
           [left,right] = await Promise.all(pages.map(mediaProof));
           if ([left,right].every(p => p.rtp && p.audio_attached && p.rms > 0.015)
               && Math.abs(left.peak_hz-880)<70 && Math.abs(right.peak_hz-440)<70) break;
           await new Promise(resolve => setTimeout(resolve,100));
-        }
+        } while (performance.now()<mediaDeadline);
         diagnostics[tenant+':'+direction] = {left:left.diagnostics,right:right.diagnostics};
         delete left.diagnostics; delete right.diagnostics;
         const proofs = [left,right];

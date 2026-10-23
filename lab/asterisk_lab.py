@@ -164,7 +164,7 @@ def cleanup_owned(name, ownership):
     return result
 
 
-def summarize(checks, *, calls=False, webrtc=False):
+def summarize(checks, *, calls=False, webrtc=False, dids=False):
     required = {'real_runtime', 'tls_transport', 'wss_transport', 'container_removed',
                 'checkout_clean', 'runtime_mounts', 'source_label'}
     required.update(name+':'+tid for tid in ('t1', 't2', 't3')
@@ -175,14 +175,19 @@ def summarize(checks, *, calls=False, webrtc=False):
     if webrtc:
         from .webrtc_checks import required_webrtc_checks
         required.update(required_webrtc_checks())
+    if dids:
+        from .did_checks import required_did_checks
+        required.update(required_did_checks())
     passed = sum(value is True for value in checks.values())
     return {'passed': passed, 'total': len(checks),
             'success': set(checks) == required and passed == len(required)}
 
 
-def run(root, report, *, calls=False, webrtc=False):
+def run(root, report, *, calls=False, webrtc=False, dids=False):
     if webrtc and not calls:
         raise ValueError('WebRTC requer o modo de chamadas')
+    if dids and not calls:
+        raise ValueError('DIDs requerem o modo de chamadas')
     source = command(['git', '-C', str(root), 'rev-parse', 'HEAD']).stdout.strip()
     if not re.fullmatch(r'[0-9a-f]{40}', source):
         raise ValueError('SHA do checkout inválido')
@@ -196,6 +201,9 @@ def run(root, report, *, calls=False, webrtc=False):
                       wss_session_tested=False)
     if webrtc:
         report.update(schema_version=3,kind='real_asterisk_browser_webrtc_lab')
+    if dids:
+        report.update(schema_version=4,kind='real_asterisk_incoming_did_lab',
+                      live_did_routing_tested=False)
     clean = command(['git', '-C', str(root), 'diff', '--quiet', 'HEAD', '--',
                      'asterisk', 'admin-api/tenants.py', 'admin-api/conf_generator.py',
                      'scripts/secrets_generator.py', 'lab','webphone','package.json','package-lock.json',
@@ -216,6 +224,9 @@ def run(root, report, *, calls=False, webrtc=False):
         if webrtc:
             from .webrtc_checks import prepare_webrtc
             prepare_webrtc(root,prepared,source)
+        if dids:
+            from .did_checks import prepare_dids
+            prepare_dids(root,prepared,source)
         command(['docker', 'pull', IMAGE], timeout=180)
         image_data = json.loads(command(['docker', 'image', 'inspect', IMAGE]).stdout)[0]
         report['image_id'] = image_data['Id']
@@ -292,6 +303,9 @@ def run(root, report, *, calls=False, webrtc=False):
         if webrtc:
             from .webrtc_checks import exercise_webrtc
             exercise_webrtc(root,container_id,prepared,report)
+        if dids:
+            from .did_checks import exercise_dids
+            exercise_dids(container_id,prepared,report)
     finally:
         if attempted_create:
             cleaned = cleanup_owned(name, ownership)
@@ -301,7 +315,7 @@ def run(root, report, *, calls=False, webrtc=False):
         report['private_staging_retained'] = retain_staging
         if not retain_staging:
             shutil.rmtree(folder)
-    report.update(summarize(report['checks'], calls=calls,webrtc=webrtc))
+    report.update(summarize(report['checks'], calls=calls,webrtc=webrtc,dids=dids))
     return report['success']
 
 
@@ -310,12 +324,15 @@ def main(argv=None):
     parser.add_argument('--report', required=True, type=Path)
     parser.add_argument('--calls', action='store_true', help='testar chamadas, CDR e SRTP real')
     parser.add_argument('--webrtc', action='store_true', help='testar também a UI real com WSS e DTLS-SRTP')
+    parser.add_argument('--dids', action='store_true', help='testar DIDs estáticos, dinâmicos e rejeições SIP')
     args = parser.parse_args(argv)
     if args.webrtc and not args.calls:
         parser.error('--webrtc requer --calls')
+    if args.dids and not args.calls:
+        parser.error('--dids requer --calls')
     report = {}
     try:
-        success = run(Path(__file__).resolve().parents[1], report, calls=args.calls,webrtc=args.webrtc)
+        success = run(Path(__file__).resolve().parents[1], report, calls=args.calls,webrtc=args.webrtc,dids=args.dids)
     except Exception as exc:
         success = False
         report['success'] = False

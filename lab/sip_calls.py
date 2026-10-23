@@ -38,6 +38,13 @@ class Dialog:
     cseq: int
 
 
+class CallRejected(ValueError):
+    """Resposta final negativa já correlacionada e confirmada com ACK."""
+    def __init__(self, code):
+        self.code = code
+        super().__init__('chamada SIP rejeitada: '+str(code))
+
+
 class CallPeer(SipTLS):
     def __init__(self, *args):
         super().__init__(*args)
@@ -80,10 +87,11 @@ class CallPeer(SipTLS):
                 raise ValueError('resposta de outro diálogo SIP')
             self.events.append('response:'+match[1])
             if int(match[1]) >= 200:
+                tag(single(headers, 'to'))
                 return int(match[1]), headers, body
 
     def dial(self, number, media):
-        if not re.fullmatch(r'(?:t[1-9][0-9]*-)?[0-9]{3,6}', number):
+        if not re.fullmatch(r'(?:t[1-9][0-9]*-[0-9]{3,6}|[0-9]{3,15})', number):
             raise ValueError('destino do laboratório inválido')
         uri = f'sip:{number}@127.0.0.1:{self.target_port};transport=tls'
         dialog = Dialog(secrets.token_hex(16)+'@localhost',
@@ -109,7 +117,7 @@ class CallPeer(SipTLS):
         dialog.remote = single(headers, 'to')
         if code != 200:
             self.send_request(dialog, 'ACK', branch=branch)
-            raise ValueError('chamada SIP rejeitada: '+str(code))
+            raise CallRejected(code)
         tag(dialog.remote)
         dialog.uri = contact_uri(headers)
         self.send_request(dialog, 'ACK')
