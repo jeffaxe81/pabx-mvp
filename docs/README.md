@@ -115,6 +115,8 @@ configurar, como testar manualmente, e limitações conhecidas.
 
 87. [Publicação recuperável de arquivos Asterisk e migração de volume](manual-87-publicacao-asterisk-rollback.md)
 
+88. [Pré-check de arquivos gerados do Asterisk](manual-88-precheck-gerados-asterisk.md)
+
 ## Regra de manutenção
 
 Toda vez que uma funcionalidade nova for implementada no projeto, um
