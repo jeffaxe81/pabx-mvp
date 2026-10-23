@@ -33,6 +33,44 @@ jobs:
           path: lab-results/registration.json
           if-no-files-found: error
           retention-days: 14
+  webrtc:
+    name: Chromium | Webphone WSS e DTLS-SRTP reais
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Dependências fixadas de teste
+        run: |
+          python3 -m pip install -r lab/requirements.txt
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm run check:sip
+      - name: Selecionar Chromium do runner
+        shell: bash
+        run: |
+          pabx_chrome_path="$(command -v google-chrome || command -v chromium || true)"
+          if [[ -n "$pabx_chrome_path" ]]; then
+            echo "PABX_BROWSER_EXECUTABLE=$pabx_chrome_path" >> "$GITHUB_ENV"
+          else
+            npx playwright install --with-deps chromium
+          fi
+      - name: Testar a UI real com Asterisk e mídia real
+        run: python3 -m lab.asterisk_lab --calls --webrtc --report lab-results/webrtc.json
+      - name: Preservar somente resultado sanitizado WebRTC
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: asterisk-real-webrtc-${{ github.sha }}
+          path: lab-results/webrtc.json
+          if-no-files-found: error
+          retention-days: 14
   secure-calls:
     name: Asterisk | chamadas, CDR e SRTP bidirecional
     runs-on: ubuntu-24.04

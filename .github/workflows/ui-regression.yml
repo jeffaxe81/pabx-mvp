@@ -37,7 +37,9 @@ jobs:
         with:
           node-version: "22"
       - name: Testar links e preservação de contexto
-        run: node --test tests/ui_navigation.test.cjs
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          node --test tests/ui_navigation.test.cjs tests/sip_bundle.test.cjs tests/webrtc_contract.test.cjs
 
   browser:
     name: Chromium | responsividade e permissões
@@ -51,7 +53,7 @@ jobs:
         with:
           node-version: "22"
       - name: Instalar Playwright fixado
-        run: npm install --no-save playwright@1.56.1
+        run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Usar Chrome do runner ou instalar Chromium
         shell: bash
         run: |
