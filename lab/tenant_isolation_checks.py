@@ -49,6 +49,31 @@ def rejected_cdr_is_isolated(raw, previous_ids, caller, target):
     )
 
 
+
+def cdr_rejection_diagnostics(raw, previous_ids, caller, target):
+    """Somente booleanos/contagens, nunca conteúdo do CDR."""
+    rows = cdr_rows(raw)
+    fresh = ([r for r in rows if r[8] not in previous_ids]
+             if rows is not None and isinstance(previous_ids, set) else [])
+    tenant, number = caller.split('-', 1)
+    return {
+        'well_formed': rows is not None,
+        'new_rows': len(fresh),
+        'source': any(r[1] == number for r in fresh),
+        'destination': any(r[2] == target for r in fresh),
+        'context': any(r[3] == tenant + '-internal' for r in fresh),
+        'origin_channel': any(re.fullmatch(
+            r'PJSIP/' + re.escape(caller) + r'-[0-9a-f]+', r[4]
+        ) is not None for r in fresh),
+        'no_destination_channel': all(not r[5] for r in fresh) and bool(fresh),
+        'not_answered': all(r[6] != 'ANSWERED' for r in fresh) and bool(fresh),
+        'billsec_zero': all(r[7] == '0' for r in fresh) and bool(fresh),
+        'uniqueid_format': all(re.fullmatch(
+            r'[0-9]+\\.[0-9]+', r[8]
+        ) is not None for r in fresh) and bool(fresh),
+    }
+
+
 def exercise_isolation(container, prepared, report):
     """Executa negativos com observador autenticado no ramal estrangeiro."""
     from .asterisk_lab import cli, command
@@ -56,6 +81,7 @@ def exercise_isolation(container, prepared, report):
     checks = report['checks']
     checks.update({key: False for key in required_isolation_checks()})
     report['sip_isolation_cases'] = {}
+    report['sip_isolation_cdr_diagnostics'] = {}
     report['live_sip_extension_isolation_tested'] = False
 
     def snapshot():
@@ -112,7 +138,10 @@ def exercise_isolation(container, prepared, report):
         while time.monotonic() < deadline:
             channels = cli(container, 'core show channels concise')
             clean = not any(row.startswith('PJSIP/') for row in channels.splitlines())
-            cdr = rejected_cdr_is_isolated(snapshot(), prior, source, destination)
+            raw = snapshot()
+            cdr = rejected_cdr_is_isolated(raw, prior, source, destination)
+            report['sip_isolation_cdr_diagnostics'][case] = cdr_rejection_diagnostics(
+                raw, prior, source, destination)
             checks['channels_cleared:' + case] = clean
             checks['cdr_no_delivery:' + case] = cdr
             if clean and cdr:
