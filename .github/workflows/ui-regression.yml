@@ -8,6 +8,12 @@ name: AXE PABX | regressão da interface
       - "admin/index.html"
       - "scripts/sync_ui.py"
       - "tests/ui_*.cjs"
+      - "tests/sip_bundle.test.cjs"
+      - "tests/webphone_media.test.cjs"
+      - "tests/webrtc_contract.test.cjs"
+      - "lab/webrtc_browser.cjs"
+      - "scripts/build_webphone_sip.cjs"
+      - "package*.json"
       - ".github/workflows/ui-regression.yml"
   push:
     branches:
@@ -18,6 +24,12 @@ name: AXE PABX | regressão da interface
       - "admin/index.html"
       - "scripts/sync_ui.py"
       - "tests/ui_*.cjs"
+      - "tests/sip_bundle.test.cjs"
+      - "tests/webphone_media.test.cjs"
+      - "tests/webrtc_contract.test.cjs"
+      - "lab/webrtc_browser.cjs"
+      - "scripts/build_webphone_sip.cjs"
+      - "package*.json"
       - ".github/workflows/ui-regression.yml"
   workflow_dispatch:
 
