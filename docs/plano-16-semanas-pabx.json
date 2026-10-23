@@ -80,7 +80,7 @@
       "acceptance": "Encaminhamento correto e rejeição fail-closed com sinalização",
       "status": "done",
       "pr_number": 57,
-      "ci_run_id": 40007838427,
+      "ci_run_id": 40009695151,
       "requires_lab": true
     },
     {

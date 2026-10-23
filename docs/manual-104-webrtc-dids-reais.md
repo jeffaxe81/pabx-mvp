@@ -115,9 +115,9 @@ dependente da [#56](https://github.com/jeffaxe81/pabx-mvp/pull/56).
 
 ## Evidência final
 
-O commit de implementação `be1878f481e81c7a7c8ca16d7254094e160d493d`
-foi aprovado na [CI estática 40007838447](https://github.com/jeffaxe81/pabx-mvp/actions/runs/40007838447)
-(oito jobs) e no [laboratório real 40007838427](https://github.com/jeffaxe81/pabx-mvp/actions/runs/40007838427)
+O commit de implementação `f13f22a149948ef1dd31e5277eab344d139891a1`
+foi aprovado na [CI estática 40009694965](https://github.com/jeffaxe81/pabx-mvp/actions/runs/40009694965)
+(oito jobs) e no [laboratório real 40009695151](https://github.com/jeffaxe81/pabx-mvp/actions/runs/40009695151)
 (quatro jobs):
 
 - Registro SIP/TLS: **22/22**.
@@ -129,6 +129,10 @@ As contagens são por modo e compartilham verificações; não representam
 336 testes independentes. Na validação local, as oito suítes passaram
 em **1.387 testes Python**, e a suíte Node em **19/19**, incluindo
 as verificações de certificado nativo incorporadas da PR #56.
+A [CI de interface 40009695064](https://github.com/jeffaxe81/pabx-mvp/actions/runs/40009695064)
+também aprovou os dois jobs de Node e Chromium. O conjunto da versão
+consolidada teve **14 jobs aprovados**: oito estáticos, quatro de
+Asterisk real e dois de interface.
 
 Os marcos 6 e 7 estão concluídos: **7 de 16 marcos, 43,8%**. A execução
 para neste ponto, conforme solicitado. O marco 8 permanece planejado.
