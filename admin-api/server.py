@@ -140,7 +140,7 @@ def regenerate_and_reload(extra_ami_actions=None):
     client = AMIClient(AMI_HOST, AMI_PORT, AMI_USERNAME, AMI_SECRET)
     logged_in = False
     try:
-        with published_conf_batch(ASTERISK_CONF_DIR, files):
+        with published_conf_batch(Path(ASTERISK_CONF_DIR, "generated"), files):
             client.connect_and_login()
             logged_in = True
             for method_name, args in (extra_ami_actions or []):
@@ -612,7 +612,7 @@ class Handler(BaseHTTPRequestHandler):
             f"extensions_dynamic_hints-{tenant_id}.conf",
             f"voicemail_dynamic_{tenant_id}.conf",
         ):
-            Path(ASTERISK_CONF_DIR, suffix).write_text(
+            Path(ASTERISK_CONF_DIR, "generated", suffix).write_text(
                 empty_files[suffix], encoding="utf-8"
             )
 
@@ -1018,14 +1018,14 @@ class Handler(BaseHTTPRequestHandler):
             f"extensions_dynamic_hints-{record['tenant_id']}.conf",
             f"voicemail_dynamic_{record['tenant_id']}.conf",
         ):
-            Path(ASTERISK_CONF_DIR, filename).unlink(missing_ok=True)
+            Path(ASTERISK_CONF_DIR, "generated", filename).unlink(missing_ok=True)
         removed_extensions_count = delete_extensions_by_tenant(STORE_PATH, record["tenant_id"])
         # O PJSIP é um arquivo compartilhado: remover o JSON do tenant
         # não basta. Sem atualizar isto, endpoints antigos continuam
         # disponíveis mesmo após excluir a empresa.
         if removed_extensions_count:
             remaining_extensions = load_store(STORE_PATH)
-            Path(ASTERISK_CONF_DIR, "pjsip_dynamic.conf").write_text(
+            Path(ASTERISK_CONF_DIR, "generated", "pjsip_dynamic.conf").write_text(
                 render_pjsip_dynamic(remaining_extensions), encoding="utf-8"
             )
 
