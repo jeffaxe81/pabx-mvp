@@ -48,22 +48,41 @@ def prepare_calls(root, prepared, source_commit):
     cdr.chmod(0o600)
 
 
-def cdr_matches(raw, tenant, source, destination):
-    """Aceita somente um registro atendido com ambos os canais no tenant certo."""
+def cdr_rows(raw):
     if not isinstance(raw, str) or len(raw) > 1024*1024:
-        return False
+        return None
     try:
         rows = list(csv.reader(io.StringIO(raw), strict=True))
     except csv.Error:
-        return False
+        return None
     if any(len(row) != 9 for row in rows):
-        return False
-    return any(row[0:4] == [tenant,source,destination,tenant+'-internal']
-               and re.fullmatch(r'PJSIP/'+re.escape(tenant+'-'+source)+r'-[0-9a-f]+',row[4])
-               and re.fullmatch(r'PJSIP/'+re.escape(tenant+'-'+destination)+r'-[0-9a-f]+',row[5])
-               and row[6] == 'ANSWERED' and row[7].isdigit() and int(row[7]) >= 1
-               and re.fullmatch(r'[0-9]+\.[0-9]+', row[8]) is not None
-               for row in rows)
+        return None
+    return rows
+
+
+def cdr_fields(row, tenant, source, destination):
+    return {'tenant':row[0] == tenant, 'source':row[1] == source,
+            'destination':row[2] == destination, 'context':row[3] == tenant+'-internal',
+            'origin_channel':re.fullmatch(r'PJSIP/'+re.escape(tenant+'-'+source)+r'-[0-9a-f]+',row[4]) is not None,
+            'destination_channel':re.fullmatch(r'PJSIP/'+re.escape(tenant+'-'+destination)+r'-[0-9a-f]+',row[5]) is not None,
+            'answered':row[6] == 'ANSWERED',
+            'duration':row[7].isdigit() and int(row[7]) >= 1,
+            'uniqueid':re.fullmatch(r'[0-9]+\.[0-9]+', row[8]) is not None}
+
+
+def cdr_matches(raw, tenant, source, destination):
+    """Todos os campos devem coincidir no mesmo registro, nunca entre registros."""
+    rows = cdr_rows(raw)
+    return rows is not None and any(all(cdr_fields(row,tenant,source,destination).values()) for row in rows)
+
+
+def cdr_diagnostics(raw, tenant, source, destination):
+    rows = cdr_rows(raw)
+    details = [cdr_fields(row,tenant,source,destination) for row in rows or []]
+    names = ('tenant','source','destination','context','origin_channel',
+             'destination_channel','answered','duration','uniqueid')
+    return {'rows':len(rows or []), 'well_formed':rows is not None,
+            **{name:any(item[name] for item in details) for name in names}}
 
 
 def exercise_calls(container, prepared, report):
@@ -71,6 +90,12 @@ def exercise_calls(container, prepared, report):
     checks = report['checks']
     report['calls'] = []
     report['call_protocol'] = {}
+    report['cdr_checks'] = {}
+    modules = cli(container, 'module show like cdr')
+    status = cli(container, 'cdr show status')
+    report['cdr_backend'] = {'custom_loaded':'cdr_custom.so' in modules,
+                             'csv_loaded':'cdr_csv.so' in modules,
+                             'enabled':bool(re.search(r'(?i)CDR logging:\s*Enabled',status))}
     for tenant in TENANTS:
         for direction in DIRECTIONS:
             source, destination = ('1001','1002') if direction == 'forward' else ('1002','1001')
@@ -121,6 +146,9 @@ def exercise_calls(container, prepared, report):
                 if checks['channels_cleared'+suffix] and checks['cdr'+suffix]:
                     break
                 time.sleep(0.2)
+            report['cdr_checks'][tenant+':'+direction] = {
+                'readable':cdr.returncode == 0,
+                **cdr_diagnostics(cdr.stdout,tenant,source,destination)}
             report['sip_call_tested'] = True
             report['rtp_tested'] = True
             report['srtp_tested'] = True

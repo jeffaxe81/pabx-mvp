@@ -73,3 +73,19 @@ def test_cli_writes_sanitized_failure_report_for_libsrtp_error(tmp_path, monkeyp
     assert report['success'] is False
     assert report['error_type'] == 'Error'
     assert 'PRIVATE_SDES_KEY' not in output.read_text()+capsys.readouterr().out
+
+
+def test_cdr_diagnostics_pinpoint_field_mismatch_without_exporting_values():
+    import json
+    from lab.call_checks import cdr_diagnostics
+    row = '"t1","1001","1002","t1-internal","PJSIP/t1-1001-00000001","PJSIP/t1-1002-00000002","ANSWERED","1","123.45"\n'
+    valid = cdr_diagnostics(row, 't1', '1001', '1002')
+    assert valid['rows'] == 1
+    assert valid['tenant'] is True
+    assert valid['source'] is True
+    assert valid['duration'] is True
+    invalid = cdr_diagnostics(row.replace('"1001",','"PRIVATE_SOURCE",'), 't1','1001','1002')
+    assert invalid['source'] is False
+    assert invalid['destination'] is True
+    assert 'PRIVATE_SOURCE' not in json.dumps(invalid)
+    assert cdr_diagnostics('', 't1','1001','1002')['rows'] == 0

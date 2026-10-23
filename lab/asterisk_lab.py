@@ -328,6 +328,10 @@ def main(argv=None):
         print('Etapa: '+report['phase'])
     for call, events in report.get('call_protocol', {}).items():
         print('Protocolo '+call+': '+json.dumps(events, sort_keys=True))
+    if 'cdr_backend' in report:
+        print('Backend CDR: '+json.dumps(report['cdr_backend'],sort_keys=True))
+    for call, fields in report.get('cdr_checks',{}).items():
+        print('Campos CDR '+call+': '+json.dumps(fields,sort_keys=True))
     return 0 if success else 1
 
 
