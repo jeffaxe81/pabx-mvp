@@ -125,6 +125,8 @@ configurar, como testar manualmente, e limitações conhecidas.
 
 92. [Verificação semântica de reload AMI](manual-92-validacao-semantic-reload-ami.md)
 
+93. [Confirmação obrigatória de alterações AstDB no AMI](manual-93-confirmacao-astdb-ami.md)
+
 ## Regra de manutenção
 
 Toda vez que uma funcionalidade nova for implementada no projeto, um
