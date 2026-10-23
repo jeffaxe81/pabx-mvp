@@ -46,6 +46,60 @@ def test_symlink_is_rejected_even_when_target_is_valid(tmp_path):
     assert access.load_recording_policy(symlink) is None
 
 
+
+def test_symlink_in_ancestor_directory_is_rejected(tmp_path):
+    real = tmp_path / "real"
+    nested = real / "data"
+    nested.mkdir(parents=True)
+    write_policy(nested / "catalog.json")
+    linked = tmp_path / "linked"
+    linked.symlink_to(real, target_is_directory=True)
+    assert access.load_recording_policy(linked / "data" / "catalog.json") is None
+
+    second_link = tmp_path / "indirect"
+    second_link.mkdir()
+    (second_link / "data").symlink_to(nested, target_is_directory=True)
+    assert access.load_recording_policy(second_link / "data" / "catalog.json") is None
+
+
+def test_ancestor_swapped_after_dir_open_stays_pinned_to_original(
+    monkeypatch, tmp_path
+):
+    base = tmp_path / "root"
+    safe_dir = base / "data"
+    safe_dir.mkdir(parents=True)
+    path = safe_dir / "catalog.json"
+    original = write_policy(path, "t1")
+    alternate = tmp_path / "attacker"
+    alternate.mkdir()
+    malicious = write_policy(alternate / "catalog.json", "t2")
+    old_dir = base / "original-data"
+
+    opened = os.open
+    exchanged = []
+
+    def swap_parent_after_fd(name, *args, **kwargs):
+        descriptor = opened(name, *args, **kwargs)
+        if name == "data" and "dir_fd" in kwargs and not exchanged:
+            safe_dir.rename(old_dir)
+            safe_dir.symlink_to(alternate, target_is_directory=True)
+            exchanged.append(True)
+        return descriptor
+
+    monkeypatch.setattr(access.os, "open", swap_parent_after_fd)
+    assert access.load_recording_policy(path) == original
+    assert exchanged
+    assert access.load_recording_policy(path) is None
+    assert original != malicious
+
+
+def test_dotdot_parent_path_fails_closed(tmp_path):
+    inner = tmp_path / "inner"
+    inner.mkdir()
+    write_policy(tmp_path / "catalog.json")
+    assert access.load_recording_policy(inner / ".." / "catalog.json") is None
+
+
 def test_reject_fifo_without_blocking(tmp_path):
     if not hasattr(os, "mkfifo"):
         pytest.skip("FIFO is POSIX-only")
@@ -79,7 +133,7 @@ def test_swapping_path_after_open_does_not_change_opened_contents(
         # Simula um processo trocando o caminho por um symlink exatamente
         # depois que o FD legítimo foi aberto e antes do fstat/read.
         descriptor = actual_open(name, *args, **kwargs)
-        if os.fspath(name) == os.fspath(path) and not swapped:
+        if os.fspath(name) == path.name and "dir_fd" in kwargs and not swapped:
             path.rename(backup)
             path.symlink_to(attacker)
             swapped.append(True)
