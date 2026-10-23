@@ -50,6 +50,7 @@ def render_extensions_dynamic_dial(extensions: list) -> str:
         lines.append(
             f"exten => {ext['number']},1,MixMonitor(/var/spool/asterisk/monitor/"
             f"${{STRFTIME(${{EPOCH}},,%Y%m%d-%H%M%S)}}-${{CALLERID(num)}}-{ext['number']}.wav,b)\n"
+            f" same => n,Set(CDR(accountcode)={ext['tenant']})\n"
             f" same => n,Dial(PJSIP/{ext['name']},20)\n"
             f" same => n,Hangup()\n"
         )

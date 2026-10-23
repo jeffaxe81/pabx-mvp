@@ -117,6 +117,8 @@ configurar, como testar manualmente, e limitações conhecidas.
 
 88. [Pré-check de arquivos gerados do Asterisk](manual-88-precheck-gerados-asterisk.md)
 
+89. [Conciliação CDR com propostas de gravações](manual-89-conciliacao-cdr-gravacoes.md)
+
 ## Regra de manutenção
 
 Toda vez que uma funcionalidade nova for implementada no projeto, um

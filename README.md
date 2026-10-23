@@ -793,3 +793,13 @@ arquivos dinâmicos e includes esperados. Ele aceita o catálogo de
 empresas para checar `t3+` e a opção `--compare-legacy` para
 conferir cópias antigas antes da migração. Consulte o
 [Manual 88](docs/manual-88-precheck-gerados-asterisk.md).
+
+## Conciliação de gravações com CDR do Asterisk
+
+Os dialplans agora registram `CDR(accountcode)` com o ID do tenant
+nos fluxos estáticos e nas configurações dinâmicas. O utilitário
+`queue-api/recording_cdr_candidates.py` cruza eventos CDR de fonte
+confiável com gravações locais e **somente sugere** um manifesto se
+accountcode, contexto, ramal, horário, origem e destino concordarem.
+Conflitos e dados ambíguos são rejeitados; nenhuma gravação é
+liberada automaticamente. Veja o [Manual 89](docs/manual-89-conciliacao-cdr-gravacoes.md).
