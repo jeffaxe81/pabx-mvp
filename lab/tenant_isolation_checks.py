@@ -35,8 +35,15 @@ def rejected_cdr_is_isolated(raw, previous_ids, caller, target):
     if rows is None or not isinstance(previous_ids, set):
         return False
     fresh = [row for row in rows if row[8] not in previous_ids]
+    # Asterisk 22 pode rejeitar no PJSIP (404) ANTES de entrar no
+    # dialplan; nesse caminho não produz CDR novo. A ausência só pode
+    # ser aceita se o backend já tiver produzido seis CDRs positivos
+    # neste mesmo laboratório e todos permanecerem presentes.
+    if not fresh:
+        current_ids = {row[8] for row in rows}
+        return len(previous_ids) >= 6 and previous_ids <= current_ids
     tenant, number = caller.split('-', 1)
-    return bool(fresh) and all(
+    return all(
         row[1] == number
         and row[2] == target
         and row[3] == tenant + '-internal'
@@ -56,9 +63,13 @@ def cdr_rejection_diagnostics(raw, previous_ids, caller, target):
     fresh = ([r for r in rows if r[8] not in previous_ids]
              if rows is not None and isinstance(previous_ids, set) else [])
     tenant, number = caller.split('-', 1)
+    current_ids = {row[8] for row in rows or []}
+    baseline_verified = len(previous_ids) >= 6 and previous_ids <= current_ids
     return {
         'well_formed': rows is not None,
         'new_rows': len(fresh),
+        'positive_cdr_baseline_verified': baseline_verified,
+        'predial_rejection_without_new_cdr': not fresh and baseline_verified,
         'source': any(r[1] == number for r in fresh),
         'destination': any(r[2] == target for r in fresh),
         'context': any(r[3] == tenant + '-internal' for r in fresh),
