@@ -23,7 +23,7 @@ from urllib.parse import urlparse, parse_qs
 
 from auth import hash_password, verify_password, SessionStore
 from store import add_extension, update_extension, delete_extension, load_store, delete_extensions_by_tenant
-from conf_generator import render_all
+from conf_generator import render_all, render_pjsip_dynamic
 from ami_client import AMIClient
 from blocklist import validate_blocklist_number
 from vip import validate_vip_input
@@ -33,7 +33,7 @@ from overflow import validate_overflow_timeout_input
 from tenants import (
     load_tenants, save_tenants, validate_tenant_creation_input,
     render_tenant_pjsip, render_tenant_queues, render_tenant_extensions, render_tenant_voicemail,
-    render_tenant_parking, validate_tenant_removal, generate_tenant_credentials, generate_tenant_voicemail_pins, parse_static_inbound_dids,
+    render_tenant_parking, validate_tenant_removal, generate_tenant_credentials, generate_tenant_voicemail_pins, parse_static_inbound_dids, TENANT_ID_RE,
 )
 from users import load_users, save_users, find_user, add_user, update_user, delete_user, public_user
 from totp import generate_secret, verify_totp, build_provisioning_uri
@@ -54,6 +54,24 @@ def validate_tenant(raw_tenant: str):
     tenant = (raw_tenant or DEFAULT_TENANT).strip()
     known_tenants = STATIC_TENANTS | {t["tenant_id"] for t in load_tenants(TENANTS_PATH)}
     return tenant if tenant in known_tenants else None
+def known_extension_tenants() -> set:
+    """Registry confiável do wizard + tenants estáticos; não aceita IDs soltos."""
+    records = load_tenants(TENANTS_PATH)
+    if not isinstance(records, list):
+        raise ValueError("cadastro de tenants inválido")
+    known = set(STATIC_TENANTS)
+    for row in records:
+        if not isinstance(row, dict):
+            raise ValueError("cadastro de tenants inválido")
+        tenant_id = row.get("tenant_id")
+        if not isinstance(tenant_id, str) or not TENANT_ID_RE.fullmatch(tenant_id):
+            raise ValueError("tenant não provisionado ou inválido")
+        if tenant_id in known:
+            raise ValueError("tenant duplicado no cadastro")
+        known.add(tenant_id)
+    return known
+
+
 USERS_PATH = os.environ.get("USERS_PATH", "/app/data/users.json")
 ASTERISK_CONF_DIR = os.environ.get("ASTERISK_CONF_DIR", "/app/asterisk-conf")
 STATIC_DIR = Path(os.environ.get("STATIC_DIR", "/app/static"))
@@ -120,7 +138,7 @@ def regenerate_and_reload(extra_ami_actions=None):
     dois (ver manual 62).
     """
     extensions = load_store(STORE_PATH)
-    files = render_all(extensions)
+    files = render_all(extensions, tenant_ids=known_extension_tenants())
     for filename, content in files.items():
         Path(ASTERISK_CONF_DIR, filename).write_text(content, encoding="utf-8")
 
@@ -225,6 +243,24 @@ class Handler(BaseHTTPRequestHandler):
                 return
             users = [public_user(u) for u in load_users(USERS_PATH)]
             self._send_json(200, {"users": users})
+        elif self.path == "/api/tenant-options":
+            if not self._require_role({"admin", "supervisor"}):
+                return
+            try:
+                known = known_extension_tenants()
+                records = load_tenants(TENANTS_PATH)
+            except (ValueError, OSError, TypeError):
+                self._send_json(503, {"error": "cadastro de tenants indisponível"})
+                return
+            options = [
+                {"tenant_id": tid, "display_name": f"Tenant {tid[1:]}"}
+                for tid in sorted(STATIC_TENANTS)
+            ]
+            options.extend(
+                {"tenant_id": row["tenant_id"], "display_name": row.get("display_name") or row["tenant_id"]}
+                for row in records if row["tenant_id"] in known
+            )
+            self._send_json(200, {"tenants": options})
         elif self.path.startswith("/api/tenants"):
             if not self._require_role({"admin"}):
                 return
@@ -523,6 +559,19 @@ class Handler(BaseHTTPRequestHandler):
             target_dir.mkdir(parents=True, exist_ok=True)
             Path(target_dir, f"{tenant_id}.conf").write_text(render_fn(tenant_id), encoding="utf-8")
 
+        # O dialplan do novo tenant inclui estes três arquivos antes
+        # mesmo de existir qualquer ramal gerenciado pelo painel.
+        # Arquivos ausentes tornam os #include do Asterisk inválidos.
+        empty_files = render_all([], tenant_ids={tenant_id})
+        for suffix in (
+            f"extensions_dynamic_dial-{tenant_id}.conf",
+            f"extensions_dynamic_hints-{tenant_id}.conf",
+            f"voicemail_dynamic_{tenant_id}.conf",
+        ):
+            Path(ASTERISK_CONF_DIR, suffix).write_text(
+                empty_files[suffix], encoding="utf-8"
+            )
+
         client = AMIClient(AMI_HOST, AMI_PORT, AMI_USERNAME, AMI_SECRET)
         try:
             client.connect_and_login()
@@ -782,7 +831,12 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json(400, {"error": "JSON inválido"})
             return
 
-        ok, error, cleaned = add_extension(STORE_PATH, data)
+        try:
+            allowed_tenants = known_extension_tenants()
+        except (ValueError, OSError, TypeError):
+            self._send_json(503, {"error": "cadastro de tenants indisponível"})
+            return
+        ok, error, cleaned = add_extension(STORE_PATH, data, allowed_tenants=allowed_tenants)
         if not ok:
             self._send_json(400, {"error": error})
             return
@@ -830,7 +884,12 @@ class Handler(BaseHTTPRequestHandler):
         # órfão, apontando pra um ramal que já tem outro número.
         previous_record = next((e for e in load_store(STORE_PATH) if e["name"] == name), None)
 
-        ok, error, cleaned = update_extension(STORE_PATH, name, data)
+        try:
+            allowed_tenants = known_extension_tenants()
+        except (ValueError, OSError, TypeError):
+            self._send_json(503, {"error": "cadastro de tenants indisponível"})
+            return
+        ok, error, cleaned = update_extension(STORE_PATH, name, data, allowed_tenants=allowed_tenants)
         if not ok:
             self._send_json(400, {"error": error})
             return
@@ -917,6 +976,14 @@ class Handler(BaseHTTPRequestHandler):
         ):
             Path(ASTERISK_CONF_DIR, filename).unlink(missing_ok=True)
         removed_extensions_count = delete_extensions_by_tenant(STORE_PATH, record["tenant_id"])
+        # O PJSIP é um arquivo compartilhado: remover o JSON do tenant
+        # não basta. Sem atualizar isto, endpoints antigos continuam
+        # disponíveis mesmo após excluir a empresa.
+        if removed_extensions_count:
+            remaining_extensions = load_store(STORE_PATH)
+            Path(ASTERISK_CONF_DIR, "pjsip_dynamic.conf").write_text(
+                render_pjsip_dynamic(remaining_extensions), encoding="utf-8"
+            )
 
         client = AMIClient(AMI_HOST, AMI_PORT, AMI_USERNAME, AMI_SECRET)
         try:

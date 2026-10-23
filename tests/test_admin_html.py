@@ -398,7 +398,7 @@ def test_sounds_table_shows_filename_size_and_date():
 
 def test_overflow_timeout_loaded_on_login_and_tenant_change():
     html = load_html()
-    assert html.count("loadOverflowTimeout();") == 2  # login + troca de tenant
+    assert html.count("loadOverflowTimeout();") == 3  # login, troca e fallback após excluir tenant
 
 
 def test_overflow_timeout_requests_include_current_tenant():
@@ -568,3 +568,19 @@ def test_dynamic_extension_creation_shows_voicemail_pin_once():
     assert "PIN correio de voz" in creation
     assert "extensionCredentialText').textContent" in creation
     assert "extensionCredentialText').innerHTML" not in creation
+
+
+def test_tenant_dropdown_loads_dynamic_options_without_injecting_html():
+    html = load_html()
+    start = html.index("function loadTenantOptions()")
+    end = html.index("function loadTenants()", start)
+    js = html[start:end]
+    assert "/api/tenant-options" in js
+    assert "selector.replaceChildren()" in js
+    assert "option.textContent" in js
+    assert "selector.value = currentTenant" in js
+    assert "currentTenant = 't1'" in js
+    login = html[html.index("function completeLogin"):html.index("el('loginBtn').addEventListener")]
+    assert "loadTenantOptions()" in login
+    load = html[html.index("function loadTenants()"):html.index("function renderTenantsTable", html.index("function loadTenants()"))]
+    assert "loadTenantOptions()" in load

@@ -23,7 +23,11 @@ before(async () => {
         '/api/vip': { vips: [] }, '/api/config/modo-feriado': { enabled: false },
         '/api/config/overflow-timeout': { timeout: 45 },
         '/api/users': { users: [{ username: 'operador', role: 'supervisor', totp_enabled: false }] },
-        '/api/tenants': { tenants: [] }, '/api/monitoring-pin': { configured: false }, '/api/sounds': { sounds: [] },
+        '/api/tenants': { tenants: [] },
+        '/api/tenant-options': { tenants: [
+          { tenant_id: 't1', display_name: 'Tenant 1' },
+          { tenant_id: 't2', display_name: 'Tenant 2' },
+        ] }, '/api/monitoring-pin': { configured: false }, '/api/sounds': { sounds: [] },
         '/api/metrics/today': metrics, '/api/reports': metrics,
         '/api/extension-states': { extensions: [{ exten: '1100', status_label: 'livre' }] },
         '/api/queue': { waiting: [] }, '/api/fraud-alerts': { alerts: [] }, '/api/quality': { quality_reports: [] },
@@ -353,6 +357,37 @@ test('new extension exposes generated SIP password once, with hide and logout cl
     await page.locator('#logoutBtn').click();
     await page.locator('#loginScreen').waitFor({ state: 'visible' });
     assert.equal(await page.locator('#extensionCredentialText').innerText(), '');
+    assert.deepEqual(errors, []);
+  } finally { await context.close(); }
+});
+
+test('tenant selector loads a t3 wizard company and keeps scope per request', async () => {
+  const { context, page, errors } = await openPage('admin/index.html');
+  const scopes = [];
+  try {
+    await page.route('**/api/tenant-options', route => route.fulfill({
+      status: 200, contentType: 'application/json',
+      body: JSON.stringify({ tenants: [
+        { tenant_id: 't1', display_name: 'Tenant 1' },
+        { tenant_id: 't2', display_name: 'Tenant 2' },
+        { tenant_id: 't3', display_name: 'Empresa C <img src=x onerror=alert(1)>' },
+      ] }),
+    }));
+    await page.route('**/api/extensions?*', route => {
+      const url = new URL(route.request().url());
+      scopes.push(url.searchParams.get('tenant'));
+      return route.fulfill({ status: 200, contentType: 'application/json',
+        body: JSON.stringify({ extensions: [] }) });
+    });
+    await login(page, 'admin');
+    await page.locator('#tenantSelect option[value="t3"]').waitFor({ state: 'attached' });
+    assert.equal(await page.locator('#tenantSelect img').count(), 0);
+    assert.equal(await page.locator('#tenantSelect option[value="t3"]').textContent(),
+      'Empresa C <img src=x onerror=alert(1)>');
+    await page.locator('#tenantSelect').selectOption('t3');
+    await page.waitForFunction(() => document.querySelector('#tenantLabel').textContent.includes('3'));
+    assert.equal(await page.locator('#tenantSelect').inputValue(), 't3');
+    assert.ok(scopes.includes('t3'));
     assert.deepEqual(errors, []);
   } finally { await context.close(); }
 });

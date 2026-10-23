@@ -726,3 +726,14 @@ Os dois segredos são apresentados somente no resultado inicial do
 cadastro. Ramais antigos sem PIN persistido mantêm o comportamento
 anterior e **precisam de rotação administrada**, sem troca automática.
 Confira o [Manual 81](docs/manual-81-pins-voicemail-ramais.md).
+
+## Ramais provisionados em tenants dinâmicos (t3+)
+
+O painel agora aceita ramais nos tenants criados pelo wizard, consultando
+um catálogo de IDs provisionados em vez de aceitar livremente o ID
+informado na requisição. O Asterisk recebe os arquivos de dialplan,
+hints e voicemail de cada tenant, inclusive arquivos inicialmente
+vazios durante o cadastro. O seletor mostra os tenants habilitados
+para administrador e supervisor sem expor DIDs ao supervisor.
+
+Consulte o [Manual 82](docs/manual-82-ramais-tenants-dinamicos.md).

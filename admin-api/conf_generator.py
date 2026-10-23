@@ -7,6 +7,7 @@ manter isso 100% testável sem I/O.
 Esses arquivos são incluídos (#include) nos .conf estáticos do
 Asterisk - ver manual 16 pra como a inclusão funciona.
 """
+import re
 
 AUTO_GENERATED_HEADER = (
     "; ARQUIVO GERADO AUTOMATICAMENTE PELO PAINEL DE ADMINISTRAÇÃO.\n"
@@ -75,23 +76,32 @@ def render_voicemail_dynamic(extensions: list) -> str:
     return "\n".join(lines) + ("\n" if extensions else "")
 
 
-def render_all(extensions: list) -> dict:
+def render_all(extensions: list, tenant_ids=None) -> dict:
+    """Gera um conjunto separado de dial/hints/voicemail por tenant.
+
+    Sem tenant_ids preserva compatibilidade t1/t2. Quando informado,
+    recebe somente IDs efetivamente provisionados; ramais órfãos e
+    nomes malformados interrompem a geração em vez de vazarem para
+    outro contexto ou produzirem paths arbitrários.
     """
-    Retorna {nome_do_arquivo: conteudo} pros arquivos dinâmicos.
-    pjsip_dynamic.conf é um arquivo só, compartilhado entre tenants
-    (cada endpoint já carrega seu próprio context=/mailboxes= com o
-    tenant certo). Já dial/hints/voicemail PRECISAM ser um arquivo por
-    tenant (backlog #38) - eles são incluídos DENTRO dos contextos
-    [t1-internal]/[t2-internal] etc., então um arquivo compartilhado
-    colocaria ramal do tenant 2 dentro do dialplan do tenant 1.
-    """
-    by_tenant = {}
-    for ext in extensions:
-        by_tenant.setdefault(ext.get("tenant", "t1"), []).append(ext)
+    allowed = {"t1", "t2"} if tenant_ids is None else set(tenant_ids)
+    if not allowed or any(
+        not isinstance(tid, str)
+        or not re.fullmatch(r"t[1-9][0-9]*", tid)
+        for tid in allowed
+    ):
+        raise ValueError("lista de tenants provisionados inválida")
+
+    by_tenant = {tid: [] for tid in allowed}
+    for extension in extensions:
+        tenant = extension.get("tenant", "t1")
+        if tenant not in by_tenant:
+            raise ValueError(f"ramal pertence a tenant não provisionado: {tenant}")
+        by_tenant[tenant].append(extension)
 
     files = {"pjsip_dynamic.conf": render_pjsip_dynamic(extensions)}
-    for tenant in ("t1", "t2"):
-        tenant_extensions = by_tenant.get(tenant, [])
+    for tenant in sorted(allowed):
+        tenant_extensions = by_tenant[tenant]
         files[f"extensions_dynamic_dial-{tenant}.conf"] = render_extensions_dynamic_dial(tenant_extensions)
         files[f"extensions_dynamic_hints-{tenant}.conf"] = render_extensions_dynamic_hints(tenant_extensions)
         files[f"voicemail_dynamic_{tenant}.conf"] = render_voicemail_dynamic(tenant_extensions)

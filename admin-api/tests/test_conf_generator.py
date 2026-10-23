@@ -133,3 +133,42 @@ def test_voicemail_pin_does_not_leak_to_pjsip_or_dialplan():
     extension = [{**SAMPLE[0], "voicemail_pin": "87654321"}]
     assert "87654321" not in render_pjsip_dynamic(extension)
     assert "87654321" not in render_extensions_dynamic_dial(extension)
+
+
+def test_render_all_generates_t3_dial_hints_and_mailboxes_with_isolation():
+    third = [{**SAMPLE[0], "name": "suporte-t3", "tenant": "t3",
+              "number": 1115, "voicemail_pin": "76543210"}]
+    files = render_all(SAMPLE + third, tenant_ids={"t1", "t2", "t3"})
+    assert "Dial(PJSIP/suporte-t3" in files["extensions_dynamic_dial-t3.conf"]
+    assert "Dial(PJSIP/suporte-t3" not in files["extensions_dynamic_dial-t1.conf"]
+    assert "suporte-t3" in files["extensions_dynamic_hints-t3.conf"]
+    assert "suporte-t3 => 76543210" in files["voicemail_dynamic_t3.conf"]
+    assert "context=t3-internal" in files["pjsip_dynamic.conf"]
+
+
+def test_render_all_creates_empty_includes_for_new_tenant_without_ramais():
+    files = render_all([], tenant_ids={"t3"})
+    for path in (
+        "extensions_dynamic_dial-t3.conf",
+        "extensions_dynamic_hints-t3.conf",
+        "voicemail_dynamic_t3.conf",
+    ):
+        assert path in files
+        assert "GERADO AUTOMATICAMENTE" in files[path]
+
+
+def test_render_all_refuses_orphan_and_unsafe_tenant_ids():
+    import pytest
+    extension = [{**SAMPLE[0], "tenant": "t3"}]
+    with pytest.raises(ValueError, match="não provisionado"):
+        render_all(extension, tenant_ids={"t1", "t2"})
+    with pytest.raises(ValueError, match="inválida"):
+        render_all([], tenant_ids={"../t3"})
+
+def test_removed_tenant_sip_endpoints_are_not_in_regenerated_shared_pjsip():
+    t3 = {**SAMPLE[0], "name": "atendente-t3", "tenant": "t3"}
+    before = render_pjsip_dynamic(SAMPLE + [t3])
+    after = render_pjsip_dynamic(SAMPLE)
+    assert "[atendente-t3]" in before
+    assert "[atendente-t3]" not in after
+    assert "[recepcao-3]" in after

@@ -4,8 +4,8 @@ num JSON simples (extensions_store.json) - sem banco de dados de
 propósito, consistente com o resto do projeto (poucas dependências,
 fácil de inspecionar o estado inteiro abrindo um arquivo).
 
-MVP: só ramais do tenant 1 (ver manual 16 pra limitação e caminho de
-extensão pra multi-tenant).
+Por padrão, as chamadas legadas continuam limitadas a t1/t2. O
+servidor passa explicitamente os tenants habilitados pelo wizard.
 """
 import json
 import re
@@ -34,7 +34,7 @@ def save_store(path, extensions: list):
     Path(path).write_text(json.dumps(extensions, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
-def validate_extension_input(data: dict, existing: list, editing_name: str = None):
+def validate_extension_input(data: dict, existing: list, editing_name: str = None, allowed_tenants=None):
     """Rejeita JSON de tipos incorretos e valores que quebram .conf."""
     if not isinstance(data, dict):
         return False, "dados do ramal devem ser um objeto JSON", None
@@ -68,8 +68,14 @@ def validate_extension_input(data: dict, existing: list, editing_name: str = Non
     if not isinstance(raw_tenant, str):
         return False, "tenant deve ser texto", None
     tenant = raw_tenant.strip()
-    if tenant not in VALID_TENANTS:
-        return False, f"tenant inválido - use um de: {sorted(VALID_TENANTS)}", None
+    tenants = VALID_TENANTS if allowed_tenants is None else allowed_tenants
+    if not isinstance(tenants, (set, frozenset, list, tuple)) or any(
+        not isinstance(t, str) or not re.fullmatch(r"t[1-9][0-9]*", t)
+        for t in tenants
+    ):
+        return False, "registro de tenants disponíveis inválido", None
+    if tenant not in tenants:
+        return False, f"tenant inválido - use um de: {sorted(tenants)}", None
 
     raw_number = data.get("number")
     if isinstance(raw_number, bool) or not (
@@ -165,9 +171,9 @@ def validate_extension_input(data: dict, existing: list, editing_name: str = Non
     }
 
 
-def add_extension(path, data: dict):
+def add_extension(path, data: dict, allowed_tenants=None):
     existing = load_store(path)
-    ok, error, cleaned = validate_extension_input(data, existing)
+    ok, error, cleaned = validate_extension_input(data, existing, allowed_tenants=allowed_tenants)
     if not ok:
         return False, error, None
 
@@ -176,7 +182,7 @@ def add_extension(path, data: dict):
     return True, None, cleaned
 
 
-def update_extension(path, name: str, data: dict):
+def update_extension(path, name: str, data: dict, allowed_tenants=None):
     if not isinstance(data, dict):
         return False, "dados do ramal devem ser um objeto JSON", None
     if "voicemail_pin" in data:
@@ -186,7 +192,9 @@ def update_extension(path, name: str, data: dict):
         return False, f"ramal '{name}' não encontrado", None
 
     merged = {**next(e for e in existing if e["name"] == name), **data, "name": name}
-    ok, error, cleaned = validate_extension_input(merged, existing, editing_name=name)
+    ok, error, cleaned = validate_extension_input(
+        merged, existing, editing_name=name, allowed_tenants=allowed_tenants
+    )
     if not ok:
         return False, error, None
 

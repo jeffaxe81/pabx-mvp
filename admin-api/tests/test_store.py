@@ -306,3 +306,47 @@ def test_legacy_voicemail_pin_not_rotated_implicitly(tmp_path):
     save_store(path, [legacy])
     edited = update_extension(path, legacy["name"], {"display_name": "Atualizado"})[2]
     assert edited["voicemail_pin"] == "1234"
+
+
+def test_registered_tenant_t3_can_create_and_update_extension(tmp_path):
+    path = tmp_path / "ramais.json"
+    data = {**VALID_INPUT, "name": "tres-ramal", "tenant": "t3"}
+    ok, error, created = add_extension(path, data, allowed_tenants={"t1", "t2", "t3"})
+    assert ok, error
+    assert created["tenant"] == "t3"
+    ok, error, updated = update_extension(
+        path, "tres-ramal", {"display_name": "Atendente t3"},
+        allowed_tenants={"t1", "t2", "t3"}
+    )
+    assert ok, error
+    assert updated["tenant"] == "t3"
+
+
+def test_unknown_tenant_cannot_create_even_if_payload_requests_it(tmp_path):
+    path = tmp_path / "ramais.json"
+    request = {**VALID_INPUT, "tenant": "t3"}
+    ok, error, cleaned = add_extension(path, request, allowed_tenants={"t1", "t2"})
+    assert not ok and cleaned is None and "tenant inválido" in error
+    assert load_store(path) == []
+
+
+def test_bad_tenant_registry_fails_closed():
+    ok, error, cleaned = validate_extension_input(
+        {**VALID_INPUT, "tenant": "t3"}, [], allowed_tenants={"t1", "../t3"}
+    )
+    assert not ok and cleaned is None and "registro" in error
+
+
+def test_t3_duplicate_number_fails_only_inside_same_tenant():
+    original = {**VALID_INPUT, "tenant": "t3"}
+    existing = [{**original}]
+    ok, error, _ = validate_extension_input(
+        {**VALID_INPUT, "name": "novo-ramal", "tenant": "t3"},
+        existing, allowed_tenants={"t1", "t2", "t3"}
+    )
+    assert not ok and "t3" in error
+    ok, error, cleaned = validate_extension_input(
+        {**VALID_INPUT, "name": "novo-ramal", "tenant": "t2"},
+        existing, allowed_tenants={"t1", "t2", "t3"}
+    )
+    assert ok and cleaned["tenant"] == "t2"

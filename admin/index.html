@@ -675,6 +675,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     el('totpScreen').style.display = 'none';
     el('appScreen').style.display = 'block';
     applyRolePermissions();
+    loadTenantOptions();
     loadExtensions();
     loadBlocklist();
     loadVips();
@@ -1129,8 +1130,43 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   // ---------- Wizard de preparação de ambiente por tenant (backlog #39) ----------
   let pendingTenantData = null;
 
+  function loadTenantOptions() {
+    return apiFetch('/api/tenant-options')
+      .then(data => {
+        const selector = el('tenantSelect');
+        const selected = currentTenant;
+        selector.replaceChildren();
+        const tenantList = data.tenants || [];
+        for (const tenant of tenantList) {
+          const option = document.createElement('option');
+          option.value = String(tenant.tenant_id);
+          option.textContent = String(tenant.display_name || tenant.tenant_id);
+          selector.appendChild(option);
+        }
+        const stillExists = tenantList.some(tenant => tenant.tenant_id === selected);
+        if (!stillExists) {
+          currentTenant = 't1';
+          el('tenantLabel').textContent = '(tenant 1)';
+          loadExtensions();
+          loadBlocklist();
+          loadVips();
+          loadHolidayMode();
+          loadOverflowTimeout();
+          if (myRole === 'admin') loadMonitoringStatus();
+        }
+        selector.value = currentTenant;
+      })
+      .catch(() => {
+        // Se o cadastro não estiver disponível, não oferecer
+        // um tenant desconhecido nem sobrescrever as opções atuais.
+      });
+  }
+
   function loadTenants() {
-    apiFetch('/api/tenants').then((data) => renderTenantsTable(data.tenants || []));
+    apiFetch('/api/tenants').then((data) => {
+      renderTenantsTable(data.tenants || []);
+      loadTenantOptions();
+    });
   }
 
   function renderTenantsTable(tenantList) {
