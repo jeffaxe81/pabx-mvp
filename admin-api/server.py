@@ -22,10 +22,11 @@ from pathlib import Path
 from urllib.parse import urlparse, parse_qs
 
 from auth import hash_password, verify_password, SessionStore
-from store import add_extension, update_extension, delete_extension, load_store, delete_extensions_by_tenant
+from store import add_extension, update_extension, delete_extension, load_store, delete_extensions_by_tenant, _STORE_LOCK as EXTENSIONS_STORE_LOCK
 from conf_generator import render_all, render_pjsip_dynamic
 from conf_publisher import published_conf_batch
 from tenant_provisioning import TENANT_TRANSACTION_LOCK, TenantProvisionError, provision_tenant
+from tenant_deprovisioning import TenantRemovalError, remove_tenant
 from ami_client import AMIClient
 from blocklist import validate_blocklist_number
 from vip import validate_vip_input
@@ -970,71 +971,40 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json(404, {"error": "not found"})
 
     def _handle_remove_tenant(self):
-        """
-        Remoção de tenant (backlog #52 - completa o que ficou pendente
-        no manual 39). Desregistra o DID, apaga os 5 arquivos de
-        infraestrutura gerados pelo wizard, os 3 arquivos dinâmicos de
-        ramais criados pelo painel (backlog #54, fecha a limitação
-        documentada no manual 52), os ramais órfãos correspondentes no
-        extensions_store.json, e recarrega o Asterisk. Nunca remove
-        t1/t2 (exemplos estáticos, ver validate_tenant_removal).
-        """
+        """Confirma exclusão só após arquivos, DID, ramais e JSON consistentes."""
         if not self._require_role({"admin"}):
             return
 
         tenant_id = self.path[len("/api/tenants/"):]
-        existing = load_tenants(TENANTS_PATH)
-        ok, error, record = validate_tenant_removal(tenant_id, existing)
-        if not ok:
-            self._send_json(400, {"error": error})
-            return
+        # Mesma trava da criação e do CRUD do cadastro de ramais:
+        # evita alterações concorrentes durante remoção e recuperação.
+        with TENANT_TRANSACTION_LOCK, EXTENSIONS_STORE_LOCK:
+            try:
+                existing = load_tenants(TENANTS_PATH)
+            except (ValueError, OSError, TypeError):
+                self._send_json(503, {"error": "cadastro de tenants indisponível"})
+                return
+            ok, error, record = validate_tenant_removal(tenant_id, existing)
+            if not ok:
+                self._send_json(400, {"error": error})
+                return
 
-        for subdir in ("pjsip_tenants", "queues_tenants", "extensions_tenants", "voicemail_tenants", "parking_tenants"):
-            target_file = Path(ASTERISK_CONF_DIR, subdir, f"{record['tenant_id']}.conf")
-            target_file.unlink(missing_ok=True)
-
-        # Ramais dinâmicos criados pelo painel dentro deste tenant
-        # (backlog #38) - sem isso, ficariam órfãos: os arquivos
-        # extensions_dynamic_dial-{tenant}.conf/hints/voicemail
-        # apontariam pra um contexto que não existe mais.
-        for filename in (
-            f"extensions_dynamic_dial-{record['tenant_id']}.conf",
-            f"extensions_dynamic_hints-{record['tenant_id']}.conf",
-            f"voicemail_dynamic_{record['tenant_id']}.conf",
-        ):
-            Path(ASTERISK_CONF_DIR, "generated", filename).unlink(missing_ok=True)
-        removed_extensions_count = delete_extensions_by_tenant(STORE_PATH, record["tenant_id"])
-        # O PJSIP é um arquivo compartilhado: remover o JSON do tenant
-        # não basta. Sem atualizar isto, endpoints antigos continuam
-        # disponíveis mesmo após excluir a empresa.
-        if removed_extensions_count:
-            remaining_extensions = load_store(STORE_PATH)
-            Path(ASTERISK_CONF_DIR, "generated", "pjsip_dynamic.conf").write_text(
-                render_pjsip_dynamic(remaining_extensions), encoding="utf-8"
-            )
-
-        client = AMIClient(AMI_HOST, AMI_PORT, AMI_USERNAME, AMI_SECRET)
-        try:
-            client.connect_and_login()
-            client.unregister_tenant_did(record["did"])
-            reload_result = client.reload_pjsip_and_dialplan()
-        except Exception as exc:  # noqa: BLE001
-            remaining = [t for t in existing if t["tenant_id"] != record["tenant_id"]]
-            save_tenants(TENANTS_PATH, remaining)
+            try:
+                outcome = remove_tenant(
+                    ASTERISK_CONF_DIR, TENANTS_PATH, STORE_PATH, existing, record,
+                    lambda: AMIClient(AMI_HOST, AMI_PORT, AMI_USERNAME, AMI_SECRET),
+                )
+            except TenantRemovalError as exc:
+                self._send_json(502, {
+                    "error": "remoção não confirmada; reconcilie cadastro e AstDB",
+                    "rollback_incomplete": exc.rollback_incomplete,
+                })
+                return
             self._send_json(200, {
-                "removed": record["tenant_id"], "removed_extensions": removed_extensions_count,
-                "reload_error": str(exc),
+                "removed": record["tenant_id"],
+                "removed_extensions": outcome["removed_extensions"],
+                "reload": outcome["reload"],
             })
-            return
-        finally:
-            client.close()
-
-        remaining = [t for t in existing if t["tenant_id"] != record["tenant_id"]]
-        save_tenants(TENANTS_PATH, remaining)
-        self._send_json(200, {
-            "removed": record["tenant_id"], "removed_extensions": removed_extensions_count,
-            "reload": reload_result,
-        })
 
     def _handle_disable_monitoring(self):
         if not self._require_role({"admin"}):
