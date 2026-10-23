@@ -9,6 +9,7 @@ import socket
 import threading
 
 from ami_protocol import parse_ami_blocks, build_action
+from ami_reload_policy import cli_reload_output_failed
 
 MAX_AMI_REPLY_BYTES = 128 * 1024
 MAX_AMI_EVENTS_PER_ACTION = 32
@@ -43,16 +44,31 @@ class AMIClient:
         return self._last_frame
 
     def _consume_follows_output(self):
-        """Compatibilidade com AMI antigo: Command Follows até END COMMAND."""
+        """Retorna a saída do CLI sem perder bytes da próxima ação."""
         terminator = b"--END COMMAND--"
-        while True:
-            index = self._recv_buffer.find(terminator)
-            if index >= 0:
-                trailer = self._recv_buffer.find(b"\r\n\r\n", index + len(terminator))
-                if trailer >= 0:
-                    self._recv_buffer = self._recv_buffer[trailer + 4:]
-                    return
-            self._receive()
+        parts = [self._last_frame]
+        total = len(self._last_frame)
+        if terminator not in self._last_frame:
+            while True:
+                index = self._recv_buffer.find(terminator)
+                if index >= 0:
+                    trailer = self._recv_buffer.find(b"\r\n\r\n", index + len(terminator))
+                    if trailer >= 0:
+                        portion = self._recv_buffer[:trailer + 4]
+                        total += len(portion)
+                        if total > MAX_AMI_REPLY_BYTES:
+                            raise ConnectionError("Saída AMI excede o limite")
+                        parts.append(portion)
+                        self._recv_buffer = self._recv_buffer[trailer + 4:]
+                        break
+                if total + len(self._recv_buffer) > MAX_AMI_REPLY_BYTES:
+                    raise ConnectionError("Saída AMI excede o limite")
+                self._receive()
+        # Os blocos Output e a sentinela são preservados somente para
+        # validação interna de sucesso; nunca entram nas respostas HTTP.
+        lines = b"".join(parts).decode("utf-8", errors="replace").splitlines()
+        return "\n".join(line[len("Output: "):] if line.startswith("Output: ")
+                         else line for line in lines)
 
     def connect_and_login(self, timeout=5):
         self._sock = socket.create_connection((self.host, self.port), timeout=timeout)
@@ -90,27 +106,31 @@ class AMIClient:
                 if response.get("ActionID") != action_id or "Response" not in response:
                     raise ConnectionError("Resposta AMI não corresponde à ação solicitada")
                 if response["Response"] == "Follows":
-                    # Algumas versões antigas do Asterisk emitem a saída
-                    # do comando após os headers, até --END COMMAND--.
-                    if b"--END COMMAND--" not in self._last_frame:
-                        self._consume_follows_output()
+                    # Response: Follows só confirma a entrega textual.
+                    # A mensagem CLI pode dizer "No such command".
+                    response["_cli_output"] = self._consume_follows_output()
                 return response
             raise ConnectionError("Eventos AMI excessivos antes da resposta")
 
     def reload_pjsip_and_dialplan(self):
-        """Recarrega PJSIP, dialplan, voicemail, filas e estacionamento sem derrubar chamadas em andamento."""
-        pjsip_response = self._send_action({"Action": "Command", "Command": "pjsip reload"})
-        dialplan_response = self._send_action({"Action": "Command", "Command": "dialplan reload"})
-        voicemail_response = self._send_action({"Action": "Command", "Command": "voicemail reload"})
-        queue_response = self._send_action({"Action": "Command", "Command": "queue reload all"})
-        parking_response = self._send_action({"Action": "Command", "Command": "parking reload"})
-        return {
-            "pjsip": pjsip_response.get("Response"),
-            "dialplan": dialplan_response.get("Response"),
-            "voicemail": voicemail_response.get("Response"),
-            "queue": queue_response.get("Response"),
-            "parking": parking_response.get("Response"),
+        """Comandos de reload com falha fechada em erro explícito do CLI."""
+        commands = {
+            "pjsip": "pjsip reload",
+            "dialplan": "dialplan reload",
+            "voicemail": "voicemail reload",
+            "queue": "queue reload all",
+            "parking": "parking reload",
         }
+        statuses = {}
+        for component, command in commands.items():
+            reply = self._send_action({"Action": "Command", "Command": command})
+            status = reply.get("Response")
+            if status not in ("Success", "Follows"):
+                raise ConnectionError(f"AMI recusou recarga do componente {component}")
+            if status == "Follows" and cli_reload_output_failed(reply.get("_cli_output")):
+                raise ConnectionError(f"CLI do Asterisk recusou recarga de {component}")
+            statuses[component] = status
+        return statuses
 
     def block_number(self, number: str, tenant: str = "t1"):
         """Adiciona um número na família 'blocklist-{tenant}' do AstDB (usado pelo dialplan)."""
