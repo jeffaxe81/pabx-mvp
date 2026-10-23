@@ -139,6 +139,8 @@ configurar, como testar manualmente, e limitações conhecidas.
 
 99. [Programa AXE PABX de 16 semanas e progresso verificável](manual-99-plano-16-semanas-pabx.md)
 
+100. [Pacote de evidências vinculado ao SHA de release](manual-100-release-evidence.md)
+
 ## Regra de manutenção
 
 Toda vez que uma funcionalidade nova for implementada no projeto, um
