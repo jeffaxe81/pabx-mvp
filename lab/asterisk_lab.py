@@ -326,6 +326,8 @@ def main(argv=None):
         print('Falha: '+report['error_type']+' / '+report['error_reason'])
     if report.get('phase'):
         print('Etapa: '+report['phase'])
+    for call, events in report.get('call_protocol', {}).items():
+        print('Protocolo '+call+': '+json.dumps(events, sort_keys=True))
     return 0 if success else 1
 
 

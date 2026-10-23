@@ -695,293 +695,210 @@ em vez de ignorá-los. Consulte o [Manual 77](docs/manual-77-arquivos-segredos-o
 
 O índice de gravações da API ignora links simbólicos; a leitura
 individual também rejeita aliases. A mudança inclui regressões
-automatizadas, sem alterar o fluxo de cha…6690 tokens truncated…           continue
-            members.append(member)
-        source.extractall(destination, members=members, filter='data')
-    helpers = destination/'helpers'
-    helpers.mkdir(mode=0o700)
-    for filename in ('admin-api/tenants.py', 'scripts/secrets_generator.py'):
-        body = command(['git', '-C', str(root), 'show', source_commit+':'+filename]).stdout
-        (helpers/Path(filename).name).write_text(body)
-    generator = load_file('lab_secrets_generator', helpers/'secrets_generator.py')
-    content = (conf/'pjsip.conf').read_text()
-    placeholders = generator.find_placeholders(content)
-    secret_map = {p: generator.generate_strong_secret() for p in placeholders}
-    content = generator.replace_all_placeholders(content, secret_map)
-    # O laboratório não altera templates, autenticação nem contextos de produção.
-    content = content.replace('bind=0.0.0.0:5060', 'bind=127.0.0.1:5060')
-    content = content.replace('bind=0.0.0.0:5061', 'bind=127.0.0.1:5061')
-    content = content.replace('bind=0.0.0.0', 'bind=127.0.0.1')
-    (conf/'pjsip.conf').write_text(content)
-    credentials = {}
-    for section, text in re.findall(r'(?m)^\[([^\]]+)\][^\n]*\n((?:(?!^\[).|\n)*)', content):
-        if re.search(r'(?m)^type=auth$', text):
-            match = re.search(r'(?m)^password=(.+)$', text)
-            credentials[section] = match[1]
-    tenants = load_file('lab_tenants', helpers/'tenants.py')
-    dynamic = tenants.generate_tenant_credentials('t3')
-    credentials.update(dynamic)
-    for folder, body in (
-        ('pjsip_tenants', tenants.render_tenant_pjsip('t3', dynamic)),
-        ('extensions_tenants', tenants.render_tenant_extensions('t3')),
-        ('queues_tenants', tenants.render_tenant_queues('t3')),
-        ('voicemail_tenants', tenants.render_tenant_voicemail('t3')),
-        ('parking_tenants', tenants.render_tenant_parking('t3')),
-    ):
-        (conf/folder).mkdir(exist_ok=True)
-        (conf/folder/'t3.conf').write_text(body)
-    # Nenhum AMI fica exposto pelo laboratório de registros.
-    (conf/'manager.conf').write_text('[general]\nenabled=no\n')
-    http = (conf/'http.conf').read_text().replace('0.0.0.0', '127.0.0.1')
-    (conf/'http.conf').write_text(http)
-    (conf/'asterisk.conf').write_text('''[directories]
-astetcdir => /etc/asterisk
-astmoddir => /usr/lib/asterisk/modules
-astvarlibdir => /var/lib/asterisk
-astdbdir => /var/lib/asterisk
-astkeydir => /var/lib/asterisk
-astdatadir => /var/lib/asterisk
-astagidir => /var/lib/asterisk/agi-bin
-astspooldir => /var/spool/asterisk
-astrundir => /var/run/asterisk
-astlogdir => /var/log/asterisk
-[options]
-verbose = 0
-debug = 0
-''')
-    (conf/'modules.conf').write_text('[modules]\nautoload=yes\n')
-    (conf/'logger.conf').write_text('[logfiles]\nconsole => error,warning\n')
-    certs = conf/'certs'
-    certs.mkdir()
-    command(['openssl', 'req', '-x509', '-newkey', 'rsa:2048', '-nodes',
-             '-keyout', str(certs/'asterisk.key'), '-out', str(certs/'asterisk.crt'),
-             '-days', '1', '-subj', '/CN=localhost',
-             '-addext', 'subjectAltName=DNS:localhost,IP:127.0.0.1'])
-    # Nenhum dado do laboratório fica acessível para outros usuários locais.
-    for path in destination.rglob('*'):
-        path.chmod(0o700 if path.is_dir() else 0o600)
-    return {'credentials': credentials, 'conf': conf, 'ca': certs/'asterisk.crt'}
+automatizadas, sem alterar o fluxo de chamadas SIP.
+Consulte o [Manual 78](docs/manual-78-indice-gravacoes-seguro.md).
 
+## Cadastro de ramais — validação de dados e senha SIP
 
-def command(argv, *, timeout=30, check=True):
-    result = subprocess.run(argv, capture_output=True, text=True, timeout=timeout)
-    if check and result.returncode:
-        # stdout/stderr podem conter material de configuração; não publicar.
-        raise RuntimeError('comando do laboratório falhou')
-    return result
+O painel administrativo rejeita payloads JSON de tipos inválidos e
+campos que poderiam introduzir diretivas em PJSIP ou voicemail.
+Novos ramais sem senha recebem um segredo SIP aleatório forte, mostrado
+uma única vez ao administrador para provisionamento e ocultado ao sair.
+O formulário não mostra a senha durante a digitação e o cadastro de
+ramais antigos preserva seus segredos existentes até uma rotação
+controlada. Veja o [Manual 79](docs/manual-79-ramais-validacao-segredos.md).
 
+## Acesso autenticado a gravações por tenant
 
-def cli(container, text):
-    return command(['docker', 'exec', container, 'asterisk', '-rx', text]).stdout
+A listagem e a reprodução de gravações ficam bloqueadas sem um token
+Bearer válido, escopo de tenant e vínculo explícito do áudio à empresa.
+O Webphone carrega os áudios via requisições autenticadas e URLs Blob,
+sem divulgar tokens em parâmetros de URL. A política é armazenada em
+volume privado e o acesso fica desativado quando está ausente.
+Essa etapa não substitui SSO, TLS no proxy e homologação operacional.
+Ver o [Manual 80](docs/manual-80-acesso-gravacoes-tenant.md).
 
+## PIN de voicemail dos novos ramais
 
-def diagnose(raw):
-    return {
-        'missing_template': 'Inheritance requested, but category' in raw,
-        'permission_denied': 'Permission denied' in raw,
-        'database_unavailable': 'Unable to open Asterisk database' in raw,
-        'config_unreadable': 'Unable to open specified master config file' in raw,
-    }
+A criação de um ramal pelo painel administrativo gera agora um PIN
+aleatório de oito dígitos para seu correio de voz, além da senha SIP.
+Os dois segredos são apresentados somente no resultado inicial do
+cadastro. Ramais antigos sem PIN persistido mantêm o comportamento
+anterior e **precisam de rotação administrada**, sem troca automática.
+Confira o [Manual 81](docs/manual-81-pins-voicemail-ramais.md).
 
+## Ramais provisionados em tenants dinâmicos (t3+)
 
-def cleanup_owned(name, ownership):
-    """Remove somente o ID cujo token de propriedade coincide; logs são opcionais."""
-    result = {'removed': False, 'retain_staging': True, 'diagnostics': diagnose('')}
-    try:
-        inspected = command(['docker', 'inspect', name], check=False)
-        if inspected.returncode:
-            return result
-        info = json.loads(inspected.stdout)[0]
-        labels = info['Config'].get('Labels') or {}
-        if labels.get('io.axe.pabx.lab-owner') != ownership:
-            result['retain_staging'] = False  # Outro container nunca usou nossa montagem.
-            return result
-        container_id = info['Id']
-        if not re.fullmatch(r'[0-9a-f]{64}', container_id):
-            return result
-    except (OSError, ValueError, TypeError, KeyError, IndexError, subprocess.TimeoutExpired):
-        return result
-    try:
-        logs = command(['docker', 'logs', container_id], check=False, timeout=8)
-        result['diagnostics'] = diagnose(logs.stdout + logs.stderr)
-    except (OSError, subprocess.TimeoutExpired):
-        pass
-    # A remoção independe da coleta de logs e usa ID imutável, nunca só nome.
-    try:
-        removed = command(['docker', 'rm', '--force', '--volumes', container_id], check=False)
-        result['removed'] = removed.returncode == 0
-        result['retain_staging'] = not result['removed']
-    except (OSError, subprocess.TimeoutExpired):
-        pass
-    return result
+O painel agora aceita ramais nos tenants criados pelo wizard, consultando
+um catálogo de IDs provisionados em vez de aceitar livremente o ID
+informado na requisição. O Asterisk recebe os arquivos de dialplan,
+hints e voicemail de cada tenant, inclusive arquivos inicialmente
+vazios durante o cadastro. O seletor mostra os tenants habilitados
+para administrador e supervisor sem expor DIDs ao supervisor.
 
+Consulte o [Manual 82](docs/manual-82-ramais-tenants-dinamicos.md).
 
-def summarize(checks, *, calls=False):
-    required = {'real_runtime', 'tls_transport', 'wss_transport', 'container_removed',
-                'checkout_clean', 'runtime_mounts', 'source_label'}
-    required.update(name+':'+tid for tid in ('t1', 't2', 't3')
-                    for name in ('context', 'register', 'contact', 'unregister', 'wrong_password'))
-    if calls:
-        from .call_checks import required_call_checks
-        required.update(required_call_checks())
-    passed = sum(value is True for value in checks.values())
-    return {'passed': passed, 'total': len(checks),
-            'success': set(checks) == required and passed == len(required)}
+## Importação em lote de gravações por tenant
 
+O utilitário `queue-api/recording_catalog.py` importa lotes de
+áudios previamente conferidos por um operador para o catálogo
+privado de acesso a gravações. Por padrão somente simula mudanças;
+`--apply` exige referências explícitas de evidência, recusa
+classificações conflitantes entre empresas e persiste os dados com
+lock e troca atômica, sem modificar credenciais existentes.
+Veja o [Manual 83](docs/manual-83-catalogo-gravacoes.md).
 
-def run(root, report, *, calls=False):
-    source = command(['git', '-C', str(root), 'rev-parse', 'HEAD']).stdout.strip()
-    if not re.fullmatch(r'[0-9a-f]{40}', source):
-        raise ValueError('SHA do checkout inválido')
-    report.update(schema_version=1, kind='real_asterisk_tls_registration_lab',
-                  source_commit=source, operational_go_authorized=False,
-                  timestamp_utc=datetime.now(timezone.utc).isoformat(), checks={},
-                  sip_call_tested=False, rtp_tested=False, srtp_tested=False,
-                  live_tenant_isolation_tested=False, backup_restore_tested=False)
-    if calls:
-        report.update(schema_version=2, kind='real_asterisk_secure_calls_lab', dtls_tested=False,
-                      wss_session_tested=False)
-    clean = command(['git', '-C', str(root), 'diff', '--quiet', 'HEAD', '--',
-                     'asterisk', 'admin-api/tenants.py', 'admin-api/conf_generator.py',
-                     'scripts/secrets_generator.py', 'lab'], check=False)
-    report['checks']['checkout_clean'] = clean.returncode == 0
-    if clean.returncode != 0:
-        raise RuntimeError('checkout do laboratório contém alterações não commitadas')
-    name = 'axe-lab-' + secrets.token_hex(6)
-    ownership = secrets.token_hex(32)
-    attempted_create = False
-    retain_staging = False
-    folder = Path(tempfile.mkdtemp(prefix='axe-pabx-lab-'))
-    try:
-        prepared = prepare(root, folder/'private', source)
-        if calls:
-            from .call_checks import prepare_calls
-            prepare_calls(root, prepared, source)
-        command(['docker', 'pull', IMAGE], timeout=180)
-        image_data = json.loads(command(['docker', 'image', 'inspect', IMAGE]).stdout)[0]
-        report['image_id'] = image_data['Id']
-        report['image_digests'] = image_data.get('RepoDigests', [])
-        attempted_create = True
-        result = command(['docker', 'create', '--name', name,
-                         '--network', 'host', '--user', '0:0', '--cap-drop', 'ALL',
-                         '--cap-add', 'DAC_OVERRIDE',
-                         '--security-opt', 'no-new-privileges', '--label',
-                         'io.axe.pabx.source-commit='+source, '--label',
-                         'io.axe.pabx.lab-owner='+ownership,
-                         '--mount', f'type=bind,src={prepared["conf"]},dst=/etc/asterisk,readonly',
-                         '--entrypoint', 'asterisk', IMAGE, '-f', '-n',
-                         '-C', '/etc/asterisk/asterisk.conf'], check=False)
-        if result.returncode:
-            raise RuntimeError('inicialização do container falhou')
-        container_id = result.stdout.strip()
-        if not re.fullmatch(r'[0-9a-f]{64}', container_id):
-            raise RuntimeError('ID de container inválido')
-        command(['docker', 'start', container_id])
-        container_data = json.loads(command(['docker','inspect',container_id]).stdout)[0]
-        report['checks']['source_label'] = (
-            container_data['Config']['Labels'].get('io.axe.pabx.source-commit') == source
-            and container_data['Image'] == image_data['Id'])
-        report['checks']['runtime_mounts'] = any(
-            mount.get('Type') == 'bind' and mount.get('Destination') == '/etc/asterisk'
-            and mount.get('Source') == str(prepared['conf']) and mount.get('RW') is False
-            for mount in container_data['Mounts'])
-        ready = False
-        for _ in range(40):
-            result = command(['docker', 'exec', container_id, 'asterisk', '-rx',
-                              'core show version'], check=False)
-            if result.returncode == 0 and 'Asterisk ' in result.stdout:
-                report['asterisk_version'] = result.stdout.strip().splitlines()[0]
-                ready = True
-                break
-            time.sleep(0.5)
-        report['checks']['real_runtime'] = ready
-        if not ready:
-            raise RuntimeError('Asterisk não ficou pronto')
-        # A CLI abrir antes do PJSIP não significa que todos os módulos carregaram.
-        deadline = time.monotonic() + 20
-        while time.monotonic() < deadline:
-            if 't1-1001' in cli(container_id, 'pjsip show endpoints'):
-                break
-            time.sleep(0.5)
-        report['checks']['tls_transport'] = 'transport-tls' in cli(container_id, 'pjsip show transports')
-        report['checks']['wss_transport'] = 'transport-wss' in cli(container_id, 'pjsip show transports')
-        for tenant, endpoint in (('t1','t1-1001'), ('t2','t2-1001'), ('t3','t3-recepcao')):
-            endpoint_output = cli(container_id, f'pjsip show endpoint {endpoint}')
-            report['checks']['context:'+tenant] = bool(re.search(
-                r'(?im)^\s*context\s*:\s*'+tenant+r'-internal\s*$', endpoint_output))
-            peer = SipTLS('127.0.0.1', 5061, prepared['ca'], endpoint,
-                          prepared['credentials'][endpoint])
-            try:
-                report['tls_version'] = peer.connection.version()
-                report['phase'] = 'register:'+tenant
-                report['checks']['register:'+tenant] = peer.register() == 200
-                report['checks']['contact:'+tenant] = endpoint+'/' in cli(container_id, 'pjsip show contacts')
-                report['phase'] = 'unregister:'+tenant
-                report['checks']['unregister:'+tenant] = peer.register(expires=0) == 200
-            finally:
-                peer.close()
-            peer = SipTLS('127.0.0.1', 5061, prepared['ca'], endpoint, secrets.token_hex(24))
-            try:
-                report['phase'] = 'wrong_password:'+tenant
-                report['checks']['wrong_password:'+tenant] = peer.register() in (401,403)
-            finally:
-                peer.close()
-        if calls:
-            from .call_checks import exercise_calls
-            exercise_calls(container_id, prepared, report)
-    finally:
-        if attempted_create:
-            cleaned = cleanup_owned(name, ownership)
-            report['checks']['container_removed'] = cleaned['removed']
-            report['startup_diagnostics'] = cleaned['diagnostics']
-            retain_staging = cleaned['retain_staging']
-        report['private_staging_retained'] = retain_staging
-        if not retain_staging:
-            shutil.rmtree(folder)
-    report.update(summarize(report['checks'], calls=calls))
-    return report['success']
+## Gerência de credenciais de gravações
 
+O utilitário local `queue-api/recording_credentials.py` emite
+credenciais temporárias por tenant e papel e permite revogá-las
+por hash sem guardar os tokens em texto claro no catálogo. A
+política permanece privada no servidor, com lock e escrita atômica.
+A etapa ainda não integra o login do administrador ao Webphone.
+Consulte o [Manual 84](docs/manual-84-credenciais-gravacoes.md).
 
-def main(argv=None):
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--report', required=True, type=Path)
-    parser.add_argument('--calls', action='store_true', help='testar chamadas, CDR e SRTP real')
-    args = parser.parse_args(argv)
-    report = {}
-    try:
-        success = run(Path(__file__).resolve().parents[1], report, calls=args.calls)
-    except (OSError, ValueError, RuntimeError, TimeoutError, subprocess.TimeoutExpired) as exc:
-        success = False
-        report['success'] = False
-        report['error_type'] = type(exc).__name__
-        known_errors = {'REGISTER inicial deve exigir autenticação': 'challenge_expected',
-                        'resposta de outra transação SIP': 'transaction_mismatch',
-                        'desafio REGISTER ausente ou ambíguo': 'challenge_missing',
-                        'Content-Length SIP inválido': 'content_length_invalid',
-                        'INVITE inicial deve exigir autenticação': 'invite_challenge_expected',
-                        'contato SIP fora do loopback': 'contact_not_loopback',
-                        'SDP do laboratório deve ser SRTP loopback': 'sdp_not_secure_loopback',
-                        'perfil SDP não suportado': 'sdp_profile_unsupported',
-                        'conteúdo PCMU divergente': 'pcmu_content_mismatch',
-                        'origem de mídia inesperada': 'media_source_mismatch'}
-        report['error_reason'] = known_errors.get(str(exc), 'other')
-        if re.fullmatch(r'chamada SIP rejeitada: [0-9]{3}', str(exc)):
-            report['error_reason'] = 'call_rejected_'+str(exc)[-3:]
-    args.report.parent.mkdir(parents=True, exist_ok=True)
-    args.report.write_text(json.dumps(report, indent=2, sort_keys=True)+'\n')
-    checks = report.get('checks', {})
-    print(f"Asterisk real: {sum(checks.values())}/{len(checks)} verificações; "
-          f"resultado={'PASS' if success else 'FAIL'}")
-    for key, passed in checks.items():
-        print(f"  {key}: {'PASS' if passed else 'FAIL'}")
-    if report.get('error_type'):
-        print('Falha: '+report['error_type']+' / '+report['error_reason'])
-    if report.get('phase'):
-        print('Etapa: '+report['phase'])
-    for call, events in report.get('call_protocol', {}).items():
-        print('Protocolo '+call+': '+json.dumps(events, sort_keys=True))
-    return 0 if success else 1
+## Persistência segura do cadastro de ramais
 
+O `admin-api` agora salva `extensions_store.json` usando temporário
+privado e substituição atômica, além de serializar operações CRUD
+simultâneas dentro do mesmo processo. Arquivos JSON inválidos e
+symlinks são recusados para evitar perda de dados ou gravações
+inseguras. Consulte o [Manual 85](docs/manual-85-cadastro-ramais-atomico.md).
 
-if __name__ == '__main__':
-    raise SystemExit(main())
+## Limites de requisições JSON do painel
+
+O `admin-api` limita corpos JSON a 64 KiB, recusa cabeçalhos HTTP
+ambíguos e documentos que não sejam objetos JSON. Uma requisição
+inválida provoca fechamento da conexão para não reaproveitar bytes
+residuais. Consulte o [Manual 86](docs/manual-86-limites-json-admin.md).
+
+## Atualização segura das configurações do Asterisk
+
+A recarga dos arquivos dinâmicos do PABX agora utiliza publicação por
+temporários e restauração dos arquivos anteriores quando a etapa AMI
+ou a publicação falha. O Docker Compose passa a compartilhar o diretório
+`asterisk/generated/` (somente leitura no Asterisk), evitando o
+problema de `os.replace` com bind mounts individuais.
+
+**Instalações existentes precisam de migração prévia dos arquivos
+dinâmicos e recriação do container Asterisk em janela aprovada.**
+A mudança não substitui backup nem garante rollback de AstDB e dados
+do painel. Consulte o [Manual 87](docs/manual-87-publicacao-asterisk-rollback.md).
+
+## Pré-check da migração de configurações Asterisk
+
+O utilitário `scripts/check_generated_migration.py` verifica, sem
+modificar o servidor, se a pasta `asterisk/generated/` possui os
+arquivos dinâmicos e includes esperados. Ele aceita o catálogo de
+empresas para checar `t3+` e a opção `--compare-legacy` para
+conferir cópias antigas antes da migração. Consulte o
+[Manual 88](docs/manual-88-precheck-gerados-asterisk.md).
+
+## Conciliação de gravações com CDR do Asterisk
+
+Os dialplans agora registram `CDR(accountcode)` com o ID do tenant
+nos fluxos estáticos e nas configurações dinâmicas. O utilitário
+`queue-api/recording_cdr_candidates.py` cruza eventos CDR de fonte
+confiável com gravações locais e **somente sugere** um manifesto se
+accountcode, contexto, ramal, horário, origem e destino concordarem.
+Conflitos e dados ambíguos são rejeitados; nenhuma gravação é
+liberada automaticamente. Veja o [Manual 89](docs/manual-89-conciliacao-cdr-gravacoes.md).
+
+## Respostas completas no cliente AMI administrativo
+
+O cliente AMI agora reconstrói respostas TCP fragmentadas, exige
+`ActionID` correspondente e ignora eventos assíncronos antes da
+resposta. Limites de tamanho e timeout impedem espera indefinida e
+respostas incompletas. Os testes usam socket simulado; o resultado
+de reload ainda deve ser verificado no Asterisk real.
+Veja o [Manual 90](docs/manual-90-ami-tcp-framing.md).
+
+## Consultas AMI de VIPs, bloqueios e transbordo
+
+As consultas de listas AstDB usam `ActionID` e só retornam após
+`DBGetTreeComplete`, evitando respostas parciais e períodos de espera
+fixos. Também filtram as entradas pela família do tenant e preservam
+o timeout do socket. Veja o [Manual 91](docs/manual-91-ami-dbgettree-eventos.md).
+
+## Verificação de comandos Asterisk via AMI
+
+Além de reconhecer respostas completas e `ActionID`, o cliente AMI
+verifica mensagens explícitas de erro no resultado textual dos comandos
+`pjsip reload`, `dialplan reload`, `voicemail reload`, `queue reload all`
+e `parking reload`. Uma rejeição interrompe a sequência e aciona a
+tentativa de restauração da configuração anterior (Manual 87).
+A confirmação do funcionamento real ainda depende da homologação.
+Veja o [Manual 92](docs/manual-92-validacao-semantic-reload-ami.md).
+
+## Confirmação obrigatória de escrita AstDB
+
+As operações AMI que registram ou excluem mapeamentos de ramais e
+associações DID/tenant só são consideradas concluídas quando recebem
+`Response: Success`. Erros são tratados explicitamente, permitindo
+que os fluxos de atualização acionem a compensação possível.
+Consulte o [Manual 93](docs/manual-93-confirmacao-astdb-ami.md).
+
+## Criação recuperável de novos tenants
+
+O wizard só retorna HTTP 201 após gerar os arquivos do tenant,
+confirmar o DID e a recarga no AMI e persistir o cadastro JSON.
+Uma falha remove os arquivos novos e tenta compensar o DID em nova
+sessão AMI. Se não for possível confirmar a compensação, a API
+sinaliza `rollback_incomplete=true` para reconciliação manual.
+Veja o [Manual 94](docs/manual-94-tenant-create-compensation.md).
+
+## Remoção recuperável de empresas
+
+O wizard agora guarda snapshots dos arquivos Asterisk e do cadastro
+de ramais ao excluir tenants. Se ocorrer erro no AMI ou no salvamento,
+a operação tenta restaurar arquivos, ramais e associação DID,
+retornando erro quando a exclusão não for confirmada. Consulte o
+[Manual 95](docs/manual-95-remocao-tenant-compensavel.md).
+
+## Auditoria do Asterisk em laboratório
+
+O comando `python3 scripts/asterisk_lab_audit.py --runtime docker`
+consulta o Asterisk **em execução** via CLI somente leitura.
+Verifica presença dos transportes TLS/WSS, contexto SIP dos ramais
+por tenant, dialplan de entrada e (com catálogo privado fornecido)
+os mapeamentos DID do AstDB, sem divulgar valores no relatório.
+O resultado não comprova chamadas, registro, mídia RTP/SRTP ou GO.
+Veja o [Manual 96](docs/manual-96-auditoria-runtime-asterisk.md).
+
+## Reconhecimento do contexto PJSIP no Asterisk
+
+A auditoria de runtime reconhece agora a saída realista de
+`pjsip show endpoint`, inclusive a opção `context : tN-internal`
+com variações de espaços e letras. Regressões impedem confundir
+contextos cruzados ou nomes parecidos. Veja o
+[Manual 97](docs/manual-97-pjsip-cli-compat.md).
+
+## Recuperação do cadastro de tenants após falha de escrita
+
+A criação e remoção de empresas agora preservam um snapshot do catálogo
+`tenants.json`. Se a gravação falhar mesmo depois de substituir o
+arquivo, tentam restaurar os bytes e permissões anteriores e sinalizam
+`rollback_incomplete` caso a compensação não seja confirmada.
+Veja o [Manual 98](docs/manual-98-tenant-registry-compensation.md).
+
+## Programa antecipado de quatro meses — 16 semanas
+
+O [plano de 16 semanas](docs/plano-16-semanas-pabx.json) organiza
+homologação SIP real, segurança multiempresa, restauração, carga e
+revisão operacional com critérios de aceite por marco. Consulte o
+[Manual 99](docs/manual-99-plano-16-semanas-pabx.md).
+O progresso pode ser calculado por
+`python3 scripts/program_progress.py --format markdown`.
+O script não testa chamadas nem concede autorização de GO.
+
+## Evidências de release com SHA comum
+
+O `scripts/release_evidence.py` cruza a auditoria CLI do Asterisk e
+os 13 testes declarados de homologação com o SHA completo do release.
+Relatórios divergentes ou incompletos bloqueiam a revisão. A saída
+inclui hashes dos arquivos de evidências, mas não autentica as provas,
+não executa chamadas e **não autoriza GO**.
+Veja o [Manual 100](docs/manual-100-release-evidence.md).
+
+101. [Laboratório real de registro SIP/TLS](docs/manual-101-laboratorio-sip-real.md)
+102. [Chamadas internas reais com SRTP](docs/manual-102-chamadas-srtp-reais.md)
