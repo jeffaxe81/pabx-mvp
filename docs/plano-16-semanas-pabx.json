@@ -67,9 +67,9 @@
       "title": "Provar RTP e SRTP/DTLS",
       "area": "media",
       "acceptance": "Áudio bidirecional, criptografia negociada e evidência segura",
-      "status": "in_progress",
-      "pr_number": null,
-      "ci_run_id": null,
+      "status": "done",
+      "pr_number": 57,
+      "ci_run_id": 40007838427,
       "requires_lab": true
     },
     {
@@ -78,9 +78,9 @@
       "title": "Homologar DIDs conhecidos/desconhecidos",
       "area": "routing",
       "acceptance": "Encaminhamento correto e rejeição fail-closed com sinalização",
-      "status": "planned",
-      "pr_number": null,
-      "ci_run_id": null,
+      "status": "done",
+      "pr_number": 57,
+      "ci_run_id": 40007838427,
       "requires_lab": true
     },
     {

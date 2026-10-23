@@ -56,6 +56,12 @@ O cálculo é `marcos concluídos / 16` (25% por mês quando seus
 quatro marcos forem entregues), distinto do avanço das PRs
 específicas ou das 13 provas do Manual 73.
 
+Checkpoint de 23/10/2026: os marcos 6 e 7 foram validados pela PR #57,
+CI real 40007838427 e CI estática 40007838447. O programa está em
+**7/16 (43,8%)**. A rodada foi limitada pelo usuário a essas duas semanas
+e encerra antes do marco 8. Os aceites e as correções estão no
+[Manual 103](manual-103-webrtc-dids-reais.md).
+
 ## Condições de GO
 
 Mesmo com o programa em 100%, o script **não autoriza produção**.
