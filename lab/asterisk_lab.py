@@ -164,17 +164,20 @@ def cleanup_owned(name, ownership):
     return result
 
 
-def summarize(checks):
+def summarize(checks, *, calls=False):
     required = {'real_runtime', 'tls_transport', 'wss_transport', 'container_removed',
                 'checkout_clean', 'runtime_mounts', 'source_label'}
     required.update(name+':'+tid for tid in ('t1', 't2', 't3')
                     for name in ('context', 'register', 'contact', 'unregister', 'wrong_password'))
+    if calls:
+        from .call_checks import required_call_checks
+        required.update(required_call_checks())
     passed = sum(value is True for value in checks.values())
     return {'passed': passed, 'total': len(checks),
             'success': set(checks) == required and passed == len(required)}
 
 
-def run(root, report):
+def run(root, report, *, calls=False):
     source = command(['git', '-C', str(root), 'rev-parse', 'HEAD']).stdout.strip()
     if not re.fullmatch(r'[0-9a-f]{40}', source):
         raise ValueError('SHA do checkout inválido')
@@ -183,8 +186,12 @@ def run(root, report):
                   timestamp_utc=datetime.now(timezone.utc).isoformat(), checks={},
                   sip_call_tested=False, rtp_tested=False, srtp_tested=False,
                   live_tenant_isolation_tested=False, backup_restore_tested=False)
+    if calls:
+        report.update(schema_version=2, kind='real_asterisk_secure_calls_lab', dtls_tested=False,
+                      wss_session_tested=False)
     clean = command(['git', '-C', str(root), 'diff', '--quiet', 'HEAD', '--',
-                     'asterisk', 'admin-api/tenants.py', 'scripts/secrets_generator.py', 'lab'], check=False)
+                     'asterisk', 'admin-api/tenants.py', 'admin-api/conf_generator.py',
+                     'scripts/secrets_generator.py', 'lab'], check=False)
     report['checks']['checkout_clean'] = clean.returncode == 0
     if clean.returncode != 0:
         raise RuntimeError('checkout do laboratório contém alterações não commitadas')
@@ -195,6 +202,9 @@ def run(root, report):
     folder = Path(tempfile.mkdtemp(prefix='axe-pabx-lab-'))
     try:
         prepared = prepare(root, folder/'private', source)
+        if calls:
+            from .call_checks import prepare_calls
+            prepare_calls(root, prepared, source)
         command(['docker', 'pull', IMAGE], timeout=180)
         image_data = json.loads(command(['docker', 'image', 'inspect', IMAGE]).stdout)[0]
         report['image_id'] = image_data['Id']
@@ -264,6 +274,9 @@ def run(root, report):
                 report['checks']['wrong_password:'+tenant] = peer.register() in (401,403)
             finally:
                 peer.close()
+        if calls:
+            from .call_checks import exercise_calls
+            exercise_calls(container_id, prepared, report)
     finally:
         if attempted_create:
             cleaned = cleanup_owned(name, ownership)
@@ -273,17 +286,18 @@ def run(root, report):
         report['private_staging_retained'] = retain_staging
         if not retain_staging:
             shutil.rmtree(folder)
-    report.update(summarize(report['checks']))
+    report.update(summarize(report['checks'], calls=calls))
     return report['success']
 
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--report', required=True, type=Path)
+    parser.add_argument('--calls', action='store_true', help='testar chamadas, CDR e SRTP real')
     args = parser.parse_args(argv)
     report = {}
     try:
-        success = run(Path(__file__).resolve().parents[1], report)
+        success = run(Path(__file__).resolve().parents[1], report, calls=args.calls)
     except (OSError, ValueError, RuntimeError, TimeoutError, subprocess.TimeoutExpired) as exc:
         success = False
         report['success'] = False
@@ -291,8 +305,16 @@ def main(argv=None):
         known_errors = {'REGISTER inicial deve exigir autenticação': 'challenge_expected',
                         'resposta de outra transação SIP': 'transaction_mismatch',
                         'desafio REGISTER ausente ou ambíguo': 'challenge_missing',
-                        'Content-Length SIP inválido': 'content_length_invalid'}
+                        'Content-Length SIP inválido': 'content_length_invalid',
+                        'INVITE inicial deve exigir autenticação': 'invite_challenge_expected',
+                        'contato SIP fora do loopback': 'contact_not_loopback',
+                        'SDP do laboratório deve ser SRTP loopback': 'sdp_not_secure_loopback',
+                        'perfil SDP não suportado': 'sdp_profile_unsupported',
+                        'conteúdo PCMU divergente': 'pcmu_content_mismatch',
+                        'origem de mídia inesperada': 'media_source_mismatch'}
         report['error_reason'] = known_errors.get(str(exc), 'other')
+        if re.fullmatch(r'chamada SIP rejeitada: [0-9]{3}', str(exc)):
+            report['error_reason'] = 'call_rejected_'+str(exc)[-3:]
     args.report.parent.mkdir(parents=True, exist_ok=True)
     args.report.write_text(json.dumps(report, indent=2, sort_keys=True)+'\n')
     checks = report.get('checks', {})
@@ -302,6 +324,8 @@ def main(argv=None):
         print(f"  {key}: {'PASS' if passed else 'FAIL'}")
     if report.get('error_type'):
         print('Falha: '+report['error_type']+' / '+report['error_reason'])
+    if report.get('phase'):
+        print('Etapa: '+report['phase'])
     return 0 if success else 1
 
 
