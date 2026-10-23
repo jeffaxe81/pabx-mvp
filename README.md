@@ -837,3 +837,12 @@ associações DID/tenant só são consideradas concluídas quando recebem
 `Response: Success`. Erros são tratados explicitamente, permitindo
 que os fluxos de atualização acionem a compensação possível.
 Consulte o [Manual 93](docs/manual-93-confirmacao-astdb-ami.md).
+
+## Criação recuperável de novos tenants
+
+O wizard só retorna HTTP 201 após gerar os arquivos do tenant,
+confirmar o DID e a recarga no AMI e persistir o cadastro JSON.
+Uma falha remove os arquivos novos e tenta compensar o DID em nova
+sessão AMI. Se não for possível confirmar a compensação, a API
+sinaliza `rollback_incomplete=true` para reconciliação manual.
+Veja o [Manual 94](docs/manual-94-tenant-create-compensation.md).
