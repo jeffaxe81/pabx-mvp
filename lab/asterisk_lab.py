@@ -103,6 +103,15 @@ def cli(container, text):
     return command(['docker', 'exec', container, 'asterisk', '-rx', text]).stdout
 
 
+def summarize(checks):
+    required = {'real_runtime', 'tls_transport', 'wss_transport', 'container_removed'}
+    required.update(name+':'+tid for tid in ('t1', 't2', 't3')
+                    for name in ('context', 'register', 'contact', 'unregister', 'wrong_password'))
+    passed = sum(value is True for value in checks.values())
+    return {'passed': passed, 'total': len(checks),
+            'success': set(checks) == required and passed == len(required)}
+
+
 def run(root, report):
     source = command(['git', '-C', str(root), 'rev-parse', 'HEAD']).stdout.strip()
     if not re.fullmatch(r'[0-9a-f]{40}', source):
@@ -172,15 +181,18 @@ def run(root, report):
                     peer.close()
         finally:
             if started:
-                raw = command(['docker','logs',name], check=False).stdout
+                logs = command(['docker','logs',name], check=False)
+                raw = logs.stdout + logs.stderr
+                report['startup_diagnostics'] = [line[:250] for line in raw.splitlines()
+                    if any(term in line for term in ('does not exist', 'Unable to open', 'Unable to load',
+                        'Unable to create', 'No such file', 'Permission denied', 'Cannot open', 'not found'))
+                    and not any(term in line.lower() for term in ('password', 'secret', 'auth', 'nonce'))][:12]
                 # Somente erros com nomes de templates; nunca linhas SIP, chaves ou áudio.
                 report['missing_templates'] = sorted(set(re.findall(
                     r"Inheritance requested, but category '([A-Za-z0-9_!,-]+)' does not exist", raw)))
                 cleaned = command(['docker','rm','--force',name], check=False)
                 report['checks']['container_removed'] = cleaned.returncode == 0
-    report['passed'] = sum(report['checks'].values())
-    report['total'] = len(report['checks'])
-    report['success'] = report['total'] == 22 and report['passed'] == report['total']
+    report.update(summarize(report['checks']))
     return report['success']
 
 
