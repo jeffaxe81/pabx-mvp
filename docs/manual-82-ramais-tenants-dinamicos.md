@@ -31,6 +31,9 @@ Esta entrega conecta os fluxos e mantém o isolamento.
    Valores de exibição são inseridos via `textContent`, sem HTML.
 7. Ao adicionar ou excluir empresa, as opções do seletor são
    atualizadas; um tenant removido não permanece selecionado.
+8. Na exclusão de tenant, o PJSIP compartilhado é regenerado sem os
+   endpoints apagados antes do reload, para não conservar credenciais
+   SIP órfãs de empresas removidas.
 
 ## Testes
 
