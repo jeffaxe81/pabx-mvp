@@ -106,7 +106,7 @@ def markdown(report):
         rows.append(f"- Semana {item['week']}: {item['title']} "
                     f"({item['status']})")
     rows.extend(["", "O relatório não executa chamadas nem comprova "
-                 "CI ou autoriza implantação."])
+                 "CI ou autoriza GO/implantação."])
     return "\n".join(rows) + "\n"
 
 
