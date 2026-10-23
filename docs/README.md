@@ -155,3 +155,4 @@ registrado como regra permanente no prompt master
 103. [Webphone real com WSS e DTLS-SRTP](manual-103-webrtc-real.md)
 104. [Números de entrada e encerramento dos marcos 6 e 7](manual-104-webrtc-dids-reais.md)
 105. [Trilha CEL e CDR correlacionado no aceite de DIDs](manual-105-cel-dids.md)
+106. [Gate estático inicial de isolamento multiempresa](manual-106-isolamento-estatico.md)
