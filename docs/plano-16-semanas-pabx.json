@@ -56,9 +56,9 @@
       "title": "Realizar chamadas SIP internas bidirecionais",
       "area": "sip",
       "acceptance": "Estabelecimento, desligamento e CDR em dois tenants",
-      "status": "planned",
-      "pr_number": null,
-      "ci_run_id": null,
+      "status": "done",
+      "pr_number": 54,
+      "ci_run_id": 39980624663,
       "requires_lab": true
     },
     {
@@ -67,7 +67,7 @@
       "title": "Provar RTP e SRTP/DTLS",
       "area": "media",
       "acceptance": "Áudio bidirecional, criptografia negociada e evidência segura",
-      "status": "planned",
+      "status": "in_progress",
       "pr_number": null,
       "ci_run_id": null,
       "requires_lab": true

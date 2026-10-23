@@ -901,3 +901,4 @@ não executa chamadas e **não autoriza GO**.
 Veja o [Manual 100](docs/manual-100-release-evidence.md).
 
 101. [Laboratório real de registro SIP/TLS](docs/manual-101-laboratorio-sip-real.md)
+102. [Chamadas internas reais com SRTP](docs/manual-102-chamadas-srtp-reais.md)
