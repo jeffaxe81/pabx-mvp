@@ -350,3 +350,104 @@ def test_t3_duplicate_number_fails_only_inside_same_tenant():
         existing, allowed_tenants={"t1", "t2", "t3"}
     )
     assert ok and cleaned["tenant"] == "t2"
+
+# ---------- armazenamento atômico e concorrência local ----------
+
+def test_atomic_store_keeps_previous_snapshot_if_replace_fails(tmp_path, monkeypatch):
+    import store
+    target = tmp_path / "extensions.json"
+    original = [{**VALID_INPUT}]
+    save_store(target, original)
+    previous_bytes = target.read_bytes()
+
+    def interrupted_replace(src, dst):
+        raise OSError("falha simulada antes da troca")
+
+    monkeypatch.setattr(store.os, "replace", interrupted_replace)
+    with pytest.raises(OSError, match="falha simulada"):
+        save_store(target, [{**VALID_INPUT, "name": "ramal-novo"}])
+    assert target.read_bytes() == previous_bytes
+    assert not list(tmp_path.glob(".extensions.json.*"))
+
+
+def test_atomic_store_keeps_previous_snapshot_if_json_write_fails(tmp_path, monkeypatch):
+    import store
+    target = tmp_path / "extensions.json"
+    save_store(target, [VALID_INPUT])
+    previous_bytes = target.read_bytes()
+
+    def interrupted_dump(value, handle, **kwargs):
+        handle.write('{"ramais":')
+        raise OSError("interrupção simulada na escrita")
+
+    monkeypatch.setattr(store.json, "dump", interrupted_dump)
+    with pytest.raises(OSError, match="interrupção simulada"):
+        save_store(target, [{"name": "outro"}])
+    assert target.read_bytes() == previous_bytes
+    assert not list(tmp_path.glob(".extensions.json.*"))
+
+
+def test_atomic_store_replaces_insecure_existing_file_permissions(tmp_path):
+    import stat
+    target = tmp_path / "extensions.json"
+    target.write_text("[]", encoding="utf-8")
+    target.chmod(0o644)
+    save_store(target, [VALID_INPUT])
+    assert stat.S_IMODE(target.stat().st_mode) == 0o600
+    assert load_store(target) == [VALID_INPUT]
+
+
+def test_atomic_store_rejects_symlinks_without_touching_target(tmp_path):
+    target = tmp_path / "important.json"
+    target.write_text("sensitive", encoding="utf-8")
+    link = tmp_path / "extensions.json"
+    link.symlink_to(target)
+    with pytest.raises(ValueError, match="simbólico"):
+        load_store(link)
+    with pytest.raises(ValueError, match="simbólico"):
+        save_store(link, [])
+    assert target.read_text(encoding="utf-8") == "sensitive"
+
+
+def test_atomic_store_does_not_treat_invalid_existing_json_as_empty(tmp_path):
+    target = tmp_path / "extensions.json"
+    target.write_text('{"not": "list"}', encoding="utf-8")
+    with pytest.raises(ValueError, match="lista JSON"):
+        load_store(target)
+    target.write_text("[bad", encoding="utf-8")
+    with pytest.raises(ValueError):
+        add_extension(target, VALID_INPUT)
+    assert target.read_text(encoding="utf-8") == "[bad"
+
+
+def test_concurrent_admin_creations_keep_all_extensions(tmp_path):
+    from concurrent.futures import ThreadPoolExecutor
+
+    target = tmp_path / "extensions.json"
+    records = [
+        {**VALID_INPUT, "name": f"posto-{i:02d}", "number": 1100 + i}
+        for i in range(30)
+    ]
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        results = list(pool.map(lambda payload: add_extension(target, payload), records))
+
+    assert all(ok and not error for ok, error, _ in results)
+    saved = load_store(target)
+    assert len(saved) == 30
+    assert len({record["name"] for record in saved}) == 30
+    assert len({record["number"] for record in saved}) == 30
+    assert not list(tmp_path.glob(".extensions.json.*"))
+
+
+def test_simultaneous_same_number_only_one_creation_succeeds(tmp_path):
+    from concurrent.futures import ThreadPoolExecutor
+
+    target = tmp_path / "extensions.json"
+    records = [
+        {**VALID_INPUT, "name": f"agent-{i}", "number": 1110}
+        for i in range(12)
+    ]
+    with ThreadPoolExecutor(max_workers=6) as pool:
+        results = list(pool.map(lambda item: add_extension(target, item), records))
+    assert sum(ok for ok, _, _ in results) == 1
+    assert len(load_store(target)) == 1
