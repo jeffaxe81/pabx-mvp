@@ -135,6 +135,8 @@ configurar, como testar manualmente, e limitações conhecidas.
 
 97. [Compatibilidade do CLI PJSIP na auditoria de laboratório](manual-97-pjsip-cli-compat.md)
 
+98. [Rollback do catálogo de tenants após falha tardia](manual-98-tenant-registry-compensation.md)
+
 ## Regra de manutenção
 
 Toda vez que uma funcionalidade nova for implementada no projeto, um
