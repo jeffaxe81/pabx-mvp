@@ -33,7 +33,7 @@ from overflow import validate_overflow_timeout_input
 from tenants import (
     load_tenants, save_tenants, validate_tenant_creation_input,
     render_tenant_pjsip, render_tenant_queues, render_tenant_extensions, render_tenant_voicemail,
-    render_tenant_parking, validate_tenant_removal, generate_tenant_credentials, generate_tenant_voicemail_pins, parse_static_inbound_dids,
+    render_tenant_parking, validate_tenant_removal, generate_tenant_credentials, generate_tenant_voicemail_pins, parse_static_inbound_dids, TENANT_ID_RE,
 )
 from users import load_users, save_users, find_user, add_user, update_user, delete_user, public_user
 from totp import generate_secret, verify_totp, build_provisioning_uri
@@ -54,6 +54,24 @@ def validate_tenant(raw_tenant: str):
     tenant = (raw_tenant or DEFAULT_TENANT).strip()
     known_tenants = STATIC_TENANTS | {t["tenant_id"] for t in load_tenants(TENANTS_PATH)}
     return tenant if tenant in known_tenants else None
+def known_extension_tenants() -> set:
+    """Registry confiável do wizard + tenants estáticos; não aceita IDs soltos."""
+    records = load_tenants(TENANTS_PATH)
+    if not isinstance(records, list):
+        raise ValueError("cadastro de tenants inválido")
+    known = set(STATIC_TENANTS)
+    for row in records:
+        if not isinstance(row, dict):
+            raise ValueError("cadastro de tenants inválido")
+        tenant_id = row.get("tenant_id")
+        if not isinstance(tenant_id, str) or not TENANT_ID_RE.fullmatch(tenant_id):
+            raise ValueError("tenant não provisionado ou inválido")
+        if tenant_id in known:
+            raise ValueError("tenant duplicado no cadastro")
+        known.add(tenant_id)
+    return known
+
+
 USERS_PATH = os.environ.get("USERS_PATH", "/app/data/users.json")
 ASTERISK_CONF_DIR = os.environ.get("ASTERISK_CONF_DIR", "/app/asterisk-conf")
 STATIC_DIR = Path(os.environ.get("STATIC_DIR", "/app/static"))
@@ -120,7 +138,7 @@ def regenerate_and_reload(extra_ami_actions=None):
     dois (ver manual 62).
     """
     extensions = load_store(STORE_PATH)
-    files = render_all(extensions)
+    files = render_all(extensions, tenant_ids=known_extension_tenants())
     for filename, content in files.items():
         Path(ASTERISK_CONF_DIR, filename).write_text(content, encoding="utf-8")
 
@@ -523,6 +541,19 @@ class Handler(BaseHTTPRequestHandler):
             target_dir.mkdir(parents=True, exist_ok=True)
             Path(target_dir, f"{tenant_id}.conf").write_text(render_fn(tenant_id), encoding="utf-8")
 
+        # O dialplan do novo tenant inclui estes três arquivos antes
+        # mesmo de existir qualquer ramal gerenciado pelo painel.
+        # Arquivos ausentes tornam os #include do Asterisk inválidos.
+        empty_files = render_all([], tenant_ids={tenant_id})
+        for suffix in (
+            f"extensions_dynamic_dial-{tenant_id}.conf",
+            f"extensions_dynamic_hints-{tenant_id}.conf",
+            f"voicemail_dynamic_{tenant_id}.conf",
+        ):
+            Path(ASTERISK_CONF_DIR, suffix).write_text(
+                empty_files[suffix], encoding="utf-8"
+            )
+
         client = AMIClient(AMI_HOST, AMI_PORT, AMI_USERNAME, AMI_SECRET)
         try:
             client.connect_and_login()
@@ -782,7 +813,12 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json(400, {"error": "JSON inválido"})
             return
 
-        ok, error, cleaned = add_extension(STORE_PATH, data)
+        try:
+            allowed_tenants = known_extension_tenants()
+        except (ValueError, OSError, TypeError):
+            self._send_json(503, {"error": "cadastro de tenants indisponível"})
+            return
+        ok, error, cleaned = add_extension(STORE_PATH, data, allowed_tenants=allowed_tenants)
         if not ok:
             self._send_json(400, {"error": error})
             return
@@ -830,7 +866,12 @@ class Handler(BaseHTTPRequestHandler):
         # órfão, apontando pra um ramal que já tem outro número.
         previous_record = next((e for e in load_store(STORE_PATH) if e["name"] == name), None)
 
-        ok, error, cleaned = update_extension(STORE_PATH, name, data)
+        try:
+            allowed_tenants = known_extension_tenants()
+        except (ValueError, OSError, TypeError):
+            self._send_json(503, {"error": "cadastro de tenants indisponível"})
+            return
+        ok, error, cleaned = update_extension(STORE_PATH, name, data, allowed_tenants=allowed_tenants)
         if not ok:
             self._send_json(400, {"error": error})
             return
