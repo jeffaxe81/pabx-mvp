@@ -174,7 +174,7 @@ def summarize(checks):
             'success': set(checks) == required and passed == len(required)}
 
 
-def run(root, report):
+def run(root, report, *, calls=False):
     source = command(['git', '-C', str(root), 'rev-parse', 'HEAD']).stdout.strip()
     if not re.fullmatch(r'[0-9a-f]{40}', source):
         raise ValueError('SHA do checkout inválido')
@@ -195,6 +195,9 @@ def run(root, report):
     folder = Path(tempfile.mkdtemp(prefix='axe-pabx-lab-'))
     try:
         prepared = prepare(root, folder/'private', source)
+        if calls:
+            from .call_lab import provision_call_endpoints
+            provision_call_endpoints(root,source,prepared)
         command(['docker', 'pull', IMAGE], timeout=180)
         image_data = json.loads(command(['docker', 'image', 'inspect', IMAGE]).stdout)[0]
         report['image_id'] = image_data['Id']
@@ -264,6 +267,11 @@ def run(root, report):
                 report['checks']['wrong_password:'+tenant] = peer.register() in (401,403)
             finally:
                 peer.close()
+        if calls:
+            from .call_lab import exercise_calls
+            report['call_lab'] = {}
+            report['phase'] = 'calls'
+            exercise_calls(container_id,prepared,report['call_lab'])
     finally:
         if attempted_create:
             cleaned = cleanup_owned(name, ownership)
@@ -274,16 +282,27 @@ def run(root, report):
         if not retain_staging:
             shutil.rmtree(folder)
     report.update(summarize(report['checks']))
+    if calls:
+        child = report.get('call_lab', {})
+        report['success'] = report['success'] and child.get('success') is True
+        report['passed'] += child.get('passed',0)
+        report['total'] += child.get('total',33)
+        report['sip_call_tested'] = child.get('success') is True
+        report['rtp_tested'] = child.get('success') is True
+        report['srtp_tested'] = child.get('success') is True
+        report['dtls_tested'] = False
+        report['kind'] = 'real_asterisk_internal_call_lab'
     return report['success']
 
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--report', required=True, type=Path)
+    parser.add_argument('--calls', action='store_true', help='Realizar quatro chamadas TLS/SDES-SRTP reais')
     args = parser.parse_args(argv)
     report = {}
     try:
-        success = run(Path(__file__).resolve().parents[1], report)
+        success = run(Path(__file__).resolve().parents[1], report, calls=args.calls)
     except (OSError, ValueError, RuntimeError, TimeoutError, subprocess.TimeoutExpired) as exc:
         success = False
         report['success'] = False
@@ -295,11 +314,14 @@ def main(argv=None):
         report['error_reason'] = known_errors.get(str(exc), 'other')
     args.report.parent.mkdir(parents=True, exist_ok=True)
     args.report.write_text(json.dumps(report, indent=2, sort_keys=True)+'\n')
-    checks = report.get('checks', {})
+    checks = dict(report.get('checks', {}))
+    checks.update(report.get('call_lab', {}).get('checks', {}))
     print(f"Asterisk real: {sum(checks.values())}/{len(checks)} verificações; "
           f"resultado={'PASS' if success else 'FAIL'}")
     for key, passed in checks.items():
         print(f"  {key}: {'PASS' if passed else 'FAIL'}")
+    if report.get('call_lab', {}).get('error_type'):
+        print('Falha nas chamadas: '+report['call_lab']['error_type']+' / '+report['call_lab'].get('phase','unknown'))
     if report.get('error_type'):
         print('Falha: '+report['error_type']+' / '+report['error_reason'])
     return 0 if success else 1

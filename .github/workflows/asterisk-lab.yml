@@ -33,3 +33,27 @@ jobs:
           path: lab-results/registration.json
           if-no-files-found: error
           retention-days: 14
+
+  internal-calls:
+    name: Asterisk | chamadas TLS e SRTP
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Instalar cliente SRTP fixado (somente laboratório)
+        run: python3 -m pip install -r lab/requirements.txt
+      - name: Realizar chamadas nas duas direções de t1 e t2
+        run: python3 -m lab.asterisk_lab --calls --report lab-results/calls.json
+      - name: Preservar somente métricas e verificações sanitizadas
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: asterisk-real-calls-${{ github.sha }}
+          path: lab-results/calls.json
+          if-no-files-found: error
+          retention-days: 14

@@ -1,0 +1,2 @@
+# Exclusivamente clientes do laboratório: não altera dependências de produção.
+pylibsrtp==0.12.0
