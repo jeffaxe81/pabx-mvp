@@ -18,7 +18,7 @@ from .wss_probe import probe_wss,untrusted_wss_rejected
 TENANTS=('t1','t2','t3')
 DIRECTIONS=('forward','reverse')
 METRICS=('register','established','dtls','srtp','rtp','tone','audio_attached','ended')
-CIPHERS={'AES_CM_128_HMAC_SHA1_80','AEAD_AES_128_GCM','AEAD_AES_256_GCM'}
+CIPHERS={'SRTP_AES128_CM_HMAC_SHA1_80','SRTP_AEAD_AES_128_GCM','SRTP_AEAD_AES_256_GCM'}
 
 
 def browser_checks():
@@ -130,14 +130,20 @@ def prepare_webrtc(root,prepared,source):
     prepared.update(webrtc_input=target,webrtc_source=source)
 
 
-def run_browser(root,input_file,output_file):
+def run_browser(root,input_file,output_file,*,timeout=160):
     with subprocess.Popen(['node',str(Path(root)/'lab/webrtc_browser.cjs'),str(input_file),str(output_file)],
                           stdout=subprocess.PIPE,stderr=subprocess.PIPE,start_new_session=True) as process:
-        try: process.communicate(timeout=160)
+        try: process.communicate(timeout=timeout)
         except subprocess.TimeoutExpired:
-            try: os.killpg(process.pid,signal.SIGKILL)
+            # Playwright cria um grupo próprio para o Chromium. SIGTERM
+            # permite que seu handler encerre esse grupo antes de sair.
+            try: os.killpg(process.pid,signal.SIGTERM)
             except ProcessLookupError: pass
-            process.communicate(timeout=5)
+            try: process.communicate(timeout=35)
+            except subprocess.TimeoutExpired:
+                try: os.killpg(process.pid,signal.SIGKILL)
+                except ProcessLookupError: pass
+                process.communicate(timeout=5)
             raise RuntimeError('prazo WebRTC excedido') from None
         return process.returncode
 
