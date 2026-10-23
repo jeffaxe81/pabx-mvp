@@ -69,7 +69,7 @@ def cdr_rejection_diagnostics(raw, previous_ids, caller, target):
         'not_answered': all(r[6] != 'ANSWERED' for r in fresh) and bool(fresh),
         'billsec_zero': all(r[7] == '0' for r in fresh) and bool(fresh),
         'uniqueid_format': all(re.fullmatch(
-            r'[0-9]+\\.[0-9]+', r[8]
+            r'[0-9]+\.[0-9]+', r[8]
         ) is not None for r in fresh) and bool(fresh),
     }
 
