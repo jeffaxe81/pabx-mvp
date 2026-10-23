@@ -4,7 +4,9 @@ MixMonitor/queue monitor do Asterisk) num diretório. Lógica pura,
 separada do servidor HTTP, pra dar pra testar com arquivos temporários
 sem precisar subir nada.
 """
+import os
 import re
+import stat
 import time
 from pathlib import Path
 from datetime import datetime
@@ -148,3 +150,41 @@ def delete_expired_recordings(directory, retention_days: int, clock=time.time):
             deleted.append(f.name)
 
     return deleted
+
+
+def open_recording_file(directory, filename):
+    """Abre um audio regular sem seguir symlinks, mesmo em troca concorrente.
+
+    O descritor da pasta ancora o openat() e o descritor retornado
+    ancora o conteudo enviado pelo HTTP. Destinado ao host Linux/Docker.
+    Falha fechado para caminhos inseguros, links e arquivos especiais.
+    """
+    if (
+        not isinstance(filename, str) or filename in {"", ".", ".."}
+        or "/" in filename or "\\" in filename
+        or Path(filename).suffix.lower() not in ALLOWED_EXTENSIONS
+        or any(ord(char) < 32 or ord(char) == 127 for char in filename)
+    ):
+        return None
+
+    directory_fd = None
+    file_fd = None
+    try:
+        directory_fd = os.open(directory, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        file_fd = os.open(
+            filename,
+            os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK,
+            dir_fd=directory_fd,
+        )
+        if not stat.S_ISREG(os.fstat(file_fd).st_mode):
+            return None
+        opened = os.fdopen(file_fd, "rb")
+        file_fd = None  # O file object passa a possuir o descritor.
+        return opened
+    except (OSError, ValueError, TypeError):
+        return None
+    finally:
+        if file_fd is not None:
+            os.close(file_fd)
+        if directory_fd is not None:
+            os.close(directory_fd)

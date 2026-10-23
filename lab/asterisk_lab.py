@@ -164,7 +164,7 @@ def cleanup_owned(name, ownership):
     return result
 
 
-def summarize(checks, *, calls=False, webrtc=False, dids=False):
+def summarize(checks, *, calls=False, webrtc=False, dids=False, isolation=False):
     required = {'real_runtime', 'tls_transport', 'wss_transport', 'container_removed',
                 'checkout_clean', 'runtime_mounts', 'source_label'}
     required.update(name+':'+tid for tid in ('t1', 't2', 't3')
@@ -178,16 +178,21 @@ def summarize(checks, *, calls=False, webrtc=False, dids=False):
     if dids:
         from .did_checks import required_did_checks
         required.update(required_did_checks())
+    if isolation:
+        from .tenant_isolation_checks import required_isolation_checks
+        required.update(required_isolation_checks())
     passed = sum(value is True for value in checks.values())
     return {'passed': passed, 'total': len(checks),
             'success': set(checks) == required and passed == len(required)}
 
 
-def run(root, report, *, calls=False, webrtc=False, dids=False):
+def run(root, report, *, calls=False, webrtc=False, dids=False, isolation=False):
     if webrtc and not calls:
         raise ValueError('WebRTC requer o modo de chamadas')
     if dids and not calls:
         raise ValueError('DIDs requerem o modo de chamadas')
+    if isolation and not calls:
+        raise ValueError('isolamento SIP requer o modo de chamadas')
     source = command(['git', '-C', str(root), 'rev-parse', 'HEAD']).stdout.strip()
     if not re.fullmatch(r'[0-9a-f]{40}', source):
         raise ValueError('SHA do checkout inválido')
@@ -204,6 +209,9 @@ def run(root, report, *, calls=False, webrtc=False, dids=False):
     if dids:
         report.update(schema_version=4,kind='real_asterisk_incoming_did_lab',
                       live_did_routing_tested=False)
+    if isolation:
+        report.update(schema_version=5, kind='real_asterisk_sip_extension_isolation_lab',
+                      live_sip_extension_isolation_tested=False)
     clean = command(['git', '-C', str(root), 'diff', '--quiet', 'HEAD', '--',
                      'asterisk', 'admin-api/tenants.py', 'admin-api/conf_generator.py',
                      'scripts/secrets_generator.py', 'lab','webphone','package.json','package-lock.json',
@@ -308,6 +316,9 @@ def run(root, report, *, calls=False, webrtc=False, dids=False):
         if dids:
             from .did_checks import exercise_dids
             exercise_dids(container_id,prepared,report)
+        if isolation:
+            from .tenant_isolation_checks import exercise_isolation
+            exercise_isolation(container_id,prepared,report)
     finally:
         if attempted_create:
             cleaned = cleanup_owned(name, ownership)
@@ -317,7 +328,7 @@ def run(root, report, *, calls=False, webrtc=False, dids=False):
         report['private_staging_retained'] = retain_staging
         if not retain_staging:
             shutil.rmtree(folder)
-    report.update(summarize(report['checks'], calls=calls,webrtc=webrtc,dids=dids))
+    report.update(summarize(report['checks'], calls=calls,webrtc=webrtc,dids=dids,isolation=isolation))
     return report['success']
 
 
@@ -327,14 +338,20 @@ def main(argv=None):
     parser.add_argument('--calls', action='store_true', help='testar chamadas, CDR e SRTP real')
     parser.add_argument('--webrtc', action='store_true', help='testar também a UI real com WSS e DTLS-SRTP')
     parser.add_argument('--dids', action='store_true', help='testar DIDs estáticos, dinâmicos e rejeições SIP')
+    parser.add_argument('--isolation', action='store_true', help='negativas SIP reais entre empresas')
     args = parser.parse_args(argv)
     if args.webrtc and not args.calls:
         parser.error('--webrtc requer --calls')
     if args.dids and not args.calls:
         parser.error('--dids requer --calls')
+    if args.isolation and not args.calls:
+        parser.error('--isolation requer --calls')
     report = {}
     try:
-        success = run(Path(__file__).resolve().parents[1], report, calls=args.calls,webrtc=args.webrtc,dids=args.dids)
+        kwargs = {'calls':args.calls, 'webrtc':args.webrtc, 'dids':args.dids}
+        if args.isolation:
+            kwargs['isolation'] = True
+        success = run(Path(__file__).resolve().parents[1], report, **kwargs)
     except Exception as exc:
         success = False
         report['success'] = False
@@ -375,6 +392,8 @@ def main(argv=None):
         print('Diagnóstico WebRTC: '+json.dumps(report['webrtc_diagnostics'],sort_keys=True))
     if report.get('did_cel_backend'):
         print('Backend CEL: '+json.dumps(report['did_cel_backend'],sort_keys=True))
+    if report.get('sip_isolation_cases'):
+        print('Negativas SIP entre empresas: '+json.dumps(report['sip_isolation_cases'],sort_keys=True))
     for case, evidence in report.get('did_cel_results',{}).items():
         print('Trilha DID '+case+': '+json.dumps(evidence,sort_keys=True))
     return 0 if success else 1

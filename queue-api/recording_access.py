@@ -16,6 +16,7 @@ from urllib.parse import urlsplit
 
 HEX_SHA256 = re.compile(r"^[0-9a-f]{64}$")
 TENANT = re.compile(r"^t[1-9][0-9]*$")
+TENANT_EXTENSION = re.compile(r"^t[1-9][0-9]*-[a-z0-9][a-z0-9_-]{0,79}$")
 ROLES = {"admin", "supervisor", "agent"}
 EXTENSIONS = {".wav", ".gsm", ".mp3"}
 MAX_POLICY_BYTES = 1024 * 1024
@@ -31,11 +32,21 @@ def _valid_filename(filename):
     )
 
 
+def _extension_belongs_to_tenant(extension, tenant):
+    """Verifica identidade exata; prefixo t1 nao pode aceitar t10 nem t2."""
+    return (
+        isinstance(extension, str)
+        and isinstance(tenant, str)
+        and TENANT_EXTENSION.fullmatch(extension) is not None
+        and extension.startswith(tenant + "-")
+    )
+
+
 def load_recording_policy(path):
     """Devolve None para ausente, JSON inválido ou esquema inseguro."""
     try:
         policy_path = Path(path)
-        if not policy_path.is_file() or policy_path.stat().st_size > MAX_POLICY_BYTES:
+        if policy_path.is_symlink() or not policy_path.is_file() or policy_path.stat().st_size > MAX_POLICY_BYTES:
             return None
         policy = json.loads(policy_path.read_text(encoding="utf-8"))
     except (OSError, ValueError, TypeError, UnicodeError):
@@ -59,9 +70,10 @@ def load_recording_policy(path):
         ):
             return None
         seen.add(digest)
-        if role == "agent" and (
-            not isinstance(cred.get("extension"), str) or not cred["extension"]
-        ):
+        if role == "agent":
+            if not _extension_belongs_to_tenant(cred.get("extension"), tenant):
+                return None
+        elif cred.get("extension") is not None:
             return None
     for filename, metadata in policy["recordings"].items():
         if not _valid_filename(filename) or not isinstance(metadata, dict):
@@ -70,7 +82,7 @@ def load_recording_policy(path):
         if not isinstance(tenant, str) or not TENANT.fullmatch(tenant):
             return None
         owner = metadata.get("owner_extension")
-        if owner is not None and (not isinstance(owner, str) or not owner):
+        if owner is not None and not _extension_belongs_to_tenant(owner, tenant):
             return None
     return policy
 
@@ -98,15 +110,24 @@ def can_read_recording(policy, principal, filename):
     if not _valid_filename(filename):
         return False
     metadata = policy["recordings"].get(filename)
-    if not isinstance(metadata, dict) or principal.get("tenant") != metadata.get("tenant"):
+    tenant = principal.get("tenant")
+    if (
+        not isinstance(metadata, dict)
+        or not isinstance(tenant, str)
+        or TENANT.fullmatch(tenant) is None
+        or tenant != metadata.get("tenant")
+    ):
+        return False
+    owner = metadata.get("owner_extension")
+    if owner is not None and not _extension_belongs_to_tenant(owner, tenant):
         return False
     role = principal.get("role")
     if role in {"admin", "supervisor"}:
         return True
     return (
         role == "agent"
-        and bool(metadata.get("owner_extension"))
-        and metadata["owner_extension"] == principal.get("extension")
+        and _extension_belongs_to_tenant(principal.get("extension"), tenant)
+        and owner == principal.get("extension")
     )
 
 

@@ -21,7 +21,7 @@ from urllib.parse import urlparse, parse_qs, unquote
 
 from ami_client import AMIClient
 from queue_state import QueueStateTracker
-from recordings import list_recordings, safe_recording_path
+from recordings import list_recordings, open_recording_file
 from recordings import delete_expired_recordings
 from recording_access import (
     load_recording_policy, authenticate_recordings, can_read_recording, allowed_browser_origin,
@@ -458,19 +458,29 @@ class Handler(BaseHTTPRequestHandler):
         if not can_read_recording(policy, principal, filename):
             self._send_recordings_json(404, {"error": "gravacao nao encontrada"})
             return
-        resolved = safe_recording_path(RECORDINGS_DIR, filename)
-        if resolved is None:
+        # Abre por descritor relativo ao diretorio, sem seguir links.
+        # Separar "verificar o caminho" de read_bytes() deixava uma
+        # janela TOCTOU para trocar o arquivo por um symlink.
+        opened = open_recording_file(RECORDINGS_DIR, filename)
+        if opened is None:
             self._send_recordings_json(404, {"error": "gravacao nao encontrada"})
             return
 
-        content_type = "audio/wav" if resolved.suffix.lower() == ".wav" else "application/octet-stream"
-        data = resolved.read_bytes()
-        self.send_response(200)
-        self.send_header("Content-Type", content_type)
-        self._recordings_headers()
-        self.send_header("Content-Length", str(len(data)))
-        self.end_headers()
-        self.wfile.write(data)
+        with opened:
+            size = os.fstat(opened.fileno()).st_size
+            content_type = "audio/wav" if filename.lower().endswith(".wav") else "application/octet-stream"
+            self.send_response(200)
+            self.send_header("Content-Type", content_type)
+            self._recordings_headers()
+            self.send_header("Content-Length", str(size))
+            self.end_headers()
+            remaining = size
+            while remaining:
+                chunk = opened.read(min(65536, remaining))
+                if not chunk:
+                    break
+                self.wfile.write(chunk)
+                remaining -= len(chunk)
 
     def do_POST(self):
         if self.path == "/api/queue/pickup":
