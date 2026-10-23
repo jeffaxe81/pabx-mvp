@@ -113,3 +113,10 @@ Antes da recriação do Asterisk, use o [pré-check somente leitura](manual-88-p
 para verificar presença dos arquivos, includes e possíveis diferenças
 entre configurações antigas e novas. A ferramenta não migra arquivos
 e não comprova a instalação no Docker.
+
+## Complemento — respostas AMI completas (Manual 90)
+
+O cliente administrativo passou a correlacionar as respostas por
+`ActionID` e aguardar os blocos AMI completos, inclusive quando a
+resposta chega fragmentada no TCP. Isso reduz falsas decisões de
+recarga por leitura parcial. Consulte o [Manual 90](manual-90-ami-tcp-framing.md).

@@ -4,10 +4,14 @@ painel gera os arquivos dinâmicos. Mesma situação já documentada pro
 queue-api: isso é a parte que só dá pra validar contra um Asterisk de
 verdade, sem teste de integração automatizado aqui.
 """
+import secrets
 import socket
 import threading
 
 from ami_protocol import parse_ami_blocks, build_action
+
+MAX_AMI_REPLY_BYTES = 128 * 1024
+MAX_AMI_EVENTS_PER_ACTION = 32
 
 
 class AMIClient:
@@ -18,24 +22,80 @@ class AMIClient:
         self.secret = secret
         self._sock = None
         self._lock = threading.Lock()
+        self._recv_buffer = b""
+        self._last_frame = b""
+
+    def _receive(self):
+        """Recebe mais bytes, preservando limites e erros da rede."""
+        chunk = self._sock.recv(4096)
+        if not chunk:
+            raise ConnectionError("AMI fechou a conexão antes da resposta completa")
+        self._recv_buffer += chunk
+        if len(self._recv_buffer) > MAX_AMI_REPLY_BYTES:
+            raise ConnectionError("AMI respondeu além do limite permitido")
+
+    def _read_frame(self):
+        """Extrai um único bloco CRLF CRLF sem perder bytes do próximo."""
+        while b"\r\n\r\n" not in self._recv_buffer:
+            self._receive()
+        frame, self._recv_buffer = self._recv_buffer.split(b"\r\n\r\n", 1)
+        self._last_frame = frame + b"\r\n\r\n"
+        return self._last_frame
+
+    def _consume_follows_output(self):
+        """Compatibilidade com AMI antigo: Command Follows até END COMMAND."""
+        terminator = b"--END COMMAND--"
+        while True:
+            index = self._recv_buffer.find(terminator)
+            if index >= 0:
+                trailer = self._recv_buffer.find(b"\r\n\r\n", index + len(terminator))
+                if trailer >= 0:
+                    self._recv_buffer = self._recv_buffer[trailer + 4:]
+                    return
+            self._receive()
 
     def connect_and_login(self, timeout=5):
         self._sock = socket.create_connection((self.host, self.port), timeout=timeout)
-        self._sock.recv(4096)  # banner
-
-        response = self._send_action({
-            "Action": "Login",
-            "Username": self.username,
-            "Secret": self.secret,
-        })
-        if response.get("Response") != "Success":
-            raise ConnectionError(f"Falha no login AMI: {response}")
+        self._recv_buffer = b""
+        try:
+            while b"\n" not in self._recv_buffer:
+                self._receive()
+            banner, self._recv_buffer = self._recv_buffer.split(b"\n", 1)
+            if not banner.strip().startswith(b"Asterisk Call Manager/"):
+                raise ConnectionError("Banner AMI inválido")
+            response = self._send_action({
+                "Action": "Login",
+                "Username": self.username,
+                "Secret": self.secret,
+            })
+            if response.get("Response") != "Success":
+                raise ConnectionError("Autenticação AMI recusada")
+        except Exception:
+            self.close()
+            raise
 
     def _send_action(self, fields: dict) -> dict:
-        self._sock.sendall(build_action(fields).encode("utf-8"))
-        data = self._sock.recv(4096).decode("utf-8", errors="replace")
-        blocks = parse_ami_blocks(data)
-        return blocks[0] if blocks else {}
+        """Espera resposta completa e ActionID certo; ignora eventos assíncronos."""
+        with self._lock:
+            action_id = "axe-pabx-" + secrets.token_hex(12)
+            values = {**fields, "ActionID": action_id}
+            self._sock.sendall(build_action(values).encode("utf-8"))
+            for _ in range(MAX_AMI_EVENTS_PER_ACTION):
+                block = parse_ami_blocks(self._read_frame().decode("utf-8", errors="replace"))
+                if not block:
+                    raise ConnectionError("Resposta AMI vazia")
+                response = block[0]
+                if "Event" in response and "Response" not in response:
+                    continue
+                if response.get("ActionID") != action_id or "Response" not in response:
+                    raise ConnectionError("Resposta AMI não corresponde à ação solicitada")
+                if response["Response"] == "Follows":
+                    # Algumas versões antigas do Asterisk emitem a saída
+                    # do comando após os headers, até --END COMMAND--.
+                    if b"--END COMMAND--" not in self._last_frame:
+                        self._consume_follows_output()
+                return response
+            raise ConnectionError("Eventos AMI excessivos antes da resposta")
 
     def reload_pjsip_and_dialplan(self):
         """Recarrega PJSIP, dialplan, voicemail, filas e estacionamento sem derrubar chamadas em andamento."""
