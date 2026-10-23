@@ -24,6 +24,7 @@ from urllib.parse import urlparse, parse_qs
 from auth import hash_password, verify_password, SessionStore
 from store import add_extension, update_extension, delete_extension, load_store, delete_extensions_by_tenant
 from conf_generator import render_all, render_pjsip_dynamic
+from conf_publisher import published_conf_batch
 from ami_client import AMIClient
 from blocklist import validate_blocklist_number
 from vip import validate_vip_input
@@ -128,27 +129,40 @@ def ensure_bootstrap_admin():
 
 
 def regenerate_and_reload(extra_ami_actions=None):
-    """
-    Regera os arquivos dinâmicos (um por tenant pra dial/hints/voicemail,
-    ver manual 38) e pede pro Asterisk recarregar. extra_ami_actions é
-    opcional - lista de (nome_do_metodo, args), executados na MESMA
-    conexão AMI, usados pra sincronizar o mapeamento de monitoramento
-    (backlog #55/#62) junto com o reload, sem abrir conexão AMI extra.
-    Aceita mais de uma ação porque renumerar um ramal precisa
-    DESregistrar o número antigo E registrar o novo, não só um dos
-    dois (ver manual 62).
+    """Publica lote de .conf e recarrega; restaura snapshots no erro.
+
+    AMI/AstDB não participa de transação com disco: ações extras não
+    podem ser desfeitas automaticamente. Os ACKs do Command indicam
+    entrega da resposta, não são homologação de conteúdo no Asterisk.
     """
     extensions = load_store(STORE_PATH)
     files = render_all(extensions, tenant_ids=known_extension_tenants())
-    for filename, content in files.items():
-        Path(ASTERISK_CONF_DIR, filename).write_text(content, encoding="utf-8")
-
     client = AMIClient(AMI_HOST, AMI_PORT, AMI_USERNAME, AMI_SECRET)
+    logged_in = False
     try:
-        client.connect_and_login()
-        for method_name, args in (extra_ami_actions or []):
-            getattr(client, method_name)(*args)
-        return client.reload_pjsip_and_dialplan()
+        with published_conf_batch(Path(ASTERISK_CONF_DIR, "generated"), files):
+            client.connect_and_login()
+            logged_in = True
+            for method_name, args in (extra_ami_actions or []):
+                getattr(client, method_name)(*args)
+            result = client.reload_pjsip_and_dialplan()
+            expected = {"pjsip", "dialplan", "voicemail", "queue", "parking"}
+            if not isinstance(result, dict) or any(
+                result.get(name) not in ("Success", "Follows")
+                for name in expected
+            ):
+                raise RuntimeError("Asterisk não confirmou todos os comandos de reload")
+        return result
+    except Exception:
+        if logged_in:
+            # O context manager já tentou restaurar todos os .conf.
+            # Reaplicar a configuração anterior é apenas best effort:
+            # falhas de conexão/AMI podem impedir a compensação.
+            try:
+                client.reload_pjsip_and_dialplan()
+            except Exception:
+                pass
+        raise
     finally:
         client.close()
 
@@ -598,7 +612,7 @@ class Handler(BaseHTTPRequestHandler):
             f"extensions_dynamic_hints-{tenant_id}.conf",
             f"voicemail_dynamic_{tenant_id}.conf",
         ):
-            Path(ASTERISK_CONF_DIR, suffix).write_text(
+            Path(ASTERISK_CONF_DIR, "generated", suffix).write_text(
                 empty_files[suffix], encoding="utf-8"
             )
 
@@ -1004,14 +1018,14 @@ class Handler(BaseHTTPRequestHandler):
             f"extensions_dynamic_hints-{record['tenant_id']}.conf",
             f"voicemail_dynamic_{record['tenant_id']}.conf",
         ):
-            Path(ASTERISK_CONF_DIR, filename).unlink(missing_ok=True)
+            Path(ASTERISK_CONF_DIR, "generated", filename).unlink(missing_ok=True)
         removed_extensions_count = delete_extensions_by_tenant(STORE_PATH, record["tenant_id"])
         # O PJSIP é um arquivo compartilhado: remover o JSON do tenant
         # não basta. Sem atualizar isto, endpoints antigos continuam
         # disponíveis mesmo após excluir a empresa.
         if removed_extensions_count:
             remaining_extensions = load_store(STORE_PATH)
-            Path(ASTERISK_CONF_DIR, "pjsip_dynamic.conf").write_text(
+            Path(ASTERISK_CONF_DIR, "generated", "pjsip_dynamic.conf").write_text(
                 render_pjsip_dynamic(remaining_extensions), encoding="utf-8"
             )
 

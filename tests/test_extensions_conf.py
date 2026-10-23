@@ -97,10 +97,10 @@ def test_admin_panel_dynamic_extensions_are_included():
     tenant 1.
     """
     blocks = blocks_as_dict(load_ext_blocks())
-    assert "#include extensions_dynamic_dial-t1.conf" in blocks["t1-internal"]
-    assert "#include extensions_dynamic_hints-t1.conf" in blocks["t1-hints"]
-    assert "#include extensions_dynamic_dial-t2.conf" in blocks["t2-internal"]
-    assert "#include extensions_dynamic_hints-t2.conf" in blocks["t2-hints"]
+    assert "#include generated/extensions_dynamic_dial-t1.conf" in blocks["t1-internal"]
+    assert "#include generated/extensions_dynamic_hints-t1.conf" in blocks["t1-hints"]
+    assert "#include generated/extensions_dynamic_dial-t2.conf" in blocks["t2-internal"]
+    assert "#include generated/extensions_dynamic_hints-t2.conf" in blocks["t2-hints"]
 
 
 def test_direct_operator_extensions_are_recorded():

@@ -424,3 +424,38 @@ def test_admin_api_knows_where_to_reach_ai_worker_for_tts():
     compose = load_compose()
     env = compose["services"]["admin-api"].get("environment", {})
     assert "AI_WORKER_URL" in env
+
+
+def test_generated_config_uses_shared_directory_not_single_file_bind_mounts():
+    """os.replace muda inode: volume Docker de arquivo isolado ficaria antigo."""
+    compose = load_compose()
+    mounts = compose["services"]["asterisk"]["volumes"]
+    assert "./asterisk/generated:/etc/asterisk/generated:ro" in mounts
+    names = (
+        "pjsip_dynamic.conf",
+        "extensions_dynamic_dial-t1.conf",
+        "extensions_dynamic_dial-t2.conf",
+        "extensions_dynamic_hints-t1.conf",
+        "extensions_dynamic_hints-t2.conf",
+        "voicemail_dynamic_t1.conf",
+        "voicemail_dynamic_t2.conf",
+    )
+    for name in names:
+        assert f"./asterisk/{name}:/etc/asterisk/{name}" not in mounts
+        assert (PROJECT_ROOT / "asterisk" / "generated" / name).is_file()
+
+
+def test_static_asterisk_includes_point_to_shared_generated_directory():
+    for filename, included in (
+        ("pjsip.conf", ("pjsip_dynamic.conf",)),
+        ("extensions.conf", (
+            "extensions_dynamic_dial-t1.conf",
+            "extensions_dynamic_dial-t2.conf",
+            "extensions_dynamic_hints-t1.conf",
+            "extensions_dynamic_hints-t2.conf",
+        )),
+        ("voicemail.conf", ("voicemail_dynamic_t1.conf", "voicemail_dynamic_t2.conf")),
+    ):
+        text = (PROJECT_ROOT / "asterisk" / filename).read_text(encoding="utf-8")
+        for name in included:
+            assert f"#include generated/{name}" in text

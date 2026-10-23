@@ -314,13 +314,13 @@ exten => _40XXXX,1,Set(TENANT={tenant_id})
 
 ; Ramais gerenciados pelo painel de administração (backlog #10/#38) -
 ; gerado pelo admin-api, não editar na mão.
-#include extensions_dynamic_dial-{tenant_id}.conf
+#include generated/extensions_dynamic_dial-{tenant_id}.conf
 
 [{tenant_id}-hints]
 exten => 1000,hint,PJSIP/{tenant_id}-recepcao&PJSIP/{tenant_id}-recepcao-2
 exten => 1010,hint,PJSIP/{tenant_id}-recepcao
 exten => 1011,hint,PJSIP/{tenant_id}-recepcao-2
-#include extensions_dynamic_hints-{tenant_id}.conf
+#include generated/extensions_dynamic_hints-{tenant_id}.conf
 """
 
 
@@ -356,7 +356,7 @@ def render_tenant_voicemail(tenant_id: str, pins=None) -> str:
     return f"""{AUTO_GENERATED_HEADER}[{tenant_id}]
 {tenant_id}-recepcao => {pins[f"{tenant_id}-recepcao"]},{tenant_id.upper()} Recepcao Web 1
 {tenant_id}-recepcao-2 => {pins[f"{tenant_id}-recepcao-2"]},{tenant_id.upper()} Recepcao Web 2
-#include voicemail_dynamic_{tenant_id}.conf
+#include generated/voicemail_dynamic_{tenant_id}.conf
 """
 
 

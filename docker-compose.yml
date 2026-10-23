@@ -8,15 +8,10 @@ services:
     network_mode: host   # necessário para SIP/RTP funcionarem sem dor de cabeça com NAT
     volumes:
       - ./asterisk/pjsip.conf:/etc/asterisk/pjsip.conf
-      - ./asterisk/pjsip_dynamic.conf:/etc/asterisk/pjsip_dynamic.conf
+      # Diretório compartilhado mantém os novos inodes visíveis após os.replace.
+      - ./asterisk/generated:/etc/asterisk/generated:ro
       - ./asterisk/extensions.conf:/etc/asterisk/extensions.conf
-      - ./asterisk/extensions_dynamic_dial-t1.conf:/etc/asterisk/extensions_dynamic_dial-t1.conf
-      - ./asterisk/extensions_dynamic_dial-t2.conf:/etc/asterisk/extensions_dynamic_dial-t2.conf
-      - ./asterisk/extensions_dynamic_hints-t1.conf:/etc/asterisk/extensions_dynamic_hints-t1.conf
-      - ./asterisk/extensions_dynamic_hints-t2.conf:/etc/asterisk/extensions_dynamic_hints-t2.conf
       - ./asterisk/voicemail.conf:/etc/asterisk/voicemail.conf
-      - ./asterisk/voicemail_dynamic_t1.conf:/etc/asterisk/voicemail_dynamic_t1.conf
-      - ./asterisk/voicemail_dynamic_t2.conf:/etc/asterisk/voicemail_dynamic_t2.conf
       # Tenants criados pelo wizard de preparação de ambiente (backlog
       # #39, ver manual 39) - montados como DIRETÓRIO (não arquivo por
       # arquivo) porque o admin-api gera um arquivo novo por tenant
