@@ -131,6 +131,8 @@ configurar, como testar manualmente, e limitações conhecidas.
 
 95. [Remoção compensável de tenants e ramais](manual-95-remocao-tenant-compensavel.md)
 
+96. [Auditoria somente leitura do Asterisk em execução](manual-96-auditoria-runtime-asterisk.md)
+
 ## Regra de manutenção
 
 Toda vez que uma funcionalidade nova for implementada no projeto, um
