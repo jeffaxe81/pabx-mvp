@@ -440,9 +440,18 @@ def test_direct_dial_to_1000_defaults_to_tenant_specific_portuguese_queue():
         exten_start = text.index("exten=>1000,1,")
         exten_end = text.index("exten=>", exten_start + 1)
         block_text = text[exten_start:exten_end]
-        expected_tenant_default = 'TENANT=${IF($["${TENANT}"=""]?' + tenant + ':${TENANT})})'
-        assert expected_tenant_default in block_text
-        assert 'FILA_IDIOMA=${IF($["${FILA_IDIOMA}"=""]?fila-${TENANT}' in block_text
+        # Contexto interno fixa a identidade antes de consultar AstDB ou filas.
+        # A chamada nao pode forcar outra empresa por TENANT/FILA_IDIOMA.
+        assert "Set(TENANT=" + tenant + ")" in block_text
+        assert 'Set(TENANT=${IF(' not in block_text
+        assert ('GotoIf($["${FILA_IDIOMA}"="fila-' + tenant
+                + '-en"]?idioma-autorizado)') in block_text
+        assert ('GotoIf($["${FILA_IDIOMA}"="fila-' + tenant
+                + '-es"]?idioma-autorizado)') in block_text
+        assert "Set(FILA_IDIOMA=fila-" + tenant + ")" in block_text
+        assert "n(idioma-autorizado),NoOp(" in block_text
+        assert block_text.index("Set(TENANT=" + tenant) < block_text.index("Set(FILA_IDIOMA=fila-" + tenant)
+        assert block_text.index("Set(FILA_IDIOMA=fila-" + tenant) < block_text.index("Queue(${FILA_IDIOMA}")
 
 
 def test_virtual_attendant_test_extension_exists():
