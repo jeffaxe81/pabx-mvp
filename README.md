@@ -771,3 +771,16 @@ O `admin-api` limita corpos JSON a 64 KiB, recusa cabeçalhos HTTP
 ambíguos e documentos que não sejam objetos JSON. Uma requisição
 inválida provoca fechamento da conexão para não reaproveitar bytes
 residuais. Consulte o [Manual 86](docs/manual-86-limites-json-admin.md).
+
+## Atualização segura das configurações do Asterisk
+
+A recarga dos arquivos dinâmicos do PABX agora utiliza publicação por
+temporários e restauração dos arquivos anteriores quando a etapa AMI
+ou a publicação falha. O Docker Compose passa a compartilhar o diretório
+`asterisk/generated/` (somente leitura no Asterisk), evitando o
+problema de `os.replace` com bind mounts individuais.
+
+**Instalações existentes precisam de migração prévia dos arquivos
+dinâmicos e recriação do container Asterisk em janela aprovada.**
+A mudança não substitui backup nem garante rollback de AstDB e dados
+do painel. Consulte o [Manual 87](docs/manual-87-publicacao-asterisk-rollback.md).
