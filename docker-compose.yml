@@ -9,7 +9,7 @@ services:
     volumes:
       - ./asterisk/pjsip.conf:/etc/asterisk/pjsip.conf
       # Diretório compartilhado mantém os novos inodes visíveis após os.replace.
-      - ./asterisk/generated:/etc/asterisk/generated
+      - ./asterisk/generated:/etc/asterisk/generated:ro
       - ./asterisk/extensions.conf:/etc/asterisk/extensions.conf
       - ./asterisk/voicemail.conf:/etc/asterisk/voicemail.conf
       # Tenants criados pelo wizard de preparação de ambiente (backlog
