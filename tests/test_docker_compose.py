@@ -430,7 +430,7 @@ def test_generated_config_uses_shared_directory_not_single_file_bind_mounts():
     """os.replace muda inode: volume Docker de arquivo isolado ficaria antigo."""
     compose = load_compose()
     mounts = compose["services"]["asterisk"]["volumes"]
-    assert "./asterisk/generated:/etc/asterisk/generated" in mounts
+    assert "./asterisk/generated:/etc/asterisk/generated:ro" in mounts
     names = (
         "pjsip_dynamic.conf",
         "extensions_dynamic_dial-t1.conf",
