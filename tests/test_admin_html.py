@@ -398,7 +398,7 @@ def test_sounds_table_shows_filename_size_and_date():
 
 def test_overflow_timeout_loaded_on_login_and_tenant_change():
     html = load_html()
-    assert html.count("loadOverflowTimeout();") == 2  # login + troca de tenant
+    assert html.count("loadOverflowTimeout();") == 3  # login, troca e fallback após excluir tenant
 
 
 def test_overflow_timeout_requests_include_current_tenant():
