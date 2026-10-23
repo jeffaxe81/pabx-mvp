@@ -784,3 +784,12 @@ problema de `os.replace` com bind mounts individuais.
 dinâmicos e recriação do container Asterisk em janela aprovada.**
 A mudança não substitui backup nem garante rollback de AstDB e dados
 do painel. Consulte o [Manual 87](docs/manual-87-publicacao-asterisk-rollback.md).
+
+## Pré-check da migração de configurações Asterisk
+
+O utilitário `scripts/check_generated_migration.py` verifica, sem
+modificar o servidor, se a pasta `asterisk/generated/` possui os
+arquivos dinâmicos e includes esperados. Ele aceita o catálogo de
+empresas para checar `t3+` e a opção `--compare-legacy` para
+conferir cópias antigas antes da migração. Consulte o
+[Manual 88](docs/manual-88-precheck-gerados-asterisk.md).
