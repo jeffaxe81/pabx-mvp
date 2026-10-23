@@ -11,9 +11,16 @@ permanece registrado e observado. O teste só aprova quando:
 - Um observador independente no telefone estrangeiro permanece íntegro
   e registra **zero INVITEs**.
 - Não restam canais PJSIP de chamadas ao final.
-- Há CDR de rejeição novo, correlacionado ao endpoint chamador e
-  contexto interno da empresa, com duração faturável zero, sem canal
-  de destino e sem status ANSWERED.
+- Se o Asterisk gerar CDR novo para a rejeição, ele precisa pertencer
+  ao contexto/ramal chamador, não ter canal de destino nem ANSWERED,
+  e possuir duração faturável zero.
+- Se o PJSIP rejeitar o INVITE **antes de executar o dialplan**,
+  o Asterisk pode legitimamente não gerar CDR novo. O teste exige
+  então os seis CDRs de chamadas positivas anteriores ainda presentes
+  e intactos no mesmo laboratório; zero novos CDRs, combinado à
+  rejeição SIP autenticada, observador sem INVITE e zero canais ativos,
+  é evidência do não encaminhamento. Um CDR novo malformado ou entregue
+  não é aceito.
 - Todos os checks do relatório são booleanos `true`, têm nomes
   previstos e pertencem ao **mesmo commit** da execução.
 
