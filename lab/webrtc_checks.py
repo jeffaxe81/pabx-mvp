@@ -75,7 +75,7 @@ def browser_failure_details(details):
             'pair':{'unknown','frozen','waiting','in-progress','failed','succeeded'},
             'local_algorithm':{'missing','unknown','sha-1','sha-256','sha-384','sha-512'},
             'remote_algorithm':{'missing','unknown','sha-1','sha-256','sha-384','sha-512'}}
-    flags={'outbound','inbound','nominated','local_sha256','remote_sha256','cipher_supported'}
+    flags={'outbound','inbound','nominated','local_sha256','remote_sha256','cipher_supported','remote_certificate_verified'}
     for tenant in TENANTS:
         for direction in DIRECTIONS:
             identity=tenant+':'+direction
