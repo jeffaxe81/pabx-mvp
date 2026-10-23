@@ -103,6 +103,8 @@ configurar, como testar manualmente, e limitações conhecidas.
 
 81. [PIN seguro de voicemail para novos ramais](manual-81-pins-voicemail-ramais.md)
 
+82. [Ramais de tenants dinâmicos t3+](manual-82-ramais-tenants-dinamicos.md)
+
 ## Regra de manutenção
 
 Toda vez que uma funcionalidade nova for implementada no projeto, um
