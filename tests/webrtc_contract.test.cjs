@@ -55,7 +55,8 @@ test('UI audio proof rejects a local/wrong track and disabled playback', () => {
 test('transport diagnostics expose only fixed states and booleans', () => {
   const { describeStats } = require('../lab/webrtc_browser.cjs');
   assert.deepEqual(describeStats(stats()),{ outbound:true,inbound:true,dtls:'connected',pair:'succeeded',
-    nominated:true,local_sha256:true,remote_sha256:true,cipher_supported:true });
+    nominated:true,local_sha256:true,remote_sha256:true,cipher_supported:true,
+    local_algorithm:'sha-256',remote_algorithm:'sha-256' });
   const rows = stats(); rows.find(row => row.id === 'transport').dtlsState = 'private-value';
   assert.equal(describeStats(rows).dtls,'unknown');
   assert.equal(JSON.stringify(describeStats(rows)).includes('private-value'),false);

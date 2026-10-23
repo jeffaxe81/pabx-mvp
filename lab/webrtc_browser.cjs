@@ -26,12 +26,18 @@ function describeStats(rows) {
   const transport = reports.get(outbound?.transportId);
   const pair = reports.get(transport?.selectedCandidatePairId);
   const state = (value,allowed) => allowed.includes(value) ? value : 'unknown';
+  const algorithm = id => {
+    const value = reports.get(id)?.fingerprintAlgorithm;
+    return value === undefined ? 'missing' : state(value,['sha-1','sha-256','sha-384','sha-512']);
+  };
   return { outbound:Boolean(outbound),inbound:Boolean(inbound),
     dtls:state(transport?.dtlsState,['new','connecting','connected','closed','failed']),
     pair:state(pair?.state,['frozen','waiting','in-progress','failed','succeeded']),
     nominated:pair?.nominated === true,
     local_sha256:reports.get(transport?.localCertificateId)?.fingerprintAlgorithm === 'sha-256',
     remote_sha256:reports.get(transport?.remoteCertificateId)?.fingerprintAlgorithm === 'sha-256',
+    local_algorithm:algorithm(transport?.localCertificateId),
+    remote_algorithm:algorithm(transport?.remoteCertificateId),
     cipher_supported:CIPHERS.has(transport?.srtpCipher) };
 }
 

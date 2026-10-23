@@ -72,7 +72,9 @@ def browser_failure_details(details):
     if not isinstance(details,dict): return {}
     result={}
     states={'dtls':{'unknown','new','connecting','connected','closed','failed'},
-            'pair':{'unknown','frozen','waiting','in-progress','failed','succeeded'}}
+            'pair':{'unknown','frozen','waiting','in-progress','failed','succeeded'},
+            'local_algorithm':{'missing','unknown','sha-1','sha-256','sha-384','sha-512'},
+            'remote_algorithm':{'missing','unknown','sha-1','sha-256','sha-384','sha-512'}}
     flags={'outbound','inbound','nominated','local_sha256','remote_sha256','cipher_supported'}
     for tenant in TENANTS:
         for direction in DIRECTIONS:
