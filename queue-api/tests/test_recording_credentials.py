@@ -100,3 +100,14 @@ def test_credential_limit_is_enforced(tmp_path):
     path.write_text(json.dumps({"credentials": many, "recordings": {}}))
     with pytest.raises(ValueError, match="limite"):
         issue_credential(path, "t1", "admin", now=1000)
+
+def test_revocation_only_removes_matching_hash_not_other_tenant(tmp_path):
+    path = setup_policy(tmp_path)
+    first = issue_credential(path, "t1", "supervisor", ttl=600, now=1000)
+    second = issue_credential(path, "t2", "supervisor", ttl=600, now=1000)
+
+    revoke_credential(path, first["sha256"])
+    current = load_recording_policy(path)
+    assert authenticate_recordings("Bearer " + first["token"], current, now=1100) is None
+    assert authenticate_recordings("Bearer " + second["token"], current, now=1100)["tenant"] == "t2"
+    assert current["recordings"] == {"t1.wav": {"tenant": "t1"}}
