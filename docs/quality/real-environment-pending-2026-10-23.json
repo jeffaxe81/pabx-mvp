@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "project": "AXE PABX",
+  "review_date": "2026-10-23",
+  "policy": {
+    "development_may_continue_without_external_environment": true,
+    "automated_code_security_tests_required": true,
+    "manual_environment_tests_required_before_production_go": true,
+    "do_not_claim_unperformed_tests_as_passed": true,
+    "do_not_disable_technical_security_gates": true
+  },
+  "release_status": "NOT_APPROVED_FOR_PRODUCTION",
+  "risk_note": "Nenhum teste em infraestrutura de cliente nem GO de produção confirmado.",
+  "external_environment_tests": [
+    {
+      "id": "PABX-REAL-01",
+      "area": "Telefonia/SIP",
+      "status": "PENDING_REAL_ENVIRONMENT",
+      "gate": "PRODUCTION_GO",
+      "procedure": "Registrar ramais em rede e servidores-alvo com certificados CA reais; provar chamadas bidirecionais, transferência, DTMF, SRTP e recuperação de rede.",
+      "evidence_required": "pcap sanitizado, logs Asterisk/CDR/CEL correlacionados e identificação do build",
+      "owner": "to_be_assigned",
+      "executed_at": null,
+      "evidence_url": null
+    },
+    {
+      "id": "PABX-REAL-02",
+      "area": "Isolamento/segurança",
+      "status": "PENDING_REAL_ENVIRONMENT",
+      "gate": "PRODUCTION_GO",
+      "procedure": "Executar tentativas negativas cruzadas entre tenants para DID, ramais, filas, voicemail e gravações; validar sessão/SSO e roles da queue-api.",
+      "evidence_required": "matriz por tenant, HTTP/SIP esperados, trilha de auditoria e ausência de acesso indevido",
+      "owner": "to_be_assigned",
+      "executed_at": null,
+      "evidence_url": null
+    },
+    {
+      "id": "PABX-REAL-03",
+      "area": "Operação",
+      "status": "PENDING_REAL_ENVIRONMENT",
+      "gate": "PRODUCTION_GO",
+      "procedure": "Exercitar falha de Asterisk/tronco, restauração de backup, rollback, proxy/TLS, carga e teste de gravação real.",
+      "evidence_required": "relatório RPO/RTO, amostras não sensíveis, versão e decisão operacional",
+      "owner": "to_be_assigned",
+      "executed_at": null,
+      "evidence_url": null
+    }
+  ],
+  "references": [
+    "https://github.com/jeffaxe81/pabx-mvp/issues/30",
+    "https://github.com/jeffaxe81/pabx-mvp/pull/53",
+    "https://github.com/jeffaxe81/pabx-mvp/pull/59"
+  ]
+}
