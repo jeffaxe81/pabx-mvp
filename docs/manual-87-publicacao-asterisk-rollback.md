@@ -106,3 +106,10 @@ mesmo volume exigem locking compartilhado. A atualização de mounts
 necessita validação real em Docker e a homologação do Manual 73.
 
 Nenhuma implantação nem chamada SIP/RTP foi feita por esta PR.
+
+## Verificação automatizada da migração (Manual 88)
+
+Antes da recriação do Asterisk, use o [pré-check somente leitura](manual-88-precheck-gerados-asterisk.md)
+para verificar presença dos arquivos, includes e possíveis diferenças
+entre configurações antigas e novas. A ferramenta não migra arquivos
+e não comprova a instalação no Docker.
