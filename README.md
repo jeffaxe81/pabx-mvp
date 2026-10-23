@@ -904,3 +904,5 @@ Veja o [Manual 100](docs/manual-100-release-evidence.md).
 102. [Chamadas internas reais com SRTP](docs/manual-102-chamadas-srtp-reais.md)
 103. [Webphone real com WSS e DTLS-SRTP](docs/manual-103-webrtc-real.md)
 105. [Trilha CEL e CDR correlacionado no aceite de DIDs](docs/manual-105-cel-dids.md)
+106. [Auditoria estática de isolamento multiempresa — marco 8 parcial](docs/manual-106-isolamento-estatico.md)
+
