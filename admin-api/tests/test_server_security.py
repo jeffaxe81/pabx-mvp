@@ -254,15 +254,19 @@ def test_create_tenant_validates_before_writing_any_file():
     source = load_source()
     body = get_function_body(source, "_handle_create_tenant")
     validate_pos = body.index("validate_tenant_creation_input(")
-    write_pos = body.index("write_text(")
-    assert validate_pos < write_pos
+    publish_pos = body.index("provision_tenant(")
+    assert validate_pos < publish_pos
+    assert "with TENANT_TRANSACTION_LOCK:" in body
 
 
 def test_create_tenant_registers_did_and_persists_only_after_success():
     source = load_source()
     body = get_function_body(source, "_handle_create_tenant")
-    assert "register_tenant_did(" in body
-    assert "save_tenants(" in body
+    publisher = (SERVER_PY.parent / "tenant_provisioning.py").read_text(encoding="utf-8")
+    assert "provision_tenant(" in body
+    assert publisher.index("client.register_tenant_did(") < publisher.index("save_tenants(")
+    assert "exclusive_tenant_files(config_files)" in publisher
+    assert "client.unregister_tenant_did(" in publisher
 
 
 def test_monitoring_pin_endpoints_require_admin_not_supervisor():
@@ -472,9 +476,10 @@ def test_wizard_creates_strong_credentials_before_files():
     source = SERVER_PY.read_text(encoding="utf-8")
     body = get_function_body(source, "_handle_create_tenant")
     assert "generate_tenant_credentials(tenant_id)" in body
-    assert body.index("generate_tenant_credentials(") < body.index("target_dir.mkdir(")
-    assert "render_tenant_pjsip(tid, sip_credentials)" in body
-    assert body.count('"sip_credentials": sip_credentials') == 2
+    assert body.index("generate_tenant_credentials(") < body.index("provision_tenant(")
+    publisher = (SERVER_PY.parent / "tenant_provisioning.py").read_text(encoding="utf-8")
+    assert "render_tenant_pjsip(tenant_id, sip_credentials)" in publisher
+    assert body.count('"sip_credentials": sip_credentials') == 1
 
 
 def test_api_json_responses_disable_cache():
