@@ -137,6 +137,8 @@ configurar, como testar manualmente, e limitações conhecidas.
 
 98. [Rollback do catálogo de tenants após falha tardia](manual-98-tenant-registry-compensation.md)
 
+99. [Programa AXE PABX de 16 semanas e progresso verificável](manual-99-plano-16-semanas-pabx.md)
+
 ## Regra de manutenção
 
 Toda vez que uma funcionalidade nova for implementada no projeto, um
