@@ -803,3 +803,12 @@ confiável com gravações locais e **somente sugere** um manifesto se
 accountcode, contexto, ramal, horário, origem e destino concordarem.
 Conflitos e dados ambíguos são rejeitados; nenhuma gravação é
 liberada automaticamente. Veja o [Manual 89](docs/manual-89-conciliacao-cdr-gravacoes.md).
+
+## Respostas completas no cliente AMI administrativo
+
+O cliente AMI agora reconstrói respostas TCP fragmentadas, exige
+`ActionID` correspondente e ignora eventos assíncronos antes da
+resposta. Limites de tamanho e timeout impedem espera indefinida e
+respostas incompletas. Os testes usam socket simulado; o resultado
+de reload ainda deve ser verificado no Asterisk real.
+Veja o [Manual 90](docs/manual-90-ami-tcp-framing.md).
