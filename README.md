@@ -829,3 +829,11 @@ e `parking reload`. Uma rejeição interrompe a sequência e aciona a
 tentativa de restauração da configuração anterior (Manual 87).
 A confirmação do funcionamento real ainda depende da homologação.
 Veja o [Manual 92](docs/manual-92-validacao-semantic-reload-ami.md).
+
+## Confirmação obrigatória de escrita AstDB
+
+As operações AMI que registram ou excluem mapeamentos de ramais e
+associações DID/tenant só são consideradas concluídas quando recebem
+`Response: Success`. Erros são tratados explicitamente, permitindo
+que os fluxos de atualização acionem a compensação possível.
+Consulte o [Manual 93](docs/manual-93-confirmacao-astdb-ami.md).
