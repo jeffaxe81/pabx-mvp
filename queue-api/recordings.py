@@ -95,7 +95,7 @@ def list_recordings(directory, limit=50, caller_number=None, destination=None, s
             for entry in entries:
                 name = entry.name
                 if (not isinstance(name, str) or len(name) > 240
-                        or "/" in name or "\\\\" in name
+                        or "/" in name or "\\" in name
                         or any(ord(char) < 32 or ord(char) == 127 for char in name)
                         or Path(name).suffix.lower() not in ALLOWED_EXTENSIONS):
                     continue
