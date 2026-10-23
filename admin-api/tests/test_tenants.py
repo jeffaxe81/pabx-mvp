@@ -192,8 +192,8 @@ def test_render_extensions_includes_conference_room_pattern():
 
 def test_render_extensions_includes_dynamic_ramal_files():
     content = render_tenant_extensions("t3")
-    assert "#include extensions_dynamic_dial-t3.conf" in content
-    assert "#include extensions_dynamic_hints-t3.conf" in content
+    assert "#include generated/extensions_dynamic_dial-t3.conf" in content
+    assert "#include generated/extensions_dynamic_hints-t3.conf" in content
 
 
 # ---------- render_tenant_voicemail ----------
@@ -204,7 +204,7 @@ def test_render_voicemail_creates_telephonist_mailboxes():
     assert "t3-recepcao => " in content
     assert "t3-recepcao-2 => " in content
     assert "=> 1234," not in content
-    assert "#include voicemail_dynamic_t3.conf" in content
+    assert "#include generated/voicemail_dynamic_t3.conf" in content
 
 
 def test_voicemail_pins_are_random_unique_and_eight_digits():
