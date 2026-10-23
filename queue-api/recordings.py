@@ -17,7 +17,7 @@ ALLOWED_EXTENSIONS = {".wav", ".gsm", ".mp3"}
 # Gravações vindas do monitor-type=mixmonitor da fila (manual 09) usam
 # outro padrão do próprio Asterisk e não batem aqui - ficam listadas,
 # só não são filtráveis por atendente/número (ver manual 21).
-FILENAME_RE = re.compile(r"^(\\d{8}-\\d{6})-([^-]*)-([^.]+)\\.\\w+$")
+FILENAME_RE = re.compile(r"^(\d{8}-\d{6})-([^-]*)-([^.]+)\.\w+$")
 _OPEN_SUPPORTS_DIR_FD = os.open in getattr(os, "supports_dir_fd", ())
 
 
