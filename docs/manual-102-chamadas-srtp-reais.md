@@ -65,7 +65,7 @@ credenciais, chaves, CDR completo ou arquivos de áudio.
 
 O marco 5 do programa só pode ser concluído após CI real bem-sucedida.
 Este teste usa TLS e SDES-SRTP. A homologação posterior de WSS/DTLS
-e dos DIDs está registrada no [Manual 103](manual-103-webrtc-dids-reais.md).
+e dos DIDs está registrada no [Manual 104](manual-104-webrtc-dids-reais.md).
 Permanecem pendentes os aceites completos de isolamento funcional
 cruzado, filas, URA, transferência, gravações,
 restauração, carga e operação em servidor de homologação.
@@ -104,4 +104,4 @@ aprovou as oito suítes Python. A validação local final passou em
 achados importantes, corrigidos com regressões; nenhum crítico ou
 menor adiado. O marco 5 está concluído, totalizando **5 de 16 marcos**.
 Naquele checkpoint, o marco 6 continuava em andamento. Sua conclusão
-posterior e a do marco 7 estão documentadas no Manual 103.
+posterior e a do marco 7 estão documentadas no Manual 104.

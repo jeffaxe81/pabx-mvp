@@ -152,4 +152,5 @@ registrado como regra permanente no prompt master
 
 101. [Laboratório real de registro SIP/TLS](manual-101-laboratorio-sip-real.md)
 102. [Chamadas internas reais com SRTP](manual-102-chamadas-srtp-reais.md)
-103. [Homologação real do Webphone e dos números de entrada](manual-103-webrtc-dids-reais.md)
+103. [Webphone real com WSS e DTLS-SRTP](manual-103-webrtc-real.md)
+104. [Números de entrada e encerramento dos marcos 6 e 7](manual-104-webrtc-dids-reais.md)

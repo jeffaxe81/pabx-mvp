@@ -1,9 +1,12 @@
-# Manual 103 — Duas semanas de homologação: WebRTC e números de entrada
+# Manual 104 — Duas semanas de homologação: WebRTC e números de entrada
 
 ## Escopo desta rodada
 
 O usuário limitou esta rodada aos marcos 6 e 7 do programa de 16 semanas,
 com parada ao concluir ambos. O marco 8 não faz parte desta entrega.
+O [Manual 103](manual-103-webrtc-real.md) registra a entrega original
+do Webphone pela PR #56; este manual reúne o encerramento da rodada e
+os aceites adicionais de números de entrada da PR #57.
 
 O laboratório continua usando Asterisk 22.11.0 com imagem fixada por
 digest, certificado e credenciais descartáveis, configurações extraídas
@@ -86,6 +89,11 @@ e sem tempo faturado. Arquivo vazio ou CDR atrasado não comprova rejeição.
    produzir um falso positivo. Agora o aceite aguarda um registro novo
    coerente, até o prazo existente; testes cobrem ausência, atraso,
    reutilização de registro e atendimento indevido.
+4. Uma repetição final deixou a negociação ICE/DTLS da última chamada
+   pendente ao fim dos seis segundos de observação. A espera agora
+   acompanha a condição real de mídia, com limite monotônico de 20 s
+   por chamada e orçamento de 240 s para o processo do navegador. Todas
+   as exigências de certificado, mídia e áudio remoto foram preservadas.
 
 Os dois achados da revisão tiveram testes RED → GREEN. Não houve achado
 menor adiado. Os limites de operadora externa, hardware, produção e
@@ -119,7 +127,8 @@ foi aprovado na [CI estática 40007838447](https://github.com/jeffaxe81/pabx-mvp
 
 As contagens são por modo e compartilham verificações; não representam
 336 testes independentes. Na validação local, as oito suítes passaram
-em **1.387 testes Python**, e a suíte Node em **17/17**.
+em **1.387 testes Python**, e a suíte Node em **19/19**, incluindo
+as verificações de certificado nativo incorporadas da PR #56.
 
 Os marcos 6 e 7 estão concluídos: **7 de 16 marcos, 43,8%**. A execução
 para neste ponto, conforme solicitado. O marco 8 permanece planejado.
