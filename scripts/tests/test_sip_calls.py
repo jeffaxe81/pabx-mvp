@@ -62,7 +62,7 @@ def test_call_authenticates_acknowledges_and_hangs_up_correlated_dialogue():
             _, invite, body = read_message(server)
             observed.append(invite['authorization'][0].startswith('Digest username="t1-1001"'))
             observed.append(b'RTP/SAVP' in body)
-            server.sendall(response(invite, 200, 'Contact: <sip:asterisk@127.0.0.1:5061;transport=tls>\r\nContent-Type: application/sdp', remote_media.offer()))
+            server.sendall(response(invite, 200, 'Contact: <sip:127.0.0.1:5061;transport=TLS>\r\nContent-Type: application/sdp', remote_media.offer()))
             start, ack, _ = read_message(server)
             observed.append(start.startswith('ACK ') and ack['cseq'] == ['2 ACK'])
             start, bye, _ = read_message(server)
@@ -133,6 +133,20 @@ def test_incoming_bye_with_wrong_dialogue_is_rejected():
         server.close()
 
 
-def test_contact_transport_is_case_insensitive_for_asterisk_wire_format():
+@pytest.mark.parametrize('uri', [
+    'sip:asterisk@127.0.0.1:5061;transport=TLS',
+    'sip:127.0.0.1:5061;transport=TLS',
+    'sip:127.0.0.1:5061;transport=tls',
+])
+def test_contact_transport_is_case_insensitive_for_asterisk_wire_format(uri):
     from lab.sip_calls import contact_uri
-    assert contact_uri({'contact':['<sip:asterisk@127.0.0.1:5061;transport=TLS>']}) == 'sip:asterisk@127.0.0.1:5061;transport=TLS'
+    assert contact_uri({'contact':['<'+uri+'>']}) == uri
+
+
+@pytest.mark.parametrize('uri', ['sip:asterisk@127.0.0.1:0', 'sip:asterisk@127.0.0.1:65536',
+                                'sip:asterisk@192.0.2.1:5061;transport=tls',
+                                'sip:127.0.0.1.example.invalid:5061;transport=tls'])
+def test_contact_rejects_external_host_and_invalid_port(uri):
+    from lab.sip_calls import contact_uri
+    with pytest.raises(ValueError):
+        contact_uri({'contact':['<'+uri+'>']})
