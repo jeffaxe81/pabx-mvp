@@ -124,6 +124,45 @@ def safe_recording_path(directory, filename: str):
     return candidate
 
 
+def open_recording_stream(directory, filename):
+    """Abre gravação com FD ancorado no diretório, sem seguir symlinks.
+
+    Retorna (file_object, size) para streaming em blocos; o chamador
+    DEVE fechar file_object. Nunca abre um pathname novamente depois
+    da autorização. Exige Linux/POSIX com dir_fd/O_NOFOLLOW e falha
+    fechado onde essas garantias não estiverem disponíveis.
+    """
+    if (
+        not isinstance(filename, str) or filename in {"", ".", ".."}
+        or "/" in filename or "\\" in filename
+        or Path(filename).suffix.lower() not in ALLOWED_EXTENSIONS
+        or not hasattr(os, "O_NOFOLLOW") or not hasattr(os, "O_DIRECTORY")
+        or os.open not in os.supports_dir_fd
+    ):
+        return None
+
+    dirfd = None
+    fd = None
+    try:
+        dirfd = os.open(os.fspath(directory),
+                        os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        fd = os.open(filename, os.O_RDONLY | os.O_NOFOLLOW |
+                     getattr(os, "O_NONBLOCK", 0), dir_fd=dirfd)
+        info = os.fstat(fd)
+        if not stat.S_ISREG(info.st_mode):
+            return None
+        opened = os.fdopen(fd, "rb")
+        fd = None
+        return opened, info.st_size
+    except (OSError, TypeError, ValueError, NotImplementedError):
+        return None
+    finally:
+        if fd is not None:
+            os.close(fd)
+        if dirfd is not None:
+            os.close(dirfd)
+
+
 def delete_expired_recordings(directory, retention_days: int, clock=time.time):
     """
     Apaga gravações mais antigas que retention_days. retention_days <= 0
