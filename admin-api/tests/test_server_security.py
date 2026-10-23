@@ -422,7 +422,7 @@ def test_renumbering_extension_captures_previous_record_before_updating():
     source = load_source()
     body = get_function_body(source, "_handle_update_extension")
     capture_pos = body.index("previous_record")
-    update_pos = body.index("update_extension(STORE_PATH, name, data)")
+    update_pos = body.index("update_extension(STORE_PATH, name, data, allowed_tenants=allowed_tenants)")
     assert capture_pos < update_pos
 
 
@@ -521,3 +521,40 @@ def test_public_view_hides_voicemail_pin_from_reads_and_edits():
     assert '"voicemail_pin": cleaned["voicemail_pin"]' in creation
     update = get_function_body(source, "_handle_update_extension")
     assert '"voicemail_pin":' not in update
+
+
+def test_dynamic_tenants_read_from_registry_before_write_or_ami():
+    source = load_source()
+    registry = get_function_body(source, "known_extension_tenants")
+    assert "load_tenants(TENANTS_PATH)" in registry
+    assert "TENANT_ID_RE.fullmatch" in registry
+    assert "tenant duplicado" in registry
+    for name, call in [
+        ("_handle_create_extension", "add_extension(STORE_PATH, data, allowed_tenants=allowed_tenants)"),
+        ("_handle_update_extension", "update_extension(STORE_PATH, name, data, allowed_tenants=allowed_tenants)"),
+    ]:
+        body = get_function_body(source, name)
+        assert "known_extension_tenants()" in body
+        assert body.index("known_extension_tenants()") < body.index(call)
+    reloader = get_function_body(source, "regenerate_and_reload")
+    assert "render_all(extensions, tenant_ids=known_extension_tenants())" in reloader
+
+
+def test_new_tenant_creates_three_empty_include_files_before_ami():
+    source = load_source()
+    body = get_function_body(source, "_handle_create_tenant")
+    assert 'empty_files = render_all([], tenant_ids={tenant_id})' in body
+    assert "extensions_dynamic_dial-" in body
+    assert "extensions_dynamic_hints-" in body
+    assert "voicemail_dynamic_" in body
+    assert body.index("empty_files =") < body.index("register_tenant_did(")
+
+
+def test_tenant_options_only_show_name_not_did_to_supervisor():
+    source = load_source()
+    body = get_function_body(source, "do_GET")
+    at = body.index('self.path == "/api/tenant-options"')
+    segment = body[at:body.index('self.path.startswith("/api/tenants")', at)]
+    assert '_require_role({"admin", "supervisor"})' in segment
+    assert '"display_name"' in segment
+    assert '"did"' not in segment
