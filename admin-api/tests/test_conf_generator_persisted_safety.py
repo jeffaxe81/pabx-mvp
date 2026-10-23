@@ -103,5 +103,5 @@ def test_input_snapshot_not_mutated_even_when_validation_fails():
 def test_direct_guard_checks_active_tenant_allowlist():
     valid = [{**BASE, "name": "t3-1001", "tenant": "t3"}]
     assert validate_persisted_extensions(valid, {"t1", "t2", "t3"}) is None
-    with pytest.raises(ValueError, match="nao provisionado"):
+    with pytest.raises(ValueError, match="não provisionado"):
         validate_persisted_extensions(valid, {"t1", "t2"})
