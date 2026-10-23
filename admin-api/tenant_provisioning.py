@@ -10,6 +10,7 @@ import tempfile
 import threading
 
 from conf_generator import render_all
+from tenant_registry_recovery import snapshot_registry, restore_registry
 from tenants import (
     render_tenant_pjsip, render_tenant_queues, render_tenant_extensions,
     render_tenant_voicemail, render_tenant_parking, save_tenants,
@@ -97,8 +98,11 @@ def provision_tenant(root, registry_path, existing, cleaned, sip_credentials, vo
     """
     config_files = build_tenant_files(root, cleaned["tenant_id"], sip_credentials, voicemail_pins)
     attempted_did = False
+    registry_save_started = False
+    registry_snapshot = None
     client = None
     try:
+        registry_snapshot = snapshot_registry(registry_path)
         with exclusive_tenant_files(config_files):
             client = client_factory()
             client.connect_and_login()
@@ -110,12 +114,18 @@ def provision_tenant(root, registry_path, existing, cleaned, sip_credentials, vo
                 for name in RELOAD_COMPONENTS
             ):
                 raise RuntimeError("AMI não confirmou as recargas")
+            registry_save_started = True
             save_tenants(registry_path, [*existing, cleaned])
         return reload_result
     except Exception as original_error:
         # Os arquivos gerados já foram removidos pelo context manager.
         # A rede pode falhar após o AstDB ter aplicado o DBPut.
         rollback_incomplete = False
+        if registry_save_started:
+            try:
+                restore_registry(registry_path, registry_snapshot)
+            except (OSError, ValueError):
+                rollback_incomplete = True
         if attempted_did:
             try:
                 # Uma falha de rede pode invalidar o socket original.

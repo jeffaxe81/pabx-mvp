@@ -872,3 +872,11 @@ A auditoria de runtime reconhece agora a saída realista de
 com variações de espaços e letras. Regressões impedem confundir
 contextos cruzados ou nomes parecidos. Veja o
 [Manual 97](docs/manual-97-pjsip-cli-compat.md).
+
+## Recuperação do cadastro de tenants após falha de escrita
+
+A criação e remoção de empresas agora preservam um snapshot do catálogo
+`tenants.json`. Se a gravação falhar mesmo depois de substituir o
+arquivo, tentam restaurar os bytes e permissões anteriores e sinalizam
+`rollback_incomplete` caso a compensação não seja confirmada.
+Veja o [Manual 98](docs/manual-98-tenant-registry-compensation.md).
