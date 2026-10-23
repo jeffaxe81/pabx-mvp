@@ -747,3 +747,12 @@ privado de acesso a gravações. Por padrão somente simula mudanças;
 classificações conflitantes entre empresas e persiste os dados com
 lock e troca atômica, sem modificar credenciais existentes.
 Veja o [Manual 83](docs/manual-83-catalogo-gravacoes.md).
+
+## Gerência de credenciais de gravações
+
+O utilitário local `queue-api/recording_credentials.py` emite
+credenciais temporárias por tenant e papel e permite revogá-las
+por hash sem guardar os tokens em texto claro no catálogo. A
+política permanece privada no servidor, com lock e escrita atômica.
+A etapa ainda não integra o login do administrador ao Webphone.
+Consulte o [Manual 84](docs/manual-84-credenciais-gravacoes.md).
