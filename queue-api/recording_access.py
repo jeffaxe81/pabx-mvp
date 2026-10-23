@@ -9,7 +9,9 @@ import hashlib
 import hmac
 import json
 import math
+import os
 import re
+import stat
 import time
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -44,13 +46,28 @@ def _extension_belongs_to_tenant(extension, tenant):
 
 def load_recording_policy(path):
     """Devolve None para ausente, JSON inválido ou esquema inseguro."""
+    # O teste is_symlink seguido de read_text() permitia que outro
+    # processo trocasse o catálogo por um link entre as duas operações.
+    # Abrir com O_NOFOLLOW e ler do mesmo descritor evita essa corrida.
+    if not hasattr(os, "O_NOFOLLOW") or not hasattr(os, "O_NONBLOCK"):
+        return None
+    fd = None
     try:
-        policy_path = Path(path)
-        if policy_path.is_symlink() or not policy_path.is_file() or policy_path.stat().st_size > MAX_POLICY_BYTES:
+        fd = os.open(os.fspath(path), os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        metadata = os.fstat(fd)
+        if not stat.S_ISREG(metadata.st_mode) or metadata.st_size > MAX_POLICY_BYTES:
             return None
-        policy = json.loads(policy_path.read_text(encoding="utf-8"))
+        with os.fdopen(fd, "rb") as opened:
+            fd = None
+            raw = opened.read(MAX_POLICY_BYTES + 1)
+        if len(raw) > MAX_POLICY_BYTES:
+            return None
+        policy = json.loads(raw)
     except (OSError, ValueError, TypeError, UnicodeError):
         return None
+    finally:
+        if fd is not None:
+            os.close(fd)
     if not isinstance(policy, dict) or not isinstance(policy.get("credentials"), list):
         return None
     if not isinstance(policy.get("recordings"), dict):
