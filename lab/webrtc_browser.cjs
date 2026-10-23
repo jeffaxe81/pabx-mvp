@@ -5,7 +5,13 @@ const https = require('node:https');
 const { chromium } = require('playwright');
 
 const METRICS = ['register','established','dtls','srtp','rtp','tone','audio_attached','ended'];
-const CIPHERS = new Set(['AES_CM_128_HMAC_SHA1_80','AEAD_AES_128_GCM','AEAD_AES_256_GCM']);
+// RTCTransportStats usa nomes IANA DTLS-SRTP; versões antigas usavam SDES.
+const CIPHERS = new Map([
+  ['AES_CM_128_HMAC_SHA1_80','SRTP_AES128_CM_HMAC_SHA1_80'],
+  ['AEAD_AES_128_GCM','SRTP_AEAD_AES_128_GCM'],
+  ['AEAD_AES_256_GCM','SRTP_AEAD_AES_256_GCM'],
+  ...['SRTP_AES128_CM_HMAC_SHA1_80','SRTP_AEAD_AES_128_GCM','SRTP_AEAD_AES_256_GCM'].map(name => [name,name]),
+]);
 
 function isRemoteAudioPlaying(audio, track) {
   return Boolean(track?.kind === 'audio' && track.readyState === 'live' && track.enabled
@@ -39,7 +45,7 @@ function assessStats(rows) {
   const dtls = Boolean(transport?.dtlsState === 'connected' && inbound?.transportId === outbound?.transportId
     && pair?.state === 'succeeded' && pair?.nominated === true
     && certificates.every(cert => cert?.fingerprintAlgorithm === 'sha-256'));
-  const cipher = CIPHERS.has(transport?.srtpCipher) ? transport.srtpCipher : '';
+  const cipher = CIPHERS.get(transport?.srtpCipher) || '';
   const sent = Number.isFinite(outbound?.packetsSent) ? outbound.packetsSent : 0;
   const received = Number.isFinite(inbound?.packetsReceived) ? inbound.packetsReceived : 0;
   return { dtls, srtp:dtls && Boolean(cipher), rtp:dtls && sent >= 25 && received >= 25,

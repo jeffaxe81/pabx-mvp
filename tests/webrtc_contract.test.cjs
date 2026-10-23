@@ -18,12 +18,19 @@ test('WebRTC evidence requires correlated DTLS, fingerprints, SRTP and both RTP 
   const valid = assessStats(stats());
   assert.equal(valid.dtls, true);
   assert.equal(valid.srtp, true);
+  assert.equal(valid.cipher,'SRTP_AES128_CM_HMAC_SHA1_80');
   assert.equal(valid.rtp, true);
   assert.equal(valid.packets_sent, 100);
   assert.equal(valid.packets_received, 90);
   assert.equal(assessStats([]).rtp, false);
+  for (const cipher of ['SRTP_AES128_CM_HMAC_SHA1_80','SRTP_AEAD_AES_128_GCM','SRTP_AEAD_AES_256_GCM']) {
+    const rows = stats(); rows.find(row => row.id === 'transport').srtpCipher = cipher;
+    assert.equal(assessStats(rows).cipher,cipher);
+    assert.equal(assessStats(rows).srtp,true);
+  }
   for (const [id, key, value, failing] of [
     ['transport','dtlsState','new','dtls'], ['transport','srtpCipher','NONE','srtp'],
+    ['transport','srtpCipher','SRTP_NULL_HMAC_SHA1_80','srtp'],
     ['pair','state','failed','dtls'], ['remoteCert','fingerprintAlgorithm','sha-1','dtls'],
     ['in','packetsReceived',0,'rtp'], ['in','transportId','another','dtls'],
   ]) {

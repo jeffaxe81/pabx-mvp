@@ -12,9 +12,9 @@ def test_browser_report_requires_all_named_checks_and_six_unique_cases():
     from lab.webrtc_checks import browser_checks, validate_browser_report
     cases = [{'tenant':tenant,'direction':direction,
               'left':{'packets_sent':80,'packets_received':75,'dtls':True,'srtp':True,'rtp':True,
-                      'cipher':'AES_CM_128_HMAC_SHA1_80','peak_hz':880,'rms':0.1,'audio_attached':True,'local_ice':True},
+                      'cipher':'SRTP_AES128_CM_HMAC_SHA1_80','peak_hz':880,'rms':0.1,'audio_attached':True,'local_ice':True},
               'right':{'packets_sent':76,'packets_received':79,'dtls':True,'srtp':True,'rtp':True,
-                       'cipher':'AES_CM_128_HMAC_SHA1_80','peak_hz':440,'rms':0.1,'audio_attached':True,'local_ice':True}}
+                       'cipher':'SRTP_AES128_CM_HMAC_SHA1_80','peak_hz':440,'rms':0.1,'audio_attached':True,'local_ice':True}}
              for tenant in ('t1','t2','t3') for direction in ('forward','reverse')]
     report = {'schema_version':1,'success':True,'checks':{key:True for key in browser_checks()},'cases':cases,
               'browser_version':'Chrome/130.0.0.0'}
@@ -48,6 +48,36 @@ def test_browser_failure_details_never_copy_private_or_unbounded_fields():
     result=browser_failure_details(details)
     assert result=={'t1:forward':{'left':{'outbound':True,'dtls':'connected'},'right':{}}}
     assert 'SECRET' not in str(result)
+
+
+def test_browser_timeout_allows_playwright_style_detached_child_cleanup(tmp_path):
+    import os
+    import signal
+    from lab.webrtc_checks import run_browser
+    folder=tmp_path/'lab'
+    folder.mkdir()
+    worker=folder/'webrtc_browser.cjs'
+    worker.write_text("""
+const fs=require('node:fs'),{spawn}=require('node:child_process');
+const child=spawn(process.execPath,['-e','setInterval(()=>{},1000)'],{detached:true,stdio:'ignore'});
+fs.writeFileSync(process.argv[2],String(child.pid));
+process.on('SIGTERM',()=>{
+  child.once('exit',()=>{fs.writeFileSync(process.argv[3],'cleaned');process.exit(0);});
+  process.kill(-child.pid,'SIGKILL');
+});
+setInterval(()=>{},1000);
+""")
+    pid_file=tmp_path/'pid'
+    marker=tmp_path/'cleanup'
+    try:
+        with pytest.raises(RuntimeError,match='prazo WebRTC excedido'):
+            run_browser(tmp_path,pid_file,marker,timeout=1)
+        assert marker.read_text()=='cleaned'
+        with pytest.raises(ProcessLookupError): os.kill(int(pid_file.read_text()),0)
+    finally:
+        if pid_file.exists() and not marker.exists():
+            try: os.killpg(int(pid_file.read_text()),signal.SIGKILL)
+            except ProcessLookupError: pass
 
 
 def test_webrtc_summary_requires_media_cases_and_cleanup_beyond_prior_calls():
