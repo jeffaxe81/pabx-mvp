@@ -107,6 +107,8 @@ configurar, como testar manualmente, e limitações conhecidas.
 
 83. [Importação assistida e auditável de gravações](manual-83-catalogo-gravacoes.md)
 
+84. [Emissão e revogação de credenciais de gravações](manual-84-credenciais-gravacoes.md)
+
 ## Regra de manutenção
 
 Toda vez que uma funcionalidade nova for implementada no projeto, um
