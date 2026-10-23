@@ -164,7 +164,7 @@ def cleanup_owned(name, ownership):
     return result
 
 
-def summarize(checks, *, calls=False):
+def summarize(checks, *, calls=False, webrtc=False):
     required = {'real_runtime', 'tls_transport', 'wss_transport', 'container_removed',
                 'checkout_clean', 'runtime_mounts', 'source_label'}
     required.update(name+':'+tid for tid in ('t1', 't2', 't3')
@@ -172,12 +172,17 @@ def summarize(checks, *, calls=False):
     if calls:
         from .call_checks import required_call_checks
         required.update(required_call_checks())
+    if webrtc:
+        from .webrtc_checks import required_webrtc_checks
+        required.update(required_webrtc_checks())
     passed = sum(value is True for value in checks.values())
     return {'passed': passed, 'total': len(checks),
             'success': set(checks) == required and passed == len(required)}
 
 
-def run(root, report, *, calls=False):
+def run(root, report, *, calls=False, webrtc=False):
+    if webrtc and not calls:
+        raise ValueError('WebRTC requer o modo de chamadas')
     source = command(['git', '-C', str(root), 'rev-parse', 'HEAD']).stdout.strip()
     if not re.fullmatch(r'[0-9a-f]{40}', source):
         raise ValueError('SHA do checkout inválido')
@@ -189,9 +194,12 @@ def run(root, report, *, calls=False):
     if calls:
         report.update(schema_version=2, kind='real_asterisk_secure_calls_lab', dtls_tested=False,
                       wss_session_tested=False)
+    if webrtc:
+        report.update(schema_version=3,kind='real_asterisk_browser_webrtc_lab')
     clean = command(['git', '-C', str(root), 'diff', '--quiet', 'HEAD', '--',
                      'asterisk', 'admin-api/tenants.py', 'admin-api/conf_generator.py',
-                     'scripts/secrets_generator.py', 'lab'], check=False)
+                     'scripts/secrets_generator.py', 'lab','webphone','package.json','package-lock.json',
+                     'scripts/build_webphone_sip.cjs'], check=False)
     report['checks']['checkout_clean'] = clean.returncode == 0
     if clean.returncode != 0:
         raise RuntimeError('checkout do laboratório contém alterações não commitadas')
@@ -205,6 +213,9 @@ def run(root, report, *, calls=False):
         if calls:
             from .call_checks import prepare_calls
             prepare_calls(root, prepared, source)
+        if webrtc:
+            from .webrtc_checks import prepare_webrtc
+            prepare_webrtc(root,prepared,source)
         command(['docker', 'pull', IMAGE], timeout=180)
         image_data = json.loads(command(['docker', 'image', 'inspect', IMAGE]).stdout)[0]
         report['image_id'] = image_data['Id']
@@ -217,6 +228,7 @@ def run(root, report, *, calls=False):
                          'io.axe.pabx.source-commit='+source, '--label',
                          'io.axe.pabx.lab-owner='+ownership,
                          '--mount', f'type=bind,src={prepared["conf"]},dst=/etc/asterisk,readonly',
+                         *(['--mount',f'type=bind,src={prepared["conf"]}/sounds/custom,dst=/var/lib/asterisk/sounds/custom,readonly'] if webrtc else []),
                          '--entrypoint', 'asterisk', IMAGE, '-f', '-n',
                          '-C', '/etc/asterisk/asterisk.conf'], check=False)
         if result.returncode:
@@ -277,6 +289,9 @@ def run(root, report, *, calls=False):
         if calls:
             from .call_checks import exercise_calls
             exercise_calls(container_id, prepared, report)
+        if webrtc:
+            from .webrtc_checks import exercise_webrtc
+            exercise_webrtc(root,container_id,prepared,report)
     finally:
         if attempted_create:
             cleaned = cleanup_owned(name, ownership)
@@ -286,7 +301,7 @@ def run(root, report, *, calls=False):
         report['private_staging_retained'] = retain_staging
         if not retain_staging:
             shutil.rmtree(folder)
-    report.update(summarize(report['checks'], calls=calls))
+    report.update(summarize(report['checks'], calls=calls,webrtc=webrtc))
     return report['success']
 
 
@@ -294,10 +309,13 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--report', required=True, type=Path)
     parser.add_argument('--calls', action='store_true', help='testar chamadas, CDR e SRTP real')
+    parser.add_argument('--webrtc', action='store_true', help='testar também a UI real com WSS e DTLS-SRTP')
     args = parser.parse_args(argv)
+    if args.webrtc and not args.calls:
+        parser.error('--webrtc requer --calls')
     report = {}
     try:
-        success = run(Path(__file__).resolve().parents[1], report, calls=args.calls)
+        success = run(Path(__file__).resolve().parents[1], report, calls=args.calls,webrtc=args.webrtc)
     except Exception as exc:
         success = False
         report['success'] = False
@@ -332,6 +350,10 @@ def main(argv=None):
         print('Backend CDR: '+json.dumps(report['cdr_backend'],sort_keys=True))
     for call, fields in report.get('cdr_checks',{}).items():
         print('Campos CDR '+call+': '+json.dumps(fields,sort_keys=True))
+    if report.get('webrtc_phase'):
+        print('Etapa WebRTC: '+report['webrtc_phase'])
+    if report.get('webrtc_diagnostics'):
+        print('Diagnóstico WebRTC: '+json.dumps(report['webrtc_diagnostics'],sort_keys=True))
     return 0 if success else 1
 
 

@@ -9,7 +9,8 @@
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/jssip@3.10.1/dist/jssip.min.js"></script>
+<script src="vendor/jssip-3.10.1.min.js" integrity="sha384-s3q+Ad9KMHjvPAHFr44EBPSqbUXANLVA3OZw1CMbTi7P3ve/iEbGZVL3B7hbWi2b" crossorigin="anonymous"></script>
+<script src="remote-audio.js"></script>
 <style>
   :root {
     --bg: #14181F;
@@ -1028,6 +1029,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     line.session.unhold();
     line.state = 'active';
     activeLineIndex = index;
+    line.refreshAudio?.();
     el('activePeer').textContent = line.peer;
     el('activeState').textContent = 'Em chamada';
     showView('activeView');
@@ -1056,6 +1058,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     el('secondLineBanner').style.display = 'none';
     line.session.answer({ mediaConstraints: { audio: true, video: false } });
     activeLineIndex = index;
+    line.refreshAudio?.();
     el('activePeer').textContent = line.peer;
     el('activeState').textContent = 'Em chamada';
     showView('activeView');
@@ -1082,6 +1085,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
           otherLine.session.unhold();
           otherLine.state = 'active';
         }
+        otherLine.refreshAudio?.();
         el('activePeer').textContent = otherLine.peer;
         el('activeState').textContent = 'Em chamada';
         showView('activeView');
@@ -1545,6 +1549,12 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   // ---------- Presença dos colegas (BLF via SUBSCRIBE) ----------
   function startPresenceMonitoring(domain) {
     el('colleaguesPanel').style.display = 'block';
+    // JsSIP 3.10.1 não expõe Subscriber. Isso não pode interromper
+    // o registro, os painéis nem o áudio de chamadas normais.
+    if (typeof JsSIP.Subscriber !== 'function') {
+      el('colleaguesList').innerHTML = '<div class="log-empty">Presença SIP indisponível neste cliente.</div>';
+      return;
+    }
     COLLEAGUES.forEach((colleague) => {
       colleagueState[colleague.ext] = 'indisponivel';
       subscribeToPresence(colleague.ext, domain);
@@ -1652,11 +1662,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
         el('consultTargetState').textContent = 'em conversa';
         el('completeConsultBtn').disabled = false;
       });
-      session.on('confirmed', () => {
-        session.connection.addEventListener('track', (ev) => {
-          remoteAudio.srcObject = ev.streams[0];
-        });
-      });
+      AxeRemoteAudio.bindSessionAudio(session, remoteAudio, () => consultSession === session);
       session.on('ended', () => handleConsultEnded());
       session.on('failed', () => handleConsultEnded());
       return;
@@ -1706,6 +1712,8 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   }
 
   function wireSessionEvents(session, index) {
+    lines[index].refreshAudio = AxeRemoteAudio.bindSessionAudio(session, remoteAudio,
+      () => activeLineIndex === index && lines[index]?.session === session && !consultSession);
     session.on('progress', () => {
       if (session.direction === 'outgoing' && activeLineIndex === index) {
         el('activeState').textContent = 'Chamando…';
@@ -1724,12 +1732,6 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
         setStatus('online', 'Em chamada');
       }
       renderLineSwitcher();
-    });
-
-    session.on('confirmed', () => {
-      session.connection.addEventListener('track', (ev) => {
-        if (activeLineIndex === index) remoteAudio.srcObject = ev.streams[0];
-      });
     });
 
     session.on('ended', () => handleLineEnded(index, 'concluída'));
@@ -1886,6 +1888,9 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
       primarySession.unhold();
       lines[idx].state = 'active';
       activeLineIndex = idx;
+      // Liberar o foco da consulta antes de restaurar os receivers originais.
+      consultSession = null;
+      lines[idx].refreshAudio?.();
       el('activePeer').textContent = lines[idx].peer;
       el('activeState').textContent = 'Em chamada';
       showView('activeView');
