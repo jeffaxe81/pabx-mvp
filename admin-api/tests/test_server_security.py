@@ -525,7 +525,8 @@ def test_public_view_hides_voicemail_pin_from_reads_and_edits():
 
 def test_dynamic_tenants_read_from_registry_before_write_or_ami():
     source = load_source()
-    registry = get_function_body(source, "known_extension_tenants")
+    begin = source.index("def known_extension_tenants(")
+    registry = source[begin:source.index("USERS_PATH =", begin)]
     assert "load_tenants(TENANTS_PATH)" in registry
     assert "TENANT_ID_RE.fullmatch" in registry
     assert "tenant duplicado" in registry
