@@ -111,6 +111,8 @@ configurar, como testar manualmente, e limitações conhecidas.
 
 85. [Persistência atômica do cadastro de ramais](manual-85-cadastro-ramais-atomico.md)
 
+86. [Limites de requisição JSON administrativa](manual-86-limites-json-admin.md)
+
 ## Regra de manutenção
 
 Toda vez que uma funcionalidade nova for implementada no projeto, um

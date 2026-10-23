@@ -764,3 +764,10 @@ privado e substituição atômica, além de serializar operações CRUD
 simultâneas dentro do mesmo processo. Arquivos JSON inválidos e
 symlinks são recusados para evitar perda de dados ou gravações
 inseguras. Consulte o [Manual 85](docs/manual-85-cadastro-ramais-atomico.md).
+
+## Limites de requisições JSON do painel
+
+O `admin-api` limita corpos JSON a 64 KiB, recusa cabeçalhos HTTP
+ambíguos e documentos que não sejam objetos JSON. Uma requisição
+inválida provoca fechamento da conexão para não reaproveitar bytes
+residuais. Consulte o [Manual 86](docs/manual-86-limites-json-admin.md).
