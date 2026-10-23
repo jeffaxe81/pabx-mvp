@@ -243,6 +243,24 @@ class Handler(BaseHTTPRequestHandler):
                 return
             users = [public_user(u) for u in load_users(USERS_PATH)]
             self._send_json(200, {"users": users})
+        elif self.path == "/api/tenant-options":
+            if not self._require_role({"admin", "supervisor"}):
+                return
+            try:
+                known = known_extension_tenants()
+                records = load_tenants(TENANTS_PATH)
+            except (ValueError, OSError, TypeError):
+                self._send_json(503, {"error": "cadastro de tenants indisponível"})
+                return
+            options = [
+                {"tenant_id": tid, "display_name": f"Tenant {tid[1:]}"}
+                for tid in sorted(STATIC_TENANTS)
+            ]
+            options.extend(
+                {"tenant_id": row["tenant_id"], "display_name": row.get("display_name") or row["tenant_id"]}
+                for row in records if row["tenant_id"] in known
+            )
+            self._send_json(200, {"tenants": options})
         elif self.path.startswith("/api/tenants"):
             if not self._require_role({"admin"}):
                 return
