@@ -864,3 +864,11 @@ por tenant, dialplan de entrada e (com catálogo privado fornecido)
 os mapeamentos DID do AstDB, sem divulgar valores no relatório.
 O resultado não comprova chamadas, registro, mídia RTP/SRTP ou GO.
 Veja o [Manual 96](docs/manual-96-auditoria-runtime-asterisk.md).
+
+## Reconhecimento do contexto PJSIP no Asterisk
+
+A auditoria de runtime reconhece agora a saída realista de
+`pjsip show endpoint`, inclusive a opção `context : tN-internal`
+com variações de espaços e letras. Regressões impedem confundir
+contextos cruzados ou nomes parecidos. Veja o
+[Manual 97](docs/manual-97-pjsip-cli-compat.md).

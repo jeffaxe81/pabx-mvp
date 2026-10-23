@@ -133,6 +133,8 @@ configurar, como testar manualmente, e limitações conhecidas.
 
 96. [Auditoria somente leitura do Asterisk em execução](manual-96-auditoria-runtime-asterisk.md)
 
+97. [Compatibilidade do CLI PJSIP na auditoria de laboratório](manual-97-pjsip-cli-compat.md)
+
 ## Regra de manutenção
 
 Toda vez que uma funcionalidade nova for implementada no projeto, um
