@@ -131,3 +131,18 @@ def test_negative_cdr_requires_no_tenant_no_destination_channel_and_zero_billsec
         row = cdr_row()
         row[column] = value
         assert not all(evaluate_cdr(csv_text([row]),trace).values())
+
+
+def test_route_diagnostics_identify_missing_bridge_and_wrong_application_without_values():
+    from lab.did_evidence import evaluate_trace
+    good = evaluate_trace(csv_text(trace_rows('t1')),'t1')
+    assert all(good[key] for key in ('ingress_context','one_dial','dial_destination','bridge_both'))
+    rows = trace_rows('t1')
+    rows = [row for row in rows if row[0]!='BRIDGE_ENTER']
+    missing = evaluate_trace(csv_text(rows),'t1')
+    assert missing['bridge_both'] is False and missing['one_dial'] is True
+    rows = trace_rows('t1')
+    rows[3][5] = 'PJSIP/PRIVATE_VALUE,20'
+    wrong = evaluate_trace(csv_text(rows),'t1')
+    assert wrong['dial_destination'] is False
+    assert 'PRIVATE_VALUE' not in str({key:value for key,value in wrong.items() if type(value) is bool})

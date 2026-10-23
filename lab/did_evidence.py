@@ -65,7 +65,8 @@ def evaluate_trace(raw,tenant=None):
         raise ValueError('empresa de laboratório inválida')
     rows = parse_cel(raw)
     result = {key:False for key in ('well_formed','correlated','complete','routed','isolated',
-                                   'never_answered','no_delivery','no_side_effects','cause_21','entered_ura')}
+                                   'never_answered','no_delivery','no_side_effects','cause_21','entered_ura',
+                                   'ingress_context','one_dial','dial_destination','bridge_both')}
     if not rows:
         return result
     result['well_formed'] = True
@@ -99,10 +100,11 @@ def evaluate_trace(raw,tenant=None):
                               and all(row['account'] in ('',tenant) for row in rows))
         dial = [row for row in applications if row['application'].lower()=='dial']
         bridge_ids = {row['uniqueid'] for row in rows if row['event']=='BRIDGE_ENTER'}
-        result['routed'] = (origin['context']=='from-tdm-gateway'
-                             and len(dial)==1 and dial[0]['data'].split(',')[0]=='PJSIP/'+tenant+'-1001'
-                             and result['isolated'] and bridge_ids==identities
-                             and result['complete'])
+        result.update(ingress_context=origin['context']=='from-tdm-gateway',one_dial=len(dial)==1,
+                      dial_destination=len(dial)==1 and dial[0]['data'].split(',')[0]=='PJSIP/'+tenant+'-1001',
+                      bridge_both=bridge_ids==identities)
+        result['routed'] = all(result[key] for key in ('ingress_context','one_dial','dial_destination',
+                                                      'isolated','bridge_both','complete'))
     else:
         result['isolated'] = all(row['context']=='from-tdm-gateway' and not row['account'] for row in rows)
         result['never_answered'] = (not any(row['event']=='ANSWER' for row in rows)

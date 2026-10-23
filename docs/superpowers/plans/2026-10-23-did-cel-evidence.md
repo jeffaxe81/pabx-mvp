@@ -34,7 +34,7 @@
 
 - [x] Escrever testes de caminho completo e corrupção/ausência/cruzamento; observar RED.
 - [x] Implementar parsing, correlação e evidência negativa; verificar GREEN.
-- [ ] Publicar junto ao consumidor da tarefa 2.
+- [x] Publicar junto ao consumidor da tarefa 2.
 
 ### Task 2: Integrar ao runner existente
 
@@ -42,8 +42,8 @@
 
 **Interfaces:** `prepare_dids` grava somente `cel.conf`/`cel_custom.conf` privados. `exercise_dids` exige `did_cel_backend` e `did_cel:<case>` nas seis situações já existentes. Diretório CEL é criado antes das chamadas.
 
-- [ ] Testar preparação privada, cursor e aceites sem CEL; observar RED.
-- [ ] Integrar leitura limitada, ciclo completo e CDR correlacionado no prazo do runner; verificar GREEN.
+- [x] Testar preparação privada, cursor e aceites sem CEL; observar RED.
+- [x] Integrar leitura limitada, ciclo completo e CDR correlacionado no prazo do runner; verificar GREEN.
 - [ ] Publicar PR dependente da #57 e executar laboratório real; corrigir causas comprovadas.
 
 ### Task 3: Revisão e evidência
