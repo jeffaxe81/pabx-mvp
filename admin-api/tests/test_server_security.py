@@ -254,15 +254,19 @@ def test_create_tenant_validates_before_writing_any_file():
     source = load_source()
     body = get_function_body(source, "_handle_create_tenant")
     validate_pos = body.index("validate_tenant_creation_input(")
-    write_pos = body.index("write_text(")
-    assert validate_pos < write_pos
+    publish_pos = body.index("provision_tenant(")
+    assert validate_pos < publish_pos
+    assert "with TENANT_TRANSACTION_LOCK:" in body
 
 
 def test_create_tenant_registers_did_and_persists_only_after_success():
     source = load_source()
     body = get_function_body(source, "_handle_create_tenant")
-    assert "register_tenant_did(" in body
-    assert "save_tenants(" in body
+    publisher = (SERVER_PY.parent / "tenant_provisioning.py").read_text(encoding="utf-8")
+    assert "provision_tenant(" in body
+    assert publisher.index("client.register_tenant_did(") < publisher.index("save_tenants(")
+    assert "exclusive_tenant_files(config_files)" in publisher
+    assert "client.unregister_tenant_did(" in publisher
 
 
 def test_monitoring_pin_endpoints_require_admin_not_supervisor():
@@ -472,9 +476,10 @@ def test_wizard_creates_strong_credentials_before_files():
     source = SERVER_PY.read_text(encoding="utf-8")
     body = get_function_body(source, "_handle_create_tenant")
     assert "generate_tenant_credentials(tenant_id)" in body
-    assert body.index("generate_tenant_credentials(") < body.index("target_dir.mkdir(")
-    assert "render_tenant_pjsip(tid, sip_credentials)" in body
-    assert body.count('"sip_credentials": sip_credentials') == 2
+    assert body.index("generate_tenant_credentials(") < body.index("provision_tenant(")
+    publisher = (SERVER_PY.parent / "tenant_provisioning.py").read_text(encoding="utf-8")
+    assert "render_tenant_pjsip(tenant_id, sip_credentials)" in publisher
+    assert body.count('"sip_credentials": sip_credentials') == 1
 
 
 def test_api_json_responses_disable_cache():
@@ -486,17 +491,19 @@ def test_tenant_creation_pins_generated_before_writing_and_disclosed_only_on_cre
     source = SERVER_PY.read_text(encoding="utf-8")
     body = get_function_body(source, "_handle_create_tenant")
     assert "generate_tenant_voicemail_pins(tenant_id)" in body
-    assert body.index("generate_tenant_voicemail_pins(") < body.index("target_dir.mkdir(")
-    assert "render_tenant_voicemail(tid, voicemail_pins)" in body
-    assert body.count('"voicemail_pins": voicemail_pins') == 2
+    assert body.index("generate_tenant_voicemail_pins(") < body.index("provision_tenant(")
+    assert "provision_tenant(" in body
+    assert body.count('"voicemail_pins": voicemail_pins') == 1
+    assert "except TenantProvisionError" in body
+    assert '"rollback_incomplete": exc.rollback_incomplete' in body
 
 def test_tenant_wizard_rejects_static_did_before_side_effects():
     source = SERVER_PY.read_text(encoding="utf-8")
     body = get_function_body(source, "_handle_create_tenant")
     assert "parse_static_inbound_dids(dialplan_text)" in body
     assert "validate_tenant_creation_input(data, existing, reserved_dids)" in body
-    assert body.index("parse_static_inbound_dids(") < body.index("target_dir.mkdir(")
-    assert body.index("validate_tenant_creation_input(") < body.index("target_dir.mkdir(")
+    assert body.index("parse_static_inbound_dids(") < body.index("provision_tenant(")
+    assert body.index("validate_tenant_creation_input(") < body.index("provision_tenant(")
     assert '"não foi possível verificar os DIDs estáticos"' in body
 
 
@@ -544,11 +551,13 @@ def test_dynamic_tenants_read_from_registry_before_write_or_ami():
 def test_new_tenant_creates_three_empty_include_files_before_ami():
     source = load_source()
     body = get_function_body(source, "_handle_create_tenant")
-    assert 'empty_files = render_all([], tenant_ids={tenant_id})' in body
-    assert "extensions_dynamic_dial-" in body
-    assert "extensions_dynamic_hints-" in body
-    assert "voicemail_dynamic_" in body
-    assert body.index("empty_files =") < body.index("register_tenant_did(")
+    publisher = (SERVER_PY.parent / "tenant_provisioning.py").read_text(encoding="utf-8")
+    assert 'empty_files = render_all([], tenant_ids={tenant_id})' in publisher
+    assert "extensions_dynamic_dial-" in publisher
+    assert "extensions_dynamic_hints-" in publisher
+    assert "voicemail_dynamic_" in publisher
+    assert "provision_tenant(" in body
+    assert publisher.index("with exclusive_tenant_files(config_files):") < publisher.index("client.register_tenant_did(")
 
 
 def test_tenant_options_only_show_name_not_did_to_supervisor():

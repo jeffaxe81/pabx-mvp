@@ -127,6 +127,8 @@ configurar, como testar manualmente, e limitações conhecidas.
 
 93. [Confirmação obrigatória de alterações AstDB no AMI](manual-93-confirmacao-astdb-ami.md)
 
+94. [Criação de tenant com compensação de DID e arquivos](manual-94-tenant-create-compensation.md)
+
 ## Regra de manutenção
 
 Toda vez que uma funcionalidade nova for implementada no projeto, um

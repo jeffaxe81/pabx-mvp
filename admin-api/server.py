@@ -25,6 +25,7 @@ from auth import hash_password, verify_password, SessionStore
 from store import add_extension, update_extension, delete_extension, load_store, delete_extensions_by_tenant
 from conf_generator import render_all, render_pjsip_dynamic
 from conf_publisher import published_conf_batch
+from tenant_provisioning import TENANT_TRANSACTION_LOCK, TenantProvisionError, provision_tenant
 from ami_client import AMIClient
 from blocklist import validate_blocklist_number
 from vip import validate_vip_input
@@ -581,57 +582,40 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json(503, {"error": "não foi possível verificar os DIDs estáticos"})
             return
 
-        existing = load_tenants(TENANTS_PATH)
-        ok, error, cleaned = validate_tenant_creation_input(data, existing, reserved_dids)
-        if not ok:
-            self._send_json(400, {"error": error})
-            return
+        # O lock cobre leitura, verificação de duplicidade e escrita.
+        # Sem ele, duas requisições paralelas poderiam reservar o mesmo DID.
+        with TENANT_TRANSACTION_LOCK:
+            try:
+                existing = load_tenants(TENANTS_PATH)
+            except (OSError, ValueError, TypeError):
+                self._send_json(503, {"error": "cadastro de tenants indisponível"})
+                return
+            ok, error, cleaned = validate_tenant_creation_input(data, existing, reserved_dids)
+            if not ok:
+                self._send_json(400, {"error": error})
+                return
 
-        tenant_id = cleaned["tenant_id"]
-        # Geradas uma só vez para os arquivos e retornadas somente na
-        # resposta de criação ao administrador autenticado.
-        sip_credentials = generate_tenant_credentials(tenant_id)
-        voicemail_pins = generate_tenant_voicemail_pins(tenant_id)
-        for subdir, filename_prefix, render_fn in (
-            ("pjsip_tenants", "", lambda tid: render_tenant_pjsip(tid, sip_credentials)),
-            ("queues_tenants", "", render_tenant_queues),
-            ("extensions_tenants", "", render_tenant_extensions),
-            ("voicemail_tenants", "", lambda tid: render_tenant_voicemail(tid, voicemail_pins)),
-            ("parking_tenants", "", render_tenant_parking),
-        ):
-            target_dir = Path(ASTERISK_CONF_DIR, subdir)
-            target_dir.mkdir(parents=True, exist_ok=True)
-            Path(target_dir, f"{tenant_id}.conf").write_text(render_fn(tenant_id), encoding="utf-8")
-
-        # O dialplan do novo tenant inclui estes três arquivos antes
-        # mesmo de existir qualquer ramal gerenciado pelo painel.
-        # Arquivos ausentes tornam os #include do Asterisk inválidos.
-        empty_files = render_all([], tenant_ids={tenant_id})
-        for suffix in (
-            f"extensions_dynamic_dial-{tenant_id}.conf",
-            f"extensions_dynamic_hints-{tenant_id}.conf",
-            f"voicemail_dynamic_{tenant_id}.conf",
-        ):
-            Path(ASTERISK_CONF_DIR, "generated", suffix).write_text(
-                empty_files[suffix], encoding="utf-8"
-            )
-
-        client = AMIClient(AMI_HOST, AMI_PORT, AMI_USERNAME, AMI_SECRET)
-        try:
-            client.connect_and_login()
-            client.register_tenant_did(cleaned["did"], tenant_id)
-            reload_result = client.reload_pjsip_and_dialplan()
-        except Exception as exc:  # noqa: BLE001
-            existing.append(cleaned)
-            save_tenants(TENANTS_PATH, existing)
-            self._send_json(201, {"tenant": cleaned, "sip_credentials": sip_credentials, "voicemail_pins": voicemail_pins, "reload_error": str(exc)})
-            return
-        finally:
-            client.close()
-
-        existing.append(cleaned)
-        save_tenants(TENANTS_PATH, existing)
-        self._send_json(201, {"tenant": cleaned, "sip_credentials": sip_credentials, "voicemail_pins": voicemail_pins, "reload": reload_result})
+            tenant_id = cleaned["tenant_id"]
+            # Os segredos nunca são devolvidos se o AstDB/JSON não
+            # confirmar a criação completa do tenant.
+            sip_credentials = generate_tenant_credentials(tenant_id)
+            voicemail_pins = generate_tenant_voicemail_pins(tenant_id)
+            try:
+                reload_result = provision_tenant(
+                    ASTERISK_CONF_DIR, TENANTS_PATH, existing, cleaned,
+                    sip_credentials, voicemail_pins,
+                    lambda: AMIClient(AMI_HOST, AMI_PORT, AMI_USERNAME, AMI_SECRET),
+                )
+            except TenantProvisionError as exc:
+                self._send_json(502, {
+                    "error": "provisionamento não confirmado; verifique logs e estado AstDB",
+                    "rollback_incomplete": exc.rollback_incomplete,
+                })
+                return
+            self._send_json(201, {
+                "tenant": cleaned, "sip_credentials": sip_credentials,
+                "voicemail_pins": voicemail_pins, "reload": reload_result,
+            })
 
     def _handle_generate_sound(self):
         """
