@@ -899,3 +899,5 @@ Relatórios divergentes ou incompletos bloqueiam a revisão. A saída
 inclui hashes dos arquivos de evidências, mas não autentica as provas,
 não executa chamadas e **não autoriza GO**.
 Veja o [Manual 100](docs/manual-100-release-evidence.md).
+
+101. [Laboratório real de registro SIP/TLS](docs/manual-101-laboratorio-sip-real.md)

@@ -1,0 +1,35 @@
+name: AXE PABX | laboratório Asterisk real
+
+"on":
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pabx-real-lab-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  sip-tls:
+    name: Asterisk | SIP TLS autenticado
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Subir Asterisk isolado e registrar t1, t2 e t3
+        run: python3 -m lab.asterisk_lab --report lab-results/registration.json
+      - name: Preservar somente relatório sanitizado
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: asterisk-real-registration-${{ github.sha }}
+          path: lab-results/registration.json
+          if-no-files-found: error
+          retention-days: 14

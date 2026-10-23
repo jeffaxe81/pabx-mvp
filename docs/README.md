@@ -149,3 +149,5 @@ a funcionalidade concluída — não depois, "quando der tempo". Isso está
 registrado como regra permanente no prompt master
 (`prompt-base-pabx.md`).
 
+
+101. [Laboratório real de registro SIP/TLS](manual-101-laboratorio-sip-real.md)
