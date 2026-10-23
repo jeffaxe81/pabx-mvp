@@ -169,6 +169,9 @@ async function run(inputFile, outputFile) {
             '--ignore-certificate-errors-spki-list='+cfg.spki],
     });
     report.browser_version = 'Chromium/'+context.browser().version();
+    // Equivalente à permissão dada pelo operador ao getUserMedia real.
+    // O microfone sintético não deve suprimir a permissão usada pelo ICE.
+    await context.grantPermissions(['microphone'],{ origin });
     await context.route('**/*',route => new URL(route.request().url()).origin === origin ? route.continue() : route.abort());
     let bundle = true;
     for (const tenant of ['t1','t2','t3']) {
