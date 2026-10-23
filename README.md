@@ -812,3 +812,10 @@ resposta. Limites de tamanho e timeout impedem espera indefinida e
 respostas incompletas. Os testes usam socket simulado; o resultado
 de reload ainda deve ser verificado no Asterisk real.
 Veja o [Manual 90](docs/manual-90-ami-tcp-framing.md).
+
+## Consultas AMI de VIPs, bloqueios e transbordo
+
+As consultas de listas AstDB usam `ActionID` e só retornam após
+`DBGetTreeComplete`, evitando respostas parciais e períodos de espera
+fixos. Também filtram as entradas pela família do tenant e preservam
+o timeout do socket. Veja o [Manual 91](docs/manual-91-ami-dbgettree-eventos.md).
