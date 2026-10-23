@@ -126,10 +126,14 @@ def check_snapshots(snapshots, expected):
         endpoint = STATIC_ENDPOINTS.get(tid, f"{tid}-recepcao")
         output = _healthy_output(snapshots, f"endpoint:{tid}")
         listed = bool(re.search(
-            r"(?im)^\s*Endpoint:\s*" + re.escape(endpoint) + r"(?:/|\s|$)", output
+            r"(?im)^\s*Endpoint\s*:\s*" + re.escape(endpoint) + r"(?:/|\s|$)", output
         ))
+        # Asterisk PJSIP exibe opções como "context : t1-internal"
+        # (muitas versões usam minúsculas e espaço antes de ':').
+        # Exigir a linha da opção, não aceitar apenas texto avulso.
         context_matches = bool(re.search(
-            r"(?im)^\s*Context:\s*" + re.escape(f"{tid}-internal") + r"\b", output
+            r"(?im)^\s*context\s*:\s*" + re.escape(f"{tid}-internal") + r"(?:\s|$)",
+            output
         ))
         check(f"endpoint_exists:{tid}", listed)
         check(f"endpoint_context:{tid}", listed and context_matches)
