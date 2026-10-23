@@ -819,3 +819,13 @@ As consultas de listas AstDB usam `ActionID` e só retornam após
 `DBGetTreeComplete`, evitando respostas parciais e períodos de espera
 fixos. Também filtram as entradas pela família do tenant e preservam
 o timeout do socket. Veja o [Manual 91](docs/manual-91-ami-dbgettree-eventos.md).
+
+## Verificação de comandos Asterisk via AMI
+
+Além de reconhecer respostas completas e `ActionID`, o cliente AMI
+verifica mensagens explícitas de erro no resultado textual dos comandos
+`pjsip reload`, `dialplan reload`, `voicemail reload`, `queue reload all`
+e `parking reload`. Uma rejeição interrompe a sequência e aciona a
+tentativa de restauração da configuração anterior (Manual 87).
+A confirmação do funcionamento real ainda depende da homologação.
+Veja o [Manual 92](docs/manual-92-validacao-semantic-reload-ami.md).

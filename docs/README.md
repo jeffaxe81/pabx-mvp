@@ -123,6 +123,8 @@ configurar, como testar manualmente, e limitações conhecidas.
 
 91. [Leitura completa de listas AstDB pelo AMI](manual-91-ami-dbgettree-eventos.md)
 
+92. [Verificação semântica de reload AMI](manual-92-validacao-semantic-reload-ami.md)
+
 ## Regra de manutenção
 
 Toda vez que uma funcionalidade nova for implementada no projeto, um
