@@ -243,6 +243,17 @@ class AMIClient:
             for item in self._read_db_tree(f"blocklist-{tenant}")
         ]
 
+    def _send_required_db_action(self, fields: dict) -> dict:
+        """Escrita AstDB só é confirmada com Response: Success.
+
+        Não revela Message/Val recebidos do servidor em erros AMI,
+        que poderiam conter informações de configuração.
+        """
+        reply = self._send_action(fields)
+        if reply.get("Response") != "Success":
+            raise ConnectionError("Asterisk recusou alteração AstDB")
+        return reply
+
     def register_extension_mapping(self, number: str, name: str, tenant: str = "t1"):
         """
         Mapeamento número→endpoint (backlog #55) - permite que o
@@ -250,13 +261,13 @@ class AMIClient:
         dinâmico criado pelo painel, não só as telefonistas fixas
         (1010/1011). Chamado toda vez que um ramal é criado/editado.
         """
-        return self._send_action({
+        return self._send_required_db_action({
             "Action": "DBPut", "Family": f"extension-map-{tenant}", "Key": str(number), "Val": name,
         })
 
     def unregister_extension_mapping(self, number: str, tenant: str = "t1"):
         """Chamado quando um ramal é removido - evita mapeamento órfão apontando pra um ramal que não existe mais."""
-        return self._send_action({
+        return self._send_required_db_action({
             "Action": "DBDel", "Family": f"extension-map-{tenant}", "Key": str(number),
         })
 
@@ -267,12 +278,12 @@ class AMIClient:
         pra decidir ${TENANT} de chamadas de entrada não mapeadas
         explicitamente no dialplan.
         """
-        return self._send_action({
+        return self._send_required_db_action({
             "Action": "DBPut", "Family": "tenant-did", "Key": did, "Val": tenant_id,
         })
 
     def unregister_tenant_did(self, did: str):
-        return self._send_action({
+        return self._send_required_db_action({
             "Action": "DBDel", "Family": "tenant-did", "Key": did,
         })
 
