@@ -113,6 +113,8 @@ configurar, como testar manualmente, e limitações conhecidas.
 
 86. [Limites de requisição JSON administrativa](manual-86-limites-json-admin.md)
 
+87. [Publicação recuperável de arquivos Asterisk e migração de volume](manual-87-publicacao-asterisk-rollback.md)
+
 ## Regra de manutenção
 
 Toda vez que uma funcionalidade nova for implementada no projeto, um
