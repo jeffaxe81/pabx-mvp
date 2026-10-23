@@ -38,7 +38,9 @@ def test_cel_preparation_is_private_and_preserves_the_real_dialplan(tmp_path):
     assert (conf/'extensions.conf').read_text()=='ORIGINAL_ROUTE\n'
     assert (conf/'pjsip.conf').read_text().startswith('[existing]\n')
     assert 'events=ALL' in (conf/'cel.conf').read_text()
-    assert 'apps=all' in (conf/'cel.conf').read_text()
+    apps = (conf/'cel.conf').read_text().split('apps=',1)[1].splitlines()[0].split(',')
+    assert {'Dial','Answer','Set','GotoIf','Hangup','Queue','Record','VoiceMail','MixMonitor','AGI','System'} <= set(apps)
+    assert 'all' not in apps
     assert 'CHANNEL(linkedid)' in (conf/'cel_custom.conf').read_text()
     for name in ('cel.conf','cel_custom.conf'):
         assert (conf/name).stat().st_mode & 0o077==0
@@ -51,3 +53,13 @@ def test_cel_cursor_refuses_missing_replaced_or_partial_previous_content():
     for after in ('','different record\n'):
         with pytest.raises(ValueError): new_trace(before,after)
     with pytest.raises(ValueError): new_trace('partial','partialnext\n')
+
+
+def test_backend_requires_actual_application_tracking_not_the_literal_all():
+    from lab.did_evidence import cel_backend_status, TRACKED_APPS
+    modules = 'cel_custom.so Custom CEL backend\n'
+    status = 'CEL Logging: Enabled\n'+''.join('CEL Tracking Application: '+app.lower()+'\n' for app in TRACKED_APPS)
+    assert all(cel_backend_status(modules,status).values())
+    assert not all(cel_backend_status(modules,'CEL Logging: Enabled\nCEL Tracking Application: all\n').values())
+    assert not all(cel_backend_status(modules,status.replace('Enabled','Disabled')).values())
+    assert not all(cel_backend_status('',status).values())

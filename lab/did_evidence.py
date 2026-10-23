@@ -8,7 +8,11 @@ from .call_checks import cdr_rows
 
 FIELDS = ('event','context','extension','channel','application','data','account',
           'uniqueid','linkedid','extra')
-FORBIDDEN = {'answer','dial','queue','voicemail','mixmonitor','monitor','background','read','playback'}
+TRACKED_APPS = ('Answer','Dial','Queue','VoiceMail','VoiceMailMain','MixMonitor','Monitor',
+                'Record','Playback','Background','Read','Set','Goto','GotoIf','NoOp',
+                'Hangup','AGI','EAGI','System','TrySystem','Gosub','Return',
+                'StopMixMonitor','StopMonitor')
+SAFE_REJECTION_APPS = {'set','goto','gotoif','noop','hangup'}
 ORIGIN = r'PJSIP/t9-incoming-[0-9a-f]+'
 ID = r'[0-9]+\.[0-9]+'
 
@@ -19,12 +23,20 @@ def prepare_cel(conf):
                'CHANNEL(appname)','CHANNEL(appdata)','CHANNEL(accountcode)',
                'CHANNEL(uniqueid)','CHANNEL(linkedid)','eventextra')
     for name,body in (
-        ('cel.conf','[general]\nenable=yes\napps=all\nevents=ALL\n'),
+        # In Asterisk 22.11 "all" is stored as a literal application name.
+        ('cel.conf','[general]\nenable=yes\napps='+','.join(TRACKED_APPS)+'\nevents=ALL\n'),
         ('cel_custom.conf','[mappings]\nLab.csv => '+','.join(
             '${CSV_QUOTE(${'+field+'})}' for field in columns)+'\n')):
         target = conf/name
         target.write_text(body)
         target.chmod(0o600)
+
+
+def cel_backend_status(modules,status):
+    tracked = {name.lower() for name in re.findall(r'(?im)^\s*CEL Tracking Application:\s*(\w+)\s*$',status)}
+    return {'module_loaded':'cel_custom.so' in modules,
+            'logging_enabled':re.search(r'(?im)^\s*(?:CEL\s+)?Logging:\s*Enabled\s*$',status) is not None,
+            'applications_tracked':{name.lower() for name in TRACKED_APPS} <= tracked}
 
 
 def new_trace(before,after):
@@ -111,8 +123,9 @@ def evaluate_trace(raw,tenant=None):
                                     and not any(row['application'].lower()=='answer' for row in applications))
         result['no_delivery'] = (len(starts)==1 and not any(row['event']=='BRIDGE_ENTER' for row in rows)
                                  and not any(row['application'].lower() in ('dial','queue') for row in applications))
-        result['no_side_effects'] = (result['isolated']
-                                     and not any(row['application'].lower() in FORBIDDEN for row in applications))
+        result['no_side_effects'] = (result['isolated'] and bool(applications)
+                                     and all(row['application'].lower() in SAFE_REJECTION_APPS for row in applications)
+                                     and any(row['application'].lower()=='hangup' and row['data']=='21' for row in applications))
         hangups = [row for row in rows if row['event']=='HANGUP' and row['uniqueid']==origin['uniqueid']]
         result['cause_21'] = len(hangups)==1 and _cause(hangups[0]['extra'])==21
     return result

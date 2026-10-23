@@ -33,6 +33,9 @@ def trace_rows(tenant=None):
             ['HANGUP',tenant+'-internal','1001',destination,'','','','123.2','123.1','{"hangupcause":16}'],
             ['CHAN_END',tenant+'-internal','1001',destination,'','','','123.2','123.1',''],
         ]
+    if not tenant:
+        rows.append(['APP_START','from-tdm-gateway','did-desconhecido',origin,
+                     'Hangup','21','','123.1','123.1',''])
     rows += [
         ['HANGUP',tenant+'-internal' if tenant else 'from-tdm-gateway',
          '1001' if tenant else 'did-desconhecido',origin,'Hangup','',tenant or '',
@@ -99,7 +102,7 @@ def test_rejected_path_cannot_contain_answer_bridge_or_recording(event):
 def test_rejection_requires_unambiguous_real_hangup_cause(extra):
     from lab.did_evidence import evaluate_trace
     rows = trace_rows()
-    rows[1][-1] = extra
+    next(row for row in rows if row[0]=='HANGUP')[-1] = extra
     assert evaluate_trace(csv_text(rows))['cause_21'] is False
 
 
@@ -146,3 +149,18 @@ def test_route_diagnostics_identify_missing_bridge_and_wrong_application_without
     wrong = evaluate_trace(csv_text(rows),'t1')
     assert wrong['dial_destination'] is False
     assert 'PRIVATE_VALUE' not in str({key:value for key,value in wrong.items() if type(value) is bool})
+
+
+@pytest.mark.parametrize('application', ['Record','AGI','EAGI','System','TrySystem','VoiceMailMain'])
+def test_negative_path_rejects_recording_and_other_unexpected_applications(application):
+    from lab.did_evidence import evaluate_trace
+    rows = trace_rows()
+    event = list(rows[1]); event[4] = application
+    rows.insert(1,event)
+    assert evaluate_trace(csv_text(rows))['no_side_effects'] is False
+
+
+def test_missing_application_events_cannot_prove_a_clean_negative_path():
+    from lab.did_evidence import evaluate_trace
+    rows = [row for row in trace_rows() if row[0]!='APP_START']
+    assert evaluate_trace(csv_text(rows))['no_side_effects'] is False

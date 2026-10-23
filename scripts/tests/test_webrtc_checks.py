@@ -50,7 +50,7 @@ def test_browser_failure_details_never_copy_private_or_unbounded_fields():
     assert 'SECRET' not in str(result)
 
 
-def test_browser_timeout_allows_playwright_style_detached_child_cleanup(tmp_path):
+def test_browser_timeout_allows_playwright_style_detached_child_cleanup(tmp_path, monkeypatch):
     import os
     import signal
     from lab.webrtc_checks import run_browser
@@ -59,19 +59,36 @@ def test_browser_timeout_allows_playwright_style_detached_child_cleanup(tmp_path
     worker=folder/'webrtc_browser.cjs'
     worker.write_text("""
 const fs=require('node:fs'),{spawn}=require('node:child_process');
+setTimeout(()=>{
 const child=spawn(process.execPath,['-e','setInterval(()=>{},1000)'],{detached:true,stdio:'ignore'});
-fs.writeFileSync(process.argv[2],String(child.pid));
 process.on('SIGTERM',()=>{
   child.once('exit',()=>{fs.writeFileSync(process.argv[3],'cleaned');process.exit(0);});
   process.kill(-child.pid,'SIGKILL');
 });
+child.once('spawn',()=>fs.writeFileSync(process.argv[2],String(child.pid)));
+},250);
 setInterval(()=>{},1000);
 """)
     pid_file=tmp_path/'pid'
     marker=tmp_path/'cleanup'
+    # Cold Node startup is outside the behavior under test. Wait for the real
+    # fixture's signal handler and detached child before starting its timeout.
+    import subprocess
+    import time
+    real_popen = subprocess.Popen
+    def ready_process(*args, **kwargs):
+        process = real_popen(*args, **kwargs)
+        deadline = time.monotonic()+10
+        while not pid_file.exists() and process.poll() is None and time.monotonic()<deadline:
+            time.sleep(0.01)
+        if not pid_file.exists():
+            process.kill(); process.communicate(timeout=5)
+            raise AssertionError('fixture Node não ficou pronta')
+        return process
+    monkeypatch.setattr(subprocess,'Popen',ready_process)
     try:
         with pytest.raises(RuntimeError,match='prazo WebRTC excedido'):
-            run_browser(tmp_path,pid_file,marker,timeout=1)
+            run_browser(tmp_path,pid_file,marker,timeout=0.1)
         assert marker.read_text()=='cleaned'
         with pytest.raises(ProcessLookupError): os.kill(int(pid_file.read_text()),0)
     finally:

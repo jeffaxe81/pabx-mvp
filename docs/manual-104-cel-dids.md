@@ -1,4 +1,4 @@
-# Manual 105 — Trilha CEL e CDR da mesma chamada de DID
+# Manual 104 — Trilha CEL e CDR da mesma chamada de DID
 
 ## Finalidade
 
@@ -43,8 +43,8 @@ da trilha. Evidências de linhas diferentes nunca são combinadas.
 ## Isolamento e dados
 
 `cel.conf` e `cel_custom.conf` são criados apenas na cópia privada do
-laboratório, com modo 0600. CEL acompanha todas as aplicações nessa
-execução descartável; isso não altera a configuração ou as rotas da
+laboratório, com modo 0600. CEL acompanha as aplicações de roteamento, atendimento, gravação e execução
+de scripts nessa execução descartável; isso não altera a configuração ou as rotas da
 produção. O diretório de saída é criado antes das primeiras chamadas.
 
 A leitura é limitada a 1 MiB e os CSVs são validados antes do uso. Os
@@ -65,6 +65,16 @@ contêm somente nomes fixos de cenário e diagnósticos booleanos. O container
   completo, CDR correlacionado e nenhum atendimento ou efeito lateral.
   O diagnóstico composto dos três caminhos conhecidos ainda reprovou;
   foi detalhado em booleanos para investigar o formato real do CEL.
+- A causa foi `apps=all`: o código de Asterisk 22.11.0 armazena `all`
+  como um nome literal. A preparação agora lista explicitamente as
+  aplicações auditadas e confere sua presença em `cel show status`.
+  `events=ALL` continua habilitando todos os tipos de evento. A prova
+  negativa exige também o evento real de `Hangup(21)` e recusa aplicações
+  inesperadas, como Record, AGI, EAGI e System. Referência de implementação:
+  [main/cel.c — Asterisk 22.11.0](https://github.com/asterisk/asterisk/blob/22.11.0/main/cel.c).
+- Um teste herdado de cleanup iniciava seu timeout antes de o processo Node
+  instalar o handler de sinal. A fixture agora confirma prontidão antes do
+  timeout, com atraso de partida simulado; processos e sinais continuam reais.
 - A revisão independente e a execução final serão registradas após a
   aprovação dos critérios. Nenhum marco é promovido por testes de fixture.
 

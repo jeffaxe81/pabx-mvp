@@ -7,7 +7,7 @@ import threading
 import time
 
 from .call_checks import cdr_rows
-from .did_evidence import prepare_cel, new_trace, evaluate_trace, evaluate_cdr
+from .did_evidence import prepare_cel, new_trace, evaluate_trace, evaluate_cdr, cel_backend_status
 from .sip_calls import CallPeer, CallRejected, single
 from .srtp_media import SrtpMedia, exchange
 
@@ -119,9 +119,7 @@ def exercise_dids(container, prepared, report):
     report['did_cel_results'] = {}
     modules = cli(container,'module show like cel_custom')
     status = cli(container,'cel show status')
-    report['did_cel_backend'] = {
-        'module_loaded':'cel_custom.so' in modules,
-        'logging_enabled':re.search(r'(?im)^\s*(?:CEL\s+)?Logging:\s*Enabled\s*$',status) is not None}
+    report['did_cel_backend'] = cel_backend_status(modules,status)
     checks['did_cel_backend'] = all(report['did_cel_backend'].values())
 
     def cel_snapshot():

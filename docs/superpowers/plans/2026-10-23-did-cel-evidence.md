@@ -48,7 +48,7 @@
 
 ### Task 3: Revisão e evidência
 
-**Files:** docs/manual-105-cel-dids.md; docs/README.md; README.md.
+**Files:** docs/manual-104-cel-dids.md; docs/README.md; README.md.
 
 - [ ] Executar oito suítes Python, Node/navegador e CI real no SHA publicado.
 - [ ] Revisão independente com correção dos achados importantes/críticos.
