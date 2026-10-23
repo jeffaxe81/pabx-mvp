@@ -132,6 +132,7 @@ def run(root, report):
             report['image_digests'] = image_data.get('RepoDigests', [])
             result = command(['docker', 'run', '--detach', '--name', name,
                              '--network', 'host', '--user', '0:0', '--cap-drop', 'ALL',
+                             '--cap-add', 'DAC_OVERRIDE',
                              '--security-opt', 'no-new-privileges', '--label',
                              'io.axe.pabx.source-commit='+source,
                              '--mount', f'type=bind,src={prepared["conf"]},dst=/etc/asterisk,readonly',
