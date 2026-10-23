@@ -80,8 +80,8 @@ def summarize(plan):
             {"week": row["week"], "title": row["title"], "status": row["status"]}
             for row in milestones if row["status"] != "done"
         ][:5],
-        "completed_prs": sorted(row["pr_number"] for row in milestones
-                                if row["status"] == "done"),
+        "completed_prs": sorted({row["pr_number"] for row in milestones
+                                 if row["status"] == "done"}),
         "status_source": "declarado no JSON versionado; CI e evidências não verificadas aqui",
         "real_sip_calls_executed_by_this_tool": False,
         "operational_go_authorized": False,

@@ -34,9 +34,9 @@
       "title": "Subir ambiente Docker Asterisk de laboratório",
       "area": "lab",
       "acceptance": "CLI real, versões e volumes comprovados em ambiente isolado",
-      "status": "planned",
-      "pr_number": null,
-      "ci_run_id": null,
+      "status": "done",
+      "pr_number": 53,
+      "ci_run_id": 39967937669,
       "requires_lab": true
     },
     {
@@ -45,9 +45,9 @@
       "title": "Validar REGISTER SIP t1, t2 e t3+",
       "area": "sip",
       "acceptance": "Registros reais, autenticação negativa e isolamento de contextos",
-      "status": "planned",
-      "pr_number": null,
-      "ci_run_id": null,
+      "status": "done",
+      "pr_number": 53,
+      "ci_run_id": 39967937669,
       "requires_lab": true
     },
     {

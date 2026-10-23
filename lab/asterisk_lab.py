@@ -2,14 +2,15 @@
 import argparse
 from datetime import datetime, timezone
 import importlib.util
+import io
 import json
-import os
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import re
 import secrets
 import shutil
 import subprocess
 import tempfile
+import tarfile
 import time
 
 from .sip_tls import SipTLS
@@ -25,14 +26,32 @@ def load_file(name, path):
     return module
 
 
-def prepare(root, destination):
+def prepare(root, destination, source_commit="HEAD"):
     """Copia de forma privada; nunca roda gerador de segredos no checkout."""
     root, destination = Path(root), Path(destination)
     destination.mkdir(mode=0o700, parents=True, exist_ok=False)
     conf = destination / 'asterisk'
-    shutil.copytree(root / 'asterisk', conf,
-                    ignore=shutil.ignore_patterns('__pycache__', '*.pyc', 'certs'))
-    generator = load_file('lab_secrets_generator', root/'scripts/secrets_generator.py')
+    archive = subprocess.run(['git', '-C', str(root), 'archive', '--format=tar',
+                              source_commit, 'asterisk'], capture_output=True, timeout=30)
+    if archive.returncode:
+        raise RuntimeError('não foi possível exportar configuração versionada')
+    with tarfile.open(fileobj=io.BytesIO(archive.stdout)) as source:
+        members = []
+        for member in source.getmembers():
+            parts = PurePosixPath(member.name).parts
+            if (not parts or parts[0] != 'asterisk' or '..' in parts
+                    or not (member.isdir() or member.isfile())):
+                raise ValueError('entrada insegura na configuração versionada')
+            if len(parts) > 1 and parts[1] == 'certs':
+                continue
+            members.append(member)
+        source.extractall(destination, members=members, filter='data')
+    helpers = destination/'helpers'
+    helpers.mkdir(mode=0o700)
+    for filename in ('admin-api/tenants.py', 'scripts/secrets_generator.py'):
+        body = command(['git', '-C', str(root), 'show', source_commit+':'+filename]).stdout
+        (helpers/Path(filename).name).write_text(body)
+    generator = load_file('lab_secrets_generator', helpers/'secrets_generator.py')
     content = (conf/'pjsip.conf').read_text()
     placeholders = generator.find_placeholders(content)
     secret_map = {p: generator.generate_strong_secret() for p in placeholders}
@@ -47,7 +66,7 @@ def prepare(root, destination):
         if re.search(r'(?m)^type=auth$', text):
             match = re.search(r'(?m)^password=(.+)$', text)
             credentials[section] = match[1]
-    tenants = load_file('lab_tenants', root/'admin-api/tenants.py')
+    tenants = load_file('lab_tenants', helpers/'tenants.py')
     dynamic = tenants.generate_tenant_credentials('t3')
     credentials.update(dynamic)
     for folder, body in (
@@ -113,6 +132,38 @@ def diagnose(raw):
     }
 
 
+def cleanup_owned(name, ownership):
+    """Remove somente o ID cujo token de propriedade coincide; logs são opcionais."""
+    result = {'removed': False, 'retain_staging': True, 'diagnostics': diagnose('')}
+    try:
+        inspected = command(['docker', 'inspect', name], check=False)
+        if inspected.returncode:
+            return result
+        info = json.loads(inspected.stdout)[0]
+        labels = info['Config'].get('Labels') or {}
+        if labels.get('io.axe.pabx.lab-owner') != ownership:
+            result['retain_staging'] = False  # Outro container nunca usou nossa montagem.
+            return result
+        container_id = info['Id']
+        if not re.fullmatch(r'[0-9a-f]{64}', container_id):
+            return result
+    except (OSError, ValueError, TypeError, KeyError, IndexError, subprocess.TimeoutExpired):
+        return result
+    try:
+        logs = command(['docker', 'logs', container_id], check=False, timeout=8)
+        result['diagnostics'] = diagnose(logs.stdout + logs.stderr)
+    except (OSError, subprocess.TimeoutExpired):
+        pass
+    # A remoção independe da coleta de logs e usa ID imutável, nunca só nome.
+    try:
+        removed = command(['docker', 'rm', '--force', '--volumes', container_id], check=False)
+        result['removed'] = removed.returncode == 0
+        result['retain_staging'] = not result['removed']
+    except (OSError, subprocess.TimeoutExpired):
+        pass
+    return result
+
+
 def summarize(checks):
     required = {'real_runtime', 'tls_transport', 'wss_transport', 'container_removed',
                 'checkout_clean', 'runtime_mounts', 'source_label'}
@@ -138,82 +189,90 @@ def run(root, report):
     if clean.returncode != 0:
         raise RuntimeError('checkout do laboratório contém alterações não commitadas')
     name = 'axe-lab-' + secrets.token_hex(6)
-    started = False
-    with tempfile.TemporaryDirectory(prefix='axe-pabx-lab-') as folder:
-        prepared = prepare(root, Path(folder)/'private')
-        try:
-            command(['docker', 'pull', IMAGE], timeout=180)
-            image_data = json.loads(command(['docker', 'image', 'inspect', IMAGE]).stdout)[0]
-            report['image_id'] = image_data['Id']
-            report['image_digests'] = image_data.get('RepoDigests', [])
-            result = command(['docker', 'run', '--detach', '--name', name,
-                             '--network', 'host', '--user', '0:0', '--cap-drop', 'ALL',
-                             '--cap-add', 'DAC_OVERRIDE',
-                             '--security-opt', 'no-new-privileges', '--label',
-                             'io.axe.pabx.source-commit='+source,
-                             '--mount', f'type=bind,src={prepared["conf"]},dst=/etc/asterisk,readonly',
-                             '--entrypoint', 'asterisk', IMAGE, '-f', '-n',
-                             '-C', '/etc/asterisk/asterisk.conf'], check=False)
-            # Mesmo um docker run que falha pode ter criado o container.
-            started = True
-            if result.returncode:
-                raise RuntimeError('inicialização do container falhou')
-            container_data = json.loads(command(['docker','inspect',name]).stdout)[0]
-            report['checks']['source_label'] = (
-                container_data['Config']['Labels'].get('io.axe.pabx.source-commit') == source
-                and container_data['Image'] == image_data['Id'])
-            report['checks']['runtime_mounts'] = any(
-                mount.get('Type') == 'bind' and mount.get('Destination') == '/etc/asterisk'
-                and mount.get('Source') == str(prepared['conf']) and mount.get('RW') is False
-                for mount in container_data['Mounts'])
-            ready = False
-            for _ in range(40):
-                result = command(['docker', 'exec', name, 'asterisk', '-rx',
-                                  'core show version'], check=False)
-                if result.returncode == 0 and 'Asterisk ' in result.stdout:
-                    report['asterisk_version'] = result.stdout.strip().splitlines()[0]
-                    ready = True
-                    break
-                time.sleep(0.5)
-            report['checks']['real_runtime'] = ready
-            if not ready:
-                raise RuntimeError('Asterisk não ficou pronto')
-            # A CLI abrir antes do PJSIP não significa que todos os módulos carregaram.
-            deadline = time.monotonic() + 20
-            while time.monotonic() < deadline:
-                if 't1-1001' in cli(name, 'pjsip show endpoints'):
-                    break
-                time.sleep(0.5)
-            report['checks']['tls_transport'] = 'transport-tls' in cli(name, 'pjsip show transports')
-            report['checks']['wss_transport'] = 'transport-wss' in cli(name, 'pjsip show transports')
-            for tenant, endpoint in (('t1','t1-1001'), ('t2','t2-1001'), ('t3','t3-recepcao')):
-                endpoint_output = cli(name, f'pjsip show endpoint {endpoint}')
-                report['checks']['context:'+tenant] = bool(re.search(
-                    r'(?im)^\s*context\s*:\s*'+tenant+r'-internal\s*$', endpoint_output))
-                peer = SipTLS('127.0.0.1', 5061, prepared['ca'], endpoint,
-                              prepared['credentials'][endpoint])
-                try:
-                    report['tls_version'] = peer.connection.version()
-                    report['phase'] = 'register:'+tenant
-                    report['checks']['register:'+tenant] = peer.register() == 200
-                    report['checks']['contact:'+tenant] = endpoint+'/' in cli(name, 'pjsip show contacts')
-                    report['phase'] = 'unregister:'+tenant
-                    report['checks']['unregister:'+tenant] = peer.register(expires=0) == 200
-                finally:
-                    peer.close()
-                peer = SipTLS('127.0.0.1', 5061, prepared['ca'], endpoint, secrets.token_hex(24))
-                try:
-                    report['phase'] = 'wrong_password:'+tenant
-                    report['checks']['wrong_password:'+tenant] = peer.register() in (401,403)
-                finally:
-                    peer.close()
-        finally:
-            if started:
-                logs = command(['docker','logs',name], check=False)
-                raw = logs.stdout + logs.stderr
-                report['startup_diagnostics'] = diagnose(raw)
-                cleaned = command(['docker','rm','--force','--volumes',name], check=False)
-                report['checks']['container_removed'] = cleaned.returncode == 0
+    ownership = secrets.token_hex(32)
+    attempted_create = False
+    retain_staging = False
+    folder = Path(tempfile.mkdtemp(prefix='axe-pabx-lab-'))
+    try:
+        prepared = prepare(root, folder/'private', source)
+        command(['docker', 'pull', IMAGE], timeout=180)
+        image_data = json.loads(command(['docker', 'image', 'inspect', IMAGE]).stdout)[0]
+        report['image_id'] = image_data['Id']
+        report['image_digests'] = image_data.get('RepoDigests', [])
+        attempted_create = True
+        result = command(['docker', 'create', '--name', name,
+                         '--network', 'host', '--user', '0:0', '--cap-drop', 'ALL',
+                         '--cap-add', 'DAC_OVERRIDE',
+                         '--security-opt', 'no-new-privileges', '--label',
+                         'io.axe.pabx.source-commit='+source, '--label',
+                         'io.axe.pabx.lab-owner='+ownership,
+                         '--mount', f'type=bind,src={prepared["conf"]},dst=/etc/asterisk,readonly',
+                         '--entrypoint', 'asterisk', IMAGE, '-f', '-n',
+                         '-C', '/etc/asterisk/asterisk.conf'], check=False)
+        if result.returncode:
+            raise RuntimeError('inicialização do container falhou')
+        container_id = result.stdout.strip()
+        if not re.fullmatch(r'[0-9a-f]{64}', container_id):
+            raise RuntimeError('ID de container inválido')
+        command(['docker', 'start', container_id])
+        container_data = json.loads(command(['docker','inspect',container_id]).stdout)[0]
+        report['checks']['source_label'] = (
+            container_data['Config']['Labels'].get('io.axe.pabx.source-commit') == source
+            and container_data['Image'] == image_data['Id'])
+        report['checks']['runtime_mounts'] = any(
+            mount.get('Type') == 'bind' and mount.get('Destination') == '/etc/asterisk'
+            and mount.get('Source') == str(prepared['conf']) and mount.get('RW') is False
+            for mount in container_data['Mounts'])
+        ready = False
+        for _ in range(40):
+            result = command(['docker', 'exec', container_id, 'asterisk', '-rx',
+                              'core show version'], check=False)
+            if result.returncode == 0 and 'Asterisk ' in result.stdout:
+                report['asterisk_version'] = result.stdout.strip().splitlines()[0]
+                ready = True
+                break
+            time.sleep(0.5)
+        report['checks']['real_runtime'] = ready
+        if not ready:
+            raise RuntimeError('Asterisk não ficou pronto')
+        # A CLI abrir antes do PJSIP não significa que todos os módulos carregaram.
+        deadline = time.monotonic() + 20
+        while time.monotonic() < deadline:
+            if 't1-1001' in cli(container_id, 'pjsip show endpoints'):
+                break
+            time.sleep(0.5)
+        report['checks']['tls_transport'] = 'transport-tls' in cli(container_id, 'pjsip show transports')
+        report['checks']['wss_transport'] = 'transport-wss' in cli(container_id, 'pjsip show transports')
+        for tenant, endpoint in (('t1','t1-1001'), ('t2','t2-1001'), ('t3','t3-recepcao')):
+            endpoint_output = cli(container_id, f'pjsip show endpoint {endpoint}')
+            report['checks']['context:'+tenant] = bool(re.search(
+                r'(?im)^\s*context\s*:\s*'+tenant+r'-internal\s*$', endpoint_output))
+            peer = SipTLS('127.0.0.1', 5061, prepared['ca'], endpoint,
+                          prepared['credentials'][endpoint])
+            try:
+                report['tls_version'] = peer.connection.version()
+                report['phase'] = 'register:'+tenant
+                report['checks']['register:'+tenant] = peer.register() == 200
+                report['checks']['contact:'+tenant] = endpoint+'/' in cli(container_id, 'pjsip show contacts')
+                report['phase'] = 'unregister:'+tenant
+                report['checks']['unregister:'+tenant] = peer.register(expires=0) == 200
+            finally:
+                peer.close()
+            peer = SipTLS('127.0.0.1', 5061, prepared['ca'], endpoint, secrets.token_hex(24))
+            try:
+                report['phase'] = 'wrong_password:'+tenant
+                report['checks']['wrong_password:'+tenant] = peer.register() in (401,403)
+            finally:
+                peer.close()
+    finally:
+        if attempted_create:
+            cleaned = cleanup_owned(name, ownership)
+            report['checks']['container_removed'] = cleaned['removed']
+            report['startup_diagnostics'] = cleaned['diagnostics']
+            retain_staging = cleaned['retain_staging']
+        report['private_staging_retained'] = retain_staging
+        if not retain_staging:
+            shutil.rmtree(folder)
     report.update(summarize(report['checks']))
     return report['success']
 
