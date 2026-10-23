@@ -74,6 +74,18 @@ def did_cdr_fields(raw, previous_ids, tenant):
             'coherent_route':coherent}
 
 
+def rejected_cdr_matches(raw, previous_ids):
+    rows = cdr_rows(raw)
+    fresh = [row for row in rows or [] if row[8] not in previous_ids]
+    return rows is not None and bool(fresh) and all(
+        not row[0] and row[1] == CALLER and row[2] == 'did-desconhecido'
+        and row[3] == 'from-tdm-gateway'
+        and re.fullmatch(r'PJSIP/'+TRUNK+r'-[0-9a-f]+',row[4]) is not None
+        and not row[5] and row[6] in ('FAILED','NO ANSWER','BUSY','CONGESTION')
+        and row[7] == '0' and re.fullmatch(r'[0-9]+\.[0-9]+',row[8]) is not None
+        for row in fresh)
+
+
 def observe_peer(peer, stop, ready):
     """Falhas de leitura invalidam o aceite; INVITEs inesperados recebem 486."""
     result = {'healthy':True, 'invites':0}
@@ -188,9 +200,7 @@ def exercise_dids(container, prepared, report):
                             checks['did_cdr:'+case] = all(did_cdr_fields(raw,previous_ids,tenant).values())
                             recorded = checks['did_cdr:'+case]
                         else:
-                            fresh = [row for row in cdr_rows(raw) if row[8] not in previous_ids]
-                            checks['did_no_answered_cdr:'+case] = all(
-                                row[6] != 'ANSWERED' and not row[5] for row in fresh)
+                            checks['did_no_answered_cdr:'+case] = rejected_cdr_matches(raw,previous_ids)
                             recorded = checks['did_no_answered_cdr:'+case]
                         if checks['did_channels_cleared:'+case] and recorded:
                             break

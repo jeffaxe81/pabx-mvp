@@ -36,6 +36,25 @@ def test_did_diagnostics_do_not_copy_private_fields():
     assert all(type(value) is bool for value in result.values())
 
 
+def test_rejected_call_requires_its_new_coherent_cdr_not_an_empty_or_stale_snapshot():
+    from lab.did_checks import rejected_cdr_matches
+    rejected = ('"","199999","did-desconhecido","from-tdm-gateway",'
+                '"PJSIP/t9-incoming-00000003","","FAILED","0","123.46"\n')
+    assert rejected_cdr_matches(rejected,{'123.45'}) is True
+    assert rejected_cdr_matches('',set()) is False
+    assert rejected_cdr_matches(rejected,{'123.46'}) is False
+    # O arquivo chega depois da resposta SIP; o primeiro snapshot não pode encerrar o aceite.
+    assert [rejected_cdr_matches(raw,{'123.45'}) for raw in ('',ROW,ROW+rejected)] == [False,False,True]
+    for before,after in [('FAILED','ANSWERED'), ('from-tdm-gateway','t2-internal'),
+                         ('"0","123.46"','"2","123.46"'),
+                         ('"199999"','"PRIVATE_NUMBER"'),
+                         ('PJSIP/t9-incoming-','PJSIP/t2-1001-'),
+                         ('00000003",""','00000003","PJSIP/t1-1001-00000004"')]:
+        assert rejected_cdr_matches(rejected.replace(before,after),set()) is False
+    assert rejected_cdr_matches(rejected+ROW,set()) is False
+    assert rejected_cdr_matches('malformed',set()) is False
+
+
 def test_did_summary_requires_every_case_and_strict_booleans():
     from lab.asterisk_lab import summarize
     from lab.call_checks import required_call_checks

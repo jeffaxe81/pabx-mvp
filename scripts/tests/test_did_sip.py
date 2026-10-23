@@ -65,3 +65,51 @@ def test_invalid_did_never_writes_to_transport(number):
         client.close()
         server.close()
         media.close()
+
+
+@pytest.mark.parametrize('malformed_status', [401,403])
+def test_malformed_rejection_without_to_tag_cannot_prove_did_is_blocked(malformed_status):
+    from lab.srtp_media import SrtpMedia
+    client,server = socket.socketpair()
+    client.settimeout(2)
+    server.settimeout(2)
+    peer,media = peer_on(client),SrtpMedia()
+    errors = []
+
+    def serve():
+        try:
+            _,initial,_ = read_message(server)
+            challenge = response(initial,401,
+                'WWW-Authenticate: Digest realm="asterisk", nonce="private", qop="auth"')
+            if malformed_status == 401:
+                challenge = challenge.replace(b';tag=asterisk',b'')
+            server.sendall(challenge)
+            try:
+                read_message(server)  # ACK caso o cliente aceite o desafio inválido.
+            except ConnectionError:
+                return
+            _,authenticated,_ = read_message(server)
+            rejected = response(authenticated,403)
+            if malformed_status == 403:
+                rejected = rejected.replace(b';tag=asterisk',b'')
+            server.sendall(rejected)
+            try:
+                read_message(server)
+            except ConnectionError:
+                pass
+        except BaseException as exc:
+            errors.append(type(exc).__name__)
+        finally:
+            server.close()
+
+    thread = threading.Thread(target=serve,daemon=True)
+    thread.start()
+    try:
+        with pytest.raises(ValueError,match='tag'):
+            peer.dial('5511900009999',media)
+    finally:
+        peer.close()
+        media.close()
+        thread.join(3)
+    assert not thread.is_alive()
+    assert not errors

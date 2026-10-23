@@ -87,6 +87,7 @@ class CallPeer(SipTLS):
                 raise ValueError('resposta de outro diálogo SIP')
             self.events.append('response:'+match[1])
             if int(match[1]) >= 200:
+                tag(single(headers, 'to'))
                 return int(match[1]), headers, body
 
     def dial(self, number, media):
