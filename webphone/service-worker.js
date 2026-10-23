@@ -13,10 +13,12 @@
  *    limitações reais disso).
  */
 
-const CACHE_NAME = 'telefonista-shell-v2';
+const CACHE_NAME = 'telefonista-shell-v3';
 const APP_SHELL = [
   './',
   './index.html',
+  './vendor/jssip-3.10.1.min.js',
+  './remote-audio.js',
   './manifest.json',
   './icons/icon-192.png',
   './icons/icon-512.png',

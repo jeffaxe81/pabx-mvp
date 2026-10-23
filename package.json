@@ -4,7 +4,7 @@
   "scripts": {
     "build:sip": "node scripts/build_webphone_sip.cjs",
     "check:sip": "node scripts/build_webphone_sip.cjs --check",
-    "test:node": "node --test tests/ui_navigation.test.cjs tests/sip_bundle.test.cjs"
+    "test:node": "node --test tests/ui_navigation.test.cjs tests/sip_bundle.test.cjs tests/webrtc_contract.test.cjs tests/webphone_media.test.cjs tests/ui_service_worker.test.cjs"
   },
   "devDependencies": {
     "esbuild": "0.25.11",

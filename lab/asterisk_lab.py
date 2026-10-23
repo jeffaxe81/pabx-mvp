@@ -352,6 +352,8 @@ def main(argv=None):
         print('Campos CDR '+call+': '+json.dumps(fields,sort_keys=True))
     if report.get('webrtc_phase'):
         print('Etapa WebRTC: '+report['webrtc_phase'])
+    if report.get('webrtc_diagnostics'):
+        print('Diagnóstico WebRTC: '+json.dumps(report['webrtc_diagnostics'],sort_keys=True))
     return 0 if success else 1
 
 

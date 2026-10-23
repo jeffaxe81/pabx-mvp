@@ -7,6 +7,28 @@ const { chromium } = require('playwright');
 const METRICS = ['register','established','dtls','srtp','rtp','tone','audio_attached','ended'];
 const CIPHERS = new Set(['AES_CM_128_HMAC_SHA1_80','AEAD_AES_128_GCM','AEAD_AES_256_GCM']);
 
+function isRemoteAudioPlaying(audio, track) {
+  return Boolean(track?.kind === 'audio' && track.readyState === 'live' && track.enabled
+    && audio?.srcObject?.getAudioTracks().includes(track)
+    && !audio.paused && audio.readyState >= 2 && !audio.muted && audio.volume > 0);
+}
+
+function describeStats(rows) {
+  const reports = new Map(rows.map(row => [row.id,row]));
+  const outbound = rows.find(row => row.type === 'outbound-rtp' && row.kind === 'audio');
+  const inbound = rows.find(row => row.type === 'inbound-rtp' && row.kind === 'audio');
+  const transport = reports.get(outbound?.transportId);
+  const pair = reports.get(transport?.selectedCandidatePairId);
+  const state = (value,allowed) => allowed.includes(value) ? value : 'unknown';
+  return { outbound:Boolean(outbound),inbound:Boolean(inbound),
+    dtls:state(transport?.dtlsState,['new','connecting','connected','closed','failed']),
+    pair:state(pair?.state,['frozen','waiting','in-progress','failed','succeeded']),
+    nominated:pair?.nominated === true,
+    local_sha256:reports.get(transport?.localCertificateId)?.fingerprintAlgorithm === 'sha-256',
+    remote_sha256:reports.get(transport?.remoteCertificateId)?.fingerprintAlgorithm === 'sha-256',
+    cipher_supported:CIPHERS.has(transport?.srtpCipher) };
+}
+
 function assessStats(rows) {
   const reports = new Map(rows.map(row => [row.id,row]));
   const outbound = rows.find(row => row.type === 'outbound-rtp' && row.kind === 'audio');
@@ -62,6 +84,7 @@ function watchWebSocket(page, expected) {
 }
 
 async function instrument(page, hz) {
+  await page.addInitScript('window.__axeRemoteAudioPlaying = '+isRemoteAudioPlaying.toString()+';');
   await page.addInitScript(({ hz }) => {
     const state = window.__axeLab = { pcs:[], contexts:[] };
     const NativePC = window.RTCPeerConnection;
@@ -89,16 +112,18 @@ async function mediaProof(page) {
     if (!pc) return { stats:[], peak_hz:0, rms:0, audio_attached:false, local_ice:false };
     const stats = [...(await pc.getStats()).values()];
     const track = pc.getReceivers().find(receiver => receiver.track?.kind === 'audio')?.track;
-    if (track && state.analyserTrack !== track.id) {
+    const audio = document.querySelector('#remoteAudio');
+    const audio_attached = window.__axeRemoteAudioPlaying(audio,track);
+    if (audio_attached && state.analyserTrack !== track.id) {
       const context = new AudioContext({ sampleRate:48000 });
       const analyser = context.createAnalyser(), mute = context.createGain();
       analyser.fftSize = 2048; mute.gain.value = 0;
-      context.createMediaStreamSource(new MediaStream([track])).connect(analyser);
+      context.createMediaStreamSource(new MediaStream(audio.srcObject.getAudioTracks())).connect(analyser);
       analyser.connect(mute); mute.connect(context.destination); await context.resume();
       state.analyser = analyser; state.analyserTrack = track.id; state.contexts.push(context);
     }
     let peak_hz = 0, rms = 0;
-    if (state.analyser) {
+    if (audio_attached && state.analyserTrack === track.id && state.analyser) {
       const frequencies = new Float32Array(state.analyser.frequencyBinCount);
       const samples = new Float32Array(state.analyser.fftSize);
       state.analyser.getFloatFrequencyData(frequencies); state.analyser.getFloatTimeDomainData(samples);
@@ -107,17 +132,16 @@ async function mediaProof(page) {
       peak_hz = peak*state.analyser.context.sampleRate/state.analyser.fftSize;
       rms = Math.sqrt(samples.reduce((sum,value) => sum+value*value,0)/samples.length);
     }
-    const audio = document.querySelector('#remoteAudio');
-    return { stats, peak_hz, rms,
-      audio_attached:Boolean(audio?.srcObject?.getAudioTracks().some(t => t.readyState === 'live') && !audio.paused && audio.readyState >= 2),
+    return { stats, peak_hz, rms, audio_attached,
       local_ice:(pc.getConfiguration().iceServers || []).length === 0 };
   });
   return { ...assessStats(raw.stats), peak_hz:raw.peak_hz, rms:raw.rms,
-           audio_attached:raw.audio_attached, local_ice:raw.local_ice };
+           audio_attached:raw.audio_attached, local_ice:raw.local_ice,diagnostics:describeStats(raw.stats) };
 }
 
 async function run(inputFile, outputFile) {
   const report = { schema_version:1,success:false,checks:requiredChecks(),cases:[],browser_version:'',phase:'setup' };
+  const diagnostics = {};
   let context, server, pageErrors = 0;
   try {
     const cfg = JSON.parse(fs.readFileSync(inputFile,'utf8'));
@@ -172,6 +196,7 @@ async function run(inputFile, outputFile) {
         await callee.locator('#answerBtn').click();
         for (const page of pages) await page.waitForFunction(() => document.querySelector('#activeState').textContent === 'Em chamada');
         report.checks['webrtc_established'+suffix] = true;
+        const establishedAt = performance.now();
         report.phase = 'media'+suffix;
         let left, right;
         for (let attempt=0;attempt<60;attempt++) {
@@ -180,6 +205,8 @@ async function run(inputFile, outputFile) {
               && Math.abs(left.peak_hz-880)<70 && Math.abs(right.peak_hz-440)<70) break;
           await new Promise(resolve => setTimeout(resolve,100));
         }
+        diagnostics[tenant+':'+direction] = {left:left.diagnostics,right:right.diagnostics};
+        delete left.diagnostics; delete right.diagnostics;
         const proofs = [left,right];
         report.checks['webrtc_dtls'+suffix] = proofs.every(p => p.dtls);
         report.checks['webrtc_srtp'+suffix] = proofs.every(p => p.srtp);
@@ -187,6 +214,8 @@ async function run(inputFile, outputFile) {
         report.checks['webrtc_tone'+suffix] = Math.abs(left.peak_hz-880)<70 && Math.abs(right.peak_hz-440)<70 && proofs.every(p => p.rms>0.015);
         report.checks['webrtc_audio_attached'+suffix] = proofs.every(p => p.audio_attached);
         report.cases.push({ tenant,direction,left,right });
+        // CDR exige billsec >= 1: conservar a chamada por pelo menos 2 s.
+        await new Promise(resolve => setTimeout(resolve,Math.max(0,2000-(performance.now()-establishedAt))));
         report.phase = 'hangup'+suffix;
         await caller.locator('#hangupBtn').click();
         for (const page of pages) await page.locator('#idleView').waitFor({ state:'visible' });
@@ -209,12 +238,13 @@ async function run(inputFile, outputFile) {
     }
     report.checks.webrtc_no_page_errors = pageErrors === 0;
     report.success = !report.error_type && Object.values(report.checks).every(value => value === true) && report.cases.length === 6;
+    if (!report.success) report.diagnostics = diagnostics;
     fs.writeFileSync(outputFile,JSON.stringify(report),{ mode:0o600 });
   }
   return report.success;
 }
 
-module.exports = { assessStats };
+module.exports = { assessStats, isRemoteAudioPlaying, describeStats };
 if (require.main === module) {
   run(process.argv[2],process.argv[3]).then(success => { process.exitCode = success ? 0 : 1; })
     .catch(() => { process.exitCode = 1; });

@@ -67,6 +67,29 @@ def validate_browser_report(report):
     return report
 
 
+def browser_failure_details(details):
+    """Whitelist de estados sem copiar strings/objetos do processo filho."""
+    if not isinstance(details,dict): return {}
+    result={}
+    states={'dtls':{'unknown','new','connecting','connected','closed','failed'},
+            'pair':{'unknown','frozen','waiting','in-progress','failed','succeeded'}}
+    flags={'outbound','inbound','nominated','local_sha256','remote_sha256','cipher_supported'}
+    for tenant in TENANTS:
+        for direction in DIRECTIONS:
+            identity=tenant+':'+direction
+            case=details.get(identity)
+            if not isinstance(case,dict): continue
+            result[identity]={}
+            for side in ('left','right'):
+                proof=case.get(side)
+                if not isinstance(proof,dict): continue
+                clean={key:proof[key] for key in flags if type(proof.get(key)) is bool}
+                clean.update({key:proof[key] for key,allowed in states.items()
+                              if isinstance(proof.get(key),str) and proof[key] in allowed})
+                result[identity][side]=clean
+    return result
+
+
 def webrtc_cdr_matches(raw,tenant,source,destination):
     operators={'1010':'recepcao','1011':'recepcao-2'}
     if tenant not in TENANTS or source not in operators or destination not in operators: return False
@@ -140,7 +163,9 @@ def exercise_webrtc(root,container,prepared,report):
             if name in browser_checks(): checks[name]=value is True
         phase=child.get('phase')
         if isinstance(phase,str) and re.fullmatch(r'[a-z_]+(?::t[123]:(?:forward|reverse))?',phase): report['webrtc_phase']=phase
-    if code: raise RuntimeError('laboratório WebRTC reprovado')
+    if code:
+        report['webrtc_diagnostics']=browser_failure_details(child.get('diagnostics'))
+        raise RuntimeError('laboratório WebRTC reprovado')
     validated=validate_browser_report(child)
     report['browser_version']=validated['browser_version']
     report['webrtc_cases']=validated['cases']

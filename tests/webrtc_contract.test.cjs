@@ -32,3 +32,24 @@ test('WebRTC evidence requires correlated DTLS, fingerprints, SRTP and both RTP 
     assert.equal(assessStats(rows)[failing], false);
   }
 });
+
+test('UI audio proof rejects a local/wrong track and disabled playback', () => {
+  const { isRemoteAudioPlaying } = require('../lab/webrtc_browser.cjs');
+  const track = { id:'remote',kind:'audio',readyState:'live',enabled:true };
+  const valid = () => ({ srcObject:{ getAudioTracks:() => [track] },paused:false,readyState:4,muted:false,volume:1 });
+  assert.equal(isRemoteAudioPlaying(valid(),track),true);
+  assert.equal(isRemoteAudioPlaying({ ...valid(),srcObject:{getAudioTracks:() => [{...track,id:'local'}]} },track),false);
+  for (const change of [{muted:true},{volume:0},{paused:true},{readyState:1}])
+    assert.equal(isRemoteAudioPlaying({...valid(),...change},track),false);
+  track.enabled = false;
+  assert.equal(isRemoteAudioPlaying(valid(),track),false);
+});
+
+test('transport diagnostics expose only fixed states and booleans', () => {
+  const { describeStats } = require('../lab/webrtc_browser.cjs');
+  assert.deepEqual(describeStats(stats()),{ outbound:true,inbound:true,dtls:'connected',pair:'succeeded',
+    nominated:true,local_sha256:true,remote_sha256:true,cipher_supported:true });
+  const rows = stats(); rows.find(row => row.id === 'transport').dtlsState = 'private-value';
+  assert.equal(describeStats(rows).dtls,'unknown');
+  assert.equal(JSON.stringify(describeStats(rows)).includes('private-value'),false);
+});

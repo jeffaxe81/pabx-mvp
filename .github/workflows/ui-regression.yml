@@ -39,7 +39,7 @@ jobs:
       - name: Testar links e preservação de contexto
         run: |
           npm ci --ignore-scripts --no-audit --no-fund
-          node --test tests/ui_navigation.test.cjs tests/sip_bundle.test.cjs tests/webrtc_contract.test.cjs
+          npm run test:node
 
   browser:
     name: Chromium | responsividade e permissões

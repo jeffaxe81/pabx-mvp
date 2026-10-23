@@ -41,6 +41,15 @@ def test_webrtc_cdr_matches_operator_endpoint_names_with_exact_tenant():
     assert webrtc_cdr_matches(row.replace('ANSWERED','NO ANSWER'),'t2','1010','1011') is False
 
 
+def test_browser_failure_details_never_copy_private_or_unbounded_fields():
+    from lab.webrtc_checks import browser_failure_details
+    details={'t1:forward':{'left':{'outbound':True,'dtls':'connected','private_key':'SECRET'},
+                          'right':{'dtls':'SECRET','nominated':1,'packets_received':999999999999}}}
+    result=browser_failure_details(details)
+    assert result=={'t1:forward':{'left':{'outbound':True,'dtls':'connected'},'right':{}}}
+    assert 'SECRET' not in str(result)
+
+
 def test_webrtc_summary_requires_media_cases_and_cleanup_beyond_prior_calls():
     from lab.asterisk_lab import summarize
     from lab.webrtc_checks import required_webrtc_checks
