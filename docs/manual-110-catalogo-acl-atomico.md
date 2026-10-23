@@ -38,6 +38,20 @@ limite, troca por symlink imediatamente **após** a abertura do FD,
 alternância entre política válida/inválida, crescimento concorrente de
 arquivo após \`fdopen()\` e revogação entre leituras.
 
+## Reforço — proteção de pastas ancestrais
+A abertura anterior usava \`O_NOFOLLOW\` apenas no nome final do
+catálogo. Isso não impede que uma pasta intermediária da árvore de
+diretórios seja um link simbólico. A rotina \`_open_policy_file\`
+passa a percorrer cada diretório com \`openat(dir_fd=...)\`,
+\`O_DIRECTORY\` e \`O_NOFOLLOW\`, mantendo descritores dos ancestrais
+abertos durante a resolução até o arquivo final.
+
+Novas regressões cobrem symlink em ancestral direto ou intermediário,
+substituição de pasta por symlink imediatamente depois da abertura do
+diretório, \`..\` no caminho e leitura do arquivo originalmente aberto.
+Exige POSIX/Linux com \`dir_fd\`; em plataforma sem esse suporte,
+a política de gravações é negada por padrão.
+
 ## Limites e critério de aceite
 São testes automatizados em arquivos temporários, não chamadas reais,
 não pentest com privilégios do host nem prova HTTP multiempresa ponta
