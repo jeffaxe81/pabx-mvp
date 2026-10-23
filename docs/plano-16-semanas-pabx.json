@@ -1,0 +1,187 @@
+{
+  "schema_version": 1,
+  "project": "AXE PABX",
+  "program": "Antecipação de 16 semanas",
+  "start_date": "2026-10-26",
+  "duration_weeks": 16,
+  "baseline_sha": "acfff0c4578e77ea80912397aff8c2c4b4df177f",
+  "milestones": [
+    {
+      "week": 1,
+      "month": 1,
+      "title": "Auditoria PJSIP compatível com CLI",
+      "area": "lab",
+      "acceptance": "Reconhecer contexto PJSIP em variantes reais de saída CLI",
+      "status": "done",
+      "pr_number": 49,
+      "ci_run_id": 39908454643,
+      "requires_lab": false
+    },
+    {
+      "week": 2,
+      "month": 1,
+      "title": "Restauração tardia do catálogo de empresas",
+      "area": "security",
+      "acceptance": "Retomar bytes e permissões do tenants.json após falha pós-replace",
+      "status": "done",
+      "pr_number": 50,
+      "ci_run_id": 39908954889,
+      "requires_lab": false
+    },
+    {
+      "week": 3,
+      "month": 1,
+      "title": "Subir ambiente Docker Asterisk de laboratório",
+      "area": "lab",
+      "acceptance": "CLI real, versões e volumes comprovados em ambiente isolado",
+      "status": "planned",
+      "pr_number": null,
+      "ci_run_id": null,
+      "requires_lab": true
+    },
+    {
+      "week": 4,
+      "month": 1,
+      "title": "Validar REGISTER SIP t1, t2 e t3+",
+      "area": "sip",
+      "acceptance": "Registros reais, autenticação negativa e isolamento de contextos",
+      "status": "planned",
+      "pr_number": null,
+      "ci_run_id": null,
+      "requires_lab": true
+    },
+    {
+      "week": 5,
+      "month": 2,
+      "title": "Realizar chamadas SIP internas bidirecionais",
+      "area": "sip",
+      "acceptance": "Estabelecimento, desligamento e CDR em dois tenants",
+      "status": "planned",
+      "pr_number": null,
+      "ci_run_id": null,
+      "requires_lab": true
+    },
+    {
+      "week": 6,
+      "month": 2,
+      "title": "Provar RTP e SRTP/DTLS",
+      "area": "media",
+      "acceptance": "Áudio bidirecional, criptografia negociada e evidência segura",
+      "status": "planned",
+      "pr_number": null,
+      "ci_run_id": null,
+      "requires_lab": true
+    },
+    {
+      "week": 7,
+      "month": 2,
+      "title": "Homologar DIDs conhecidos/desconhecidos",
+      "area": "routing",
+      "acceptance": "Encaminhamento correto e rejeição fail-closed com sinalização",
+      "status": "planned",
+      "pr_number": null,
+      "ci_run_id": null,
+      "requires_lab": true
+    },
+    {
+      "week": 8,
+      "month": 2,
+      "title": "Homologar isolamento completo por empresa",
+      "area": "tenancy",
+      "acceptance": "Sem acesso cruzado a ramais, gravações, voicemail, DID ou filas",
+      "status": "planned",
+      "pr_number": null,
+      "ci_run_id": null,
+      "requires_lab": true
+    },
+    {
+      "week": 9,
+      "month": 3,
+      "title": "Ensaiar filas, URA e callbacks",
+      "area": "contact-center",
+      "acceptance": "Entrada, espera, transbordo, callback e relatório de SLA",
+      "status": "planned",
+      "pr_number": null,
+      "ci_run_id": null,
+      "requires_lab": true
+    },
+    {
+      "week": 10,
+      "month": 3,
+      "title": "Ensaiar transferência e gravações",
+      "area": "contact-center",
+      "acceptance": "Transferência assistida, retorno, autorização e retenção",
+      "status": "planned",
+      "pr_number": null,
+      "ci_run_id": null,
+      "requires_lab": true
+    },
+    {
+      "week": 11,
+      "month": 3,
+      "title": "Executar backup e restauração integral",
+      "area": "resilience",
+      "acceptance": "Prova de recuperação de volumes, AstDB, ramais e arquivos",
+      "status": "planned",
+      "pr_number": null,
+      "ci_run_id": null,
+      "requires_lab": true
+    },
+    {
+      "week": 12,
+      "month": 3,
+      "title": "Ensaiar falha controlada e recuperação",
+      "area": "resilience",
+      "acceptance": "RTO/RPO medidos, rollback e reconciliação de compensações",
+      "status": "planned",
+      "pr_number": null,
+      "ci_run_id": null,
+      "requires_lab": true
+    },
+    {
+      "week": 13,
+      "month": 4,
+      "title": "Revisar hardening SIP, acesso e TLS",
+      "area": "security",
+      "acceptance": "Segredos, ACLs, exposição de portas e certificado em ambiente real",
+      "status": "planned",
+      "pr_number": null,
+      "ci_run_id": null,
+      "requires_lab": true
+    },
+    {
+      "week": 14,
+      "month": 4,
+      "title": "Executar carga e estabilidade prolongada",
+      "area": "performance",
+      "acceptance": "Canais concorrentes, recursos e métricas sob carga acordada",
+      "status": "planned",
+      "pr_number": null,
+      "ci_run_id": null,
+      "requires_lab": true
+    },
+    {
+      "week": 15,
+      "month": 4,
+      "title": "Congelar release candidate e evidências",
+      "area": "release",
+      "acceptance": "Commit SHA, CI, manuais, runbook e 13 evidências revisadas",
+      "status": "planned",
+      "pr_number": null,
+      "ci_run_id": null,
+      "requires_lab": true
+    },
+    {
+      "week": 16,
+      "month": 4,
+      "title": "Revisão de GO e implantação autorizada",
+      "area": "release",
+      "acceptance": "Aceite responsável, contingência e go/no-go com rollback testado",
+      "status": "planned",
+      "pr_number": null,
+      "ci_run_id": null,
+      "requires_lab": true
+    }
+  ],
+  "operational_go_authorized": false
+}
