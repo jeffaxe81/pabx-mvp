@@ -10,7 +10,8 @@ administrativo real para os ramais seguros adicionais de t2/t3.
 Cada chamada exige registro autenticado dos dois clientes, INVITE com
 Digest, atendimento, ACK, mídia nos dois sentidos, BYE confirmado,
 ausência de canais residuais e CDR atendido com origem, destino,
-contexto, tenant, canais e duração coerentes. Os ramais estáticos de
+contexto, tenant, canais e duração coerentes. As rotas diretas estáticas
+atribuem `CDR(accountcode)` ao tenant antes de executar `Dial()`. Os ramais estáticos de
 t1 e t2 também fazem parte do percurso validado.
 
 ## Execução
@@ -30,7 +31,8 @@ chamadas. Resultado incompleto ou negativo retorna exit code 1.
 
 ## Mídia e proteção
 
-O cliente negocia PCMU/8000 em `RTP/SAVP` com
+O cliente seleciona PCMU/8000 mesmo quando o Asterisk oferece outros
+codecs, preserva a tag SDES da oferta e responde com PCMU em `RTP/SAVP` com
 `AES_CM_128_HMAC_SHA1_80`. Chaves de 30 bytes são geradas por execução
 e entregues somente pelo SDP dentro da conexão TLS com certificado
 verificado. O cliente usa pylibsrtp 1.0.0; não implementa criptografia.
@@ -55,7 +57,8 @@ em memória para verificar os campos esperados. Gravações sintéticas
 eventualmente geradas pelo dialplan ficam no container descartável.
 
 O relatório público contém SHA, versão/digest, resultados booleanos,
-contagens de pacotes e perfil criptográfico. Não inclui SDP, Call-ID,
+contagens de pacotes, perfil criptográfico e eventos de protocolo
+predefinidos (por exemplo, `invite_received` e `response:200`). Não inclui SDP, Call-ID,
 credenciais, chaves, CDR completo ou arquivos de áudio.
 
 ## Limites
@@ -69,3 +72,34 @@ restauração, carga e operação em servidor de homologação.
 
 PR dependente: [#54](https://github.com/jeffaxe81/pabx-mvp/pull/54),
 baseada na [#53](https://github.com/jeffaxe81/pabx-mvp/pull/53).
+
+## Histórico de correções desta entrega
+
+- O contato SIP do Asterisk pode usar `transport=TLS` e omitir `usuario@`;
+  o cliente agora aceita essas formas sem permitir host externo ou porta inválida.
+- A oferta de mídia pode listar vários codecs. O cliente seleciona PCMU
+  e preserva a tag SDES, mantendo a exigência de SRTP autenticado.
+- As rotas diretas estáticas de t1/1001–1002 e t2/1001 não marcavam
+  `CDR(accountcode)`. A atribuição ao tenant agora precede `Dial()`.
+- Falhas de libsrtp agora produzem relatório JSON de reprovação sanitizado.
+  Causas da ponta chamada também são preservadas, evitando ocultá-las
+  atrás de um timeout da ponta originadora.
+- A preparação do laboratório cria o diretório `cdr-custom` antes das
+  chamadas; o backend Asterisk 22.11 abre o arquivo de saída sem criar
+  seu diretório pai. O diagnóstico reconhece a etiqueta `Logging:`
+  apresentada pela CLI dessa versão.
+
+## Evidência de execução
+
+A execução [39980624663](https://github.com/jeffaxe81/pabx-mvp/actions/runs/39980624663)
+aprovou os dois jobs: **22/22** verificações de registro e **70/70**
+verificações do modo de chamadas. As seis chamadas tiveram estabelecimento,
+mídia SRTP bidirecional com payload correto, desligamento, canais liberados
+e CDR atendido coerente. O container foi removido ao final.
+
+A [CI estática 39980624670](https://github.com/jeffaxe81/pabx-mvp/actions/runs/39980624670)
+aprovou as oito suítes Python. A validação local final passou em
+**1.361 testes Python e 7 Node**. A revisão independente teve três
+achados importantes, corrigidos com regressões; nenhum crítico ou
+menor adiado. O marco 5 está concluído, totalizando **5 de 16 marcos**.
+O marco 6 continua em andamento até a prova de WSS/DTLS.

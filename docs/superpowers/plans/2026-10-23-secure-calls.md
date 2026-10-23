@@ -32,8 +32,8 @@
 
 **Interfaces:** SrtpMedia().offer(), .negotiate(sdp), .exchange(other), .close(); parse_sdp(sdp) valida endereço, perfil, codec e chave.
 
-- [ ] Testar SDP seguro/recusas, troca UDP real bidirecional e rejeição de adulteração/replay; observar RED.
-- [ ] Implementar negociação SDES e envio/recebimento com pylibsrtp; verificar GREEN.
+- [x] Testar SDP seguro/recusas, troca UDP real bidirecional e rejeição de adulteração/replay; observar RED.
+- [x] Implementar negociação SDES e envio/recebimento com pylibsrtp; verificar GREEN.
 
 ### Task 2: Diálogos e execução Asterisk
 
@@ -41,14 +41,24 @@
 
 **Interfaces:** CallPeer(SipTLS) inicia/atende/desliga diálogo autenticado; exercise_calls(container, prepared, report) retorna verificações sanitizadas; summarize(checks, calls=False) exige conjunto completo.
 
-- [ ] Testar INVITE/Digest/ACK/BYE em socket real com servidor controlado e correlação negativa; observar RED.
-- [ ] Gerar ramais privados via conf_generator; executar seis chamadas (ida/volta em t1/t2/t3), comparar CDR e mídia; verificar GREEN.
-- [ ] Publicar branch e PR dependente da #53; executar CI real e corrigir causas observadas.
+- [x] Testar INVITE/Digest/ACK/BYE em socket real com servidor controlado e correlação negativa; observar RED.
+- [x] Gerar ramais privados via conf_generator; executar seis chamadas (ida/volta em t1/t2/t3), comparar CDR e mídia; verificar GREEN.
+- [x] Publicar branch e PR dependente da #53; executar CI real e corrigir causas observadas.
 
 ### Task 3: Evidências e revisão
 
 **Files:** docs/manual-102-chamadas-srtp-reais.md; docs/README.md; README.md; docs/plano-16-semanas-pabx.json.
 
-- [ ] Rodar as oito suítes Python e Node, obter CI real do SHA publicado.
-- [ ] Revisão independente do conjunto, corrigir achados importantes com regressão.
-- [ ] Registrar somente marcos aceitos, evidências e limites; atualizar PR com resultado concreto.
+- [x] Rodar as oito suítes Python e Node, obter CI real do SHA publicado.
+- [x] Revisão independente do conjunto, corrigir achados importantes com regressão.
+- [x] Registrar somente marcos aceitos, evidências e limites; atualizar PR com resultado concreto.
+
+## Evidências finais
+
+- Baseline: 1.339 testes Python; final: 1.361 Python nas oito suítes e 7 Node.
+- CI real [39980624663](https://github.com/jeffaxe81/pabx-mvp/actions/runs/39980624663): registros 22/22 e chamadas/CDR/SRTP 70/70.
+- CI estática [39980624670](https://github.com/jeffaxe81/pabx-mvp/actions/runs/39980624670): oito jobs aprovados.
+- Revisão independente: três achados importantes corrigidos com regressões RED→GREEN (Contact TLS, atribuição de CDR estático, relatório de erro libsrtp); nenhum achado crítico ou menor adiado.
+- Execução real também identificou oferta com vários codecs, Contact sem usuário e diretório de CDR ausente; corrigidos mantendo os critérios de aceite.
+- Publicação conferida por igualdade entre árvore Git local e remota.
+- Marco 5 concluído; marco 6 parcialmente executado, WSS/DTLS pendente. Sem GO operacional.
