@@ -97,8 +97,13 @@ class SipTLS:
     def close(self):
         self.connection.close()
 
-    def receive(self):
+    def receive(self, deadline=None):
         while True:
+            if deadline is not None:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise TimeoutError("prazo SIP excedido")
+                self.connection.settimeout(remaining)
             # SIP keepalive CRLF não constitui uma mensagem.
             self.buffer = self.buffer.lstrip(b'\r\n')
             message, self.buffer = pop_message(self.buffer)
@@ -108,6 +113,18 @@ class SipTLS:
             if not data:
                 raise ConnectionError('conexão SIP encerrada')
             self.buffer += data
+
+    def acknowledge(self, headers):
+        for key in ('from', 'to', 'call-id', 'cseq'):
+            if len(headers.get(key, [])) != 1:
+                raise ValueError('notificação SIP inválida')
+        if not headers.get('via'):
+            raise ValueError('notificação SIP sem Via')
+        lines = ['SIP/2.0 200 OK'] + ['Via: '+v for v in headers['via']]
+        lines += [name+': '+headers[key][0] for name,key in
+                  (('From','from'),('To','to'),('Call-ID','call-id'),('CSeq','cseq'))]
+        lines += ['Content-Length: 0', '', '']
+        self.connection.sendall('\r\n'.join(lines).encode('ascii'))
 
     def request(self, method, uri, *, authorization=None, expires=120):
         self.cseq += 1
@@ -126,7 +143,10 @@ class SipTLS:
         self.connection.sendall('\r\n'.join(lines).encode('ascii'))
         deadline = time.monotonic() + 8
         while time.monotonic() < deadline:
-            start, headers, body = self.receive()
+            start, headers, body = self.receive(deadline)
+            if re.fullmatch(r'(?:NOTIFY|OPTIONS) [^ ]+ SIP/2.0', start):
+                self.acknowledge(headers)
+                continue
             if (headers.get('call-id') != [self.call_id] or
                     headers.get('cseq') != [f'{self.cseq} {method}']):
                 raise ValueError('resposta de outra transação SIP')

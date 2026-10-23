@@ -101,3 +101,78 @@ def test_startup_diagnostics_never_copy_raw_lines_or_credentials():
     assert result['database_unavailable'] is True
     assert 'SECRET_PRIVATE' not in json.dumps(result)
     assert all(type(value) is bool for value in result.values())
+
+
+def test_unsolicited_mwi_is_acknowledged_without_accepting_wrong_transaction():
+    import socket
+    import threading
+    from lab.sip_tls import SipTLS, parse_message
+    client, server = socket.socketpair()
+    client.settimeout(2)
+    server.settimeout(2)
+    peer = SipTLS.__new__(SipTLS)
+    peer.connection = client
+    peer.username, peer.port = 't1-1001', 55000
+    peer.call_id, peer.tag, peer.cseq, peer.buffer = 'register@localhost', 'client', 0, b''
+    observed = []
+
+    def serve():
+        try:
+            request = server.recv(8192)
+            _, headers, _ = parse_message(request)
+            notify = (b'NOTIFY sip:t1-1001@localhost SIP/2.0\r\n'
+                      b'Via: SIP/2.0/TLS localhost;branch=z9hG4bKmwi\r\n'
+                      b'From: <sip:asterisk@localhost>;tag=server\r\n'
+                      b'To: <sip:t1-1001@localhost>;tag=client\r\n'
+                      b'Call-ID: mwi@localhost\r\nCSeq: 1 NOTIFY\r\n'
+                      b'Content-Length: 0\r\n\r\n')
+            response = (f'SIP/2.0 200 OK\r\nCall-ID: {headers["call-id"][0]}\r\n'
+                        f'CSeq: {headers["cseq"][0]}\r\nContent-Length: 0\r\n\r\n').encode()
+            server.sendall(notify + response)
+            acknowledgement = server.recv(8192)
+            if acknowledgement:
+                observed.append(parse_message(acknowledgement))
+        finally:
+            server.close()
+
+    thread = threading.Thread(target=serve, daemon=True)
+    thread.start()
+    try:
+        code, _ = peer.request('REGISTER', 'sip:localhost')
+        assert code == 200
+        thread.join(3)
+        assert not thread.is_alive()
+        assert observed[0][0] == 'SIP/2.0 200 OK'
+        assert observed[0][1]['call-id'] == ['mwi@localhost']
+        assert observed[0][1]['cseq'] == ['1 NOTIFY']
+    finally:
+        client.close()
+
+
+def test_response_for_another_transaction_still_fails_closed():
+    import socket
+    import threading
+    from lab.sip_tls import SipTLS
+    client, server = socket.socketpair()
+    client.settimeout(2)
+    server.settimeout(2)
+    peer = SipTLS.__new__(SipTLS)
+    peer.connection = client
+    peer.username, peer.port = 't1-1001', 55000
+    peer.call_id, peer.tag, peer.cseq, peer.buffer = 'register@localhost', 'client', 0, b''
+
+    def serve():
+        try:
+            server.recv(8192)
+            server.sendall(b'SIP/2.0 200 OK\r\nCall-ID: wrong@localhost\r\n'
+                           b'CSeq: 1 REGISTER\r\nContent-Length: 0\r\n\r\n')
+        finally:
+            server.close()
+    thread = threading.Thread(target=serve, daemon=True)
+    thread.start()
+    try:
+        with pytest.raises(ValueError, match='outra transação'):
+            peer.request('REGISTER', 'sip:localhost')
+    finally:
+        client.close()
+        thread.join(3)
