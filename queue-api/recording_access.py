@@ -44,16 +44,52 @@ def _extension_belongs_to_tenant(extension, tenant):
     )
 
 
+
+def _open_policy_file(path):
+    """Abre o catálogo ancorando CADA ancestral em FD de diretório.
+
+    O_NOFOLLOW no arquivo isolado não protege componentes parent
+    intermediários. Atravessar com openat(dir_fd=...) impede que um
+    symlink inserido em qualquer nível redirecione a leitura.
+    """
+    required = ("O_NOFOLLOW", "O_NONBLOCK", "O_DIRECTORY")
+    if (not all(hasattr(os, name) for name in required)
+            or os.open not in os.supports_dir_fd):
+        return None
+    directory_fd = None
+    try:
+        candidate = Path(path)
+        parts = candidate.parts
+        if candidate.is_absolute():
+            if not parts or parts[0] != "/":
+                return None
+            anchor, components = "/", parts[1:]
+        else:
+            anchor, components = ".", parts
+        if not components or any(part in {"", ".", ".."} for part in components):
+            return None
+        directory_fd = os.open(anchor, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        for component in components[:-1]:
+            next_fd = os.open(component, os.O_RDONLY | os.O_DIRECTORY |
+                              os.O_NOFOLLOW, dir_fd=directory_fd)
+            os.close(directory_fd)
+            directory_fd = next_fd
+        return os.open(components[-1], os.O_RDONLY | os.O_NOFOLLOW |
+                       os.O_NONBLOCK, dir_fd=directory_fd)
+    except (OSError, TypeError, ValueError, NotImplementedError):
+        return None
+    finally:
+        if directory_fd is not None:
+            os.close(directory_fd)
+
 def load_recording_policy(path):
     """Devolve None para ausente, JSON inválido ou esquema inseguro."""
-    # O teste is_symlink seguido de read_text() permitia que outro
-    # processo trocasse o catálogo por um link entre as duas operações.
-    # Abrir com O_NOFOLLOW e ler do mesmo descritor evita essa corrida.
-    if not hasattr(os, "O_NOFOLLOW") or not hasattr(os, "O_NONBLOCK"):
+    # Abertura relativa a diretórios ancorados evita a troca do arquivo
+    # ou de QUALQUER pasta ancestral por symlink durante a leitura.
+    fd = _open_policy_file(path)
+    if fd is None:
         return None
-    fd = None
     try:
-        fd = os.open(os.fspath(path), os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
         metadata = os.fstat(fd)
         if not stat.S_ISREG(metadata.st_mode) or metadata.st_size > MAX_POLICY_BYTES:
             return None
