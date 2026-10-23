@@ -890,3 +890,12 @@ revisão operacional com critérios de aceite por marco. Consulte o
 O progresso pode ser calculado por
 `python3 scripts/program_progress.py --format markdown`.
 O script não testa chamadas nem concede autorização de GO.
+
+## Evidências de release com SHA comum
+
+O `scripts/release_evidence.py` cruza a auditoria CLI do Asterisk e
+os 13 testes declarados de homologação com o SHA completo do release.
+Relatórios divergentes ou incompletos bloqueiam a revisão. A saída
+inclui hashes dos arquivos de evidências, mas não autentica as provas,
+não executa chamadas e **não autoriza GO**.
+Veja o [Manual 100](docs/manual-100-release-evidence.md).
