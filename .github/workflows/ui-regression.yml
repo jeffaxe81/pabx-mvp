@@ -52,7 +52,15 @@ jobs:
           node-version: "22"
       - name: Instalar Playwright fixado
         run: npm install --no-save playwright@1.56.1
-      - name: Instalar Chromium e dependências
-        run: npx playwright install --with-deps chromium
+      - name: Usar Chrome do runner ou instalar Chromium
+        shell: bash
+        run: |
+          CHROME_BIN="$(command -v google-chrome || command -v chromium || true)"
+          if [[ -n "$CHROME_BIN" ]]; then
+            echo "PABX_BROWSER_EXECUTABLE=$CHROME_BIN" >> "$GITHUB_ENV"
+            echo "Usando navegador pré-instalado do runner."
+          else
+            npx playwright install --with-deps chromium
+          fi
       - name: Rodar regressões de navegador com APIs sintéticas
         run: node --test tests/ui_browser.test.cjs
