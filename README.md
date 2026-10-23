@@ -854,3 +854,13 @@ de ramais ao excluir tenants. Se ocorrer erro no AMI ou no salvamento,
 a operação tenta restaurar arquivos, ramais e associação DID,
 retornando erro quando a exclusão não for confirmada. Consulte o
 [Manual 95](docs/manual-95-remocao-tenant-compensavel.md).
+
+## Auditoria do Asterisk em laboratório
+
+O comando `python3 scripts/asterisk_lab_audit.py --runtime docker`
+consulta o Asterisk **em execução** via CLI somente leitura.
+Verifica presença dos transportes TLS/WSS, contexto SIP dos ramais
+por tenant, dialplan de entrada e (com catálogo privado fornecido)
+os mapeamentos DID do AstDB, sem divulgar valores no relatório.
+O resultado não comprova chamadas, registro, mídia RTP/SRTP ou GO.
+Veja o [Manual 96](docs/manual-96-auditoria-runtime-asterisk.md).
