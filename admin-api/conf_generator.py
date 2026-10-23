@@ -81,11 +81,11 @@ def render_voicemail_dynamic(extensions: list) -> str:
 # Ultima barreira antes de publicar configuracoes geradas a partir de
 # extensions_store.json. A validacao de HTTP nao protege o arquivo em disco
 # contra corrupcao, restauracao antiga nem edicao fora do painel.
-_NAME = re.compile(r"[a-z0-9-]{3,40}\\Z")
-_ENDPOINT_OWNER = re.compile(r"(t[1-9][0-9]*)-.+\\Z")
-_PASSWORD = re.compile(r"[A-Za-z0-9._~!@#$%^&*()+\\-=]{1,128}\\Z")
-_EMAIL = re.compile(r"[A-Za-z0-9._%+\\-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,63}\\Z")
-_VOICEMAIL_PIN = re.compile(r"(?:1234|[1-9][0-9]{7})\\Z")
+_NAME = re.compile(r"[a-z0-9-]{3,40}\Z")
+_ENDPOINT_OWNER = re.compile(r"(t[1-9][0-9]*)-.+\Z")
+_PASSWORD = re.compile(r"[A-Za-z0-9._~!@#$%^&*()+\-=]{1,128}\Z")
+_EMAIL = re.compile(r"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,63}\Z")
+_VOICEMAIL_PIN = re.compile(r"(?:1234|[1-9][0-9]{7})\Z")
 _STATIC_ENDPOINTS = frozenset({
     "t1-1001", "t1-1002", "t1-recepcao", "t1-recepcao-2",
     "t2-1001", "t2-recepcao", "t2-recepcao-2",
