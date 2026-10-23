@@ -756,3 +756,11 @@ por hash sem guardar os tokens em texto claro no catálogo. A
 política permanece privada no servidor, com lock e escrita atômica.
 A etapa ainda não integra o login do administrador ao Webphone.
 Consulte o [Manual 84](docs/manual-84-credenciais-gravacoes.md).
+
+## Persistência segura do cadastro de ramais
+
+O `admin-api` agora salva `extensions_store.json` usando temporário
+privado e substituição atômica, além de serializar operações CRUD
+simultâneas dentro do mesmo processo. Arquivos JSON inválidos e
+symlinks são recusados para evitar perda de dados ou gravações
+inseguras. Consulte o [Manual 85](docs/manual-85-cadastro-ramais-atomico.md).

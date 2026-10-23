@@ -8,8 +8,11 @@ Por padrão, as chamadas legadas continuam limitadas a t1/t2. O
 servidor passa explicitamente os tenants habilitados pelo wizard.
 """
 import json
+import os
 import re
 import secrets
+import tempfile
+import threading
 from pathlib import Path
 
 EXTENSION_NUMBER_RANGE = range(1100, 1200)  # faixa reservada pro painel
@@ -22,16 +25,55 @@ NAME_RE = re.compile(r"^[a-z0-9-]{3,40}$")
 VALID_TENANTS = {"t1", "t2"}
 DEFAULT_TENANT = "t1"
 
+# O admin-api usa ThreadingHTTPServer: CRUD precisa serializar a
+# sequência carregar -> validar -> salvar, e não apenas o replace.
+_STORE_LOCK = threading.RLock()
+
 
 def load_store(path) -> list:
-    path = Path(path)
-    if not path.exists():
-        return []
-    return json.loads(path.read_text(encoding="utf-8"))
+    """Lê snapshot completo; nunca troca cadastro inválido por vazio."""
+    with _STORE_LOCK:
+        path = Path(path)
+        if path.is_symlink():
+            raise ValueError("arquivo de ramais não pode ser link simbólico")
+        if not path.exists():
+            return []
+        if not path.is_file():
+            raise ValueError("arquivo de ramais não é regular")
+        loaded = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(loaded, list):
+            raise ValueError("arquivo de ramais precisa conter uma lista JSON")
+        return loaded
 
 
 def save_store(path, extensions: list):
-    Path(path).write_text(json.dumps(extensions, indent=2, ensure_ascii=False), encoding="utf-8")
+    """Persiste JSON num arquivo temporário privado e publica via replace.
+
+    Em falha de escrita, o snapshot anterior permanece intacto.
+    A sincronização entre múltiplos processos/hosts requer trava externa.
+    """
+    with _STORE_LOCK:
+        if not isinstance(extensions, list):
+            raise ValueError("cadastro de ramais deve ser uma lista")
+        target = Path(path)
+        if target.is_symlink():
+            raise ValueError("arquivo de ramais não pode ser link simbólico")
+        target.parent.mkdir(parents=True, exist_ok=True)
+        temporary = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                mode="w", encoding="utf-8", dir=target.parent,
+                prefix=f".{target.name}.", delete=False
+            ) as handle:
+                temporary = Path(handle.name)
+                os.chmod(temporary, 0o600)
+                json.dump(extensions, handle, indent=2, ensure_ascii=False)
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.replace(temporary, target)
+        finally:
+            if temporary is not None and temporary.exists():
+                temporary.unlink()
 
 
 def validate_extension_input(data: dict, existing: list, editing_name: str = None, allowed_tenants=None):
@@ -172,45 +214,48 @@ def validate_extension_input(data: dict, existing: list, editing_name: str = Non
 
 
 def add_extension(path, data: dict, allowed_tenants=None):
-    existing = load_store(path)
-    ok, error, cleaned = validate_extension_input(data, existing, allowed_tenants=allowed_tenants)
-    if not ok:
-        return False, error, None
+    with _STORE_LOCK:
+        existing = load_store(path)
+        ok, error, cleaned = validate_extension_input(data, existing, allowed_tenants=allowed_tenants)
+        if not ok:
+            return False, error, None
 
-    existing.append(cleaned)
-    save_store(path, existing)
-    return True, None, cleaned
+        existing.append(cleaned)
+        save_store(path, existing)
+        return True, None, cleaned
 
 
 def update_extension(path, name: str, data: dict, allowed_tenants=None):
-    if not isinstance(data, dict):
-        return False, "dados do ramal devem ser um objeto JSON", None
-    if "voicemail_pin" in data:
-        return False, "PIN de voicemail não editável pela API", None
-    existing = load_store(path)
-    if not any(e["name"] == name for e in existing):
-        return False, f"ramal '{name}' não encontrado", None
+    with _STORE_LOCK:
+        if not isinstance(data, dict):
+            return False, "dados do ramal devem ser um objeto JSON", None
+        if "voicemail_pin" in data:
+            return False, "PIN de voicemail não editável pela API", None
+        existing = load_store(path)
+        if not any(e["name"] == name for e in existing):
+            return False, f"ramal '{name}' não encontrado", None
 
-    merged = {**next(e for e in existing if e["name"] == name), **data, "name": name}
-    ok, error, cleaned = validate_extension_input(
-        merged, existing, editing_name=name, allowed_tenants=allowed_tenants
-    )
-    if not ok:
-        return False, error, None
+        merged = {**next(e for e in existing if e["name"] == name), **data, "name": name}
+        ok, error, cleaned = validate_extension_input(
+            merged, existing, editing_name=name, allowed_tenants=allowed_tenants
+        )
+        if not ok:
+            return False, error, None
 
-    updated = [cleaned if e["name"] == name else e for e in existing]
-    save_store(path, updated)
-    return True, None, cleaned
+        updated = [cleaned if e["name"] == name else e for e in existing]
+        save_store(path, updated)
+        return True, None, cleaned
 
 
 def delete_extension(path, name: str):
-    existing = load_store(path)
-    filtered = [e for e in existing if e["name"] != name]
-    if len(filtered) == len(existing):
-        return False, f"ramal '{name}' não encontrado"
+    with _STORE_LOCK:
+        existing = load_store(path)
+        filtered = [e for e in existing if e["name"] != name]
+        if len(filtered) == len(existing):
+            return False, f"ramal '{name}' não encontrado"
 
-    save_store(path, filtered)
-    return True, None
+        save_store(path, filtered)
+        return True, None
 
 
 def delete_extensions_by_tenant(path, tenant_id: str) -> int:
@@ -220,9 +265,11 @@ def delete_extensions_by_tenant(path, tenant_id: str) -> int:
     (manual 39/52), pra não deixar ramal órfão apontando pra um
     contexto que não existe mais. Retorna quantos foram removidos.
     """
-    existing = load_store(path)
-    remaining = [e for e in existing if e.get("tenant", DEFAULT_TENANT) != tenant_id]
-    removed_count = len(existing) - len(remaining)
-    if removed_count:
-        save_store(path, remaining)
-    return removed_count
+    with _STORE_LOCK:
+        existing = load_store(path)
+        remaining = [e for e in existing if e.get("tenant", DEFAULT_TENANT) != tenant_id]
+        removed_count = len(existing) - len(remaining)
+        if removed_count:
+            save_store(path, remaining)
+        return removed_count
+
