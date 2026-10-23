@@ -22,6 +22,7 @@ TENANT_EXTENSION = re.compile(r"^t[1-9][0-9]*-[a-z0-9][a-z0-9_-]{0,79}$")
 ROLES = {"admin", "supervisor", "agent"}
 EXTENSIONS = {".wav", ".gsm", ".mp3"}
 MAX_POLICY_BYTES = 1024 * 1024
+_OPEN_SUPPORTS_DIR_FD = hasattr(os, "supports_dir_fd") and os.open in os.supports_dir_fd
 
 
 def _valid_filename(filename):
@@ -54,7 +55,7 @@ def _open_policy_file(path):
     """
     required = ("O_NOFOLLOW", "O_NONBLOCK", "O_DIRECTORY")
     if (not all(hasattr(os, name) for name in required)
-            or os.open not in os.supports_dir_fd):
+            or not _OPEN_SUPPORTS_DIR_FD):
         return None
     directory_fd = None
     try:
