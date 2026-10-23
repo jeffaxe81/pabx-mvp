@@ -160,3 +160,4 @@ registrado como regra permanente no prompt master
 108. [Roteamento seguro de filas por empresa](manual-108-filas-por-tenant.md)
 109. [Negativas SIP reais entre empresas](manual-109-negativas-sip-entre-empresas.md)
 110. [Catálogo ACL aberto atomicamente, sem symlink](manual-110-catalogo-acl-atomico.md)
+111. [Listagem de gravações segura por descritor de diretório](manual-111-listagem-gravacoes-fd.md)
