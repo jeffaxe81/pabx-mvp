@@ -31,7 +31,7 @@ def test_includes_admin_panel_dynamic_mailboxes():
     dialplan) funcione.
     """
     content = VOICEMAIL_CONF.read_text(encoding="utf-8")
-    assert "#include voicemail_dynamic_t1.conf" in content
+    assert "#include generated/voicemail_dynamic_t1.conf" in content
 
 
 def test_tenant2_telephonist_mailboxes_present():
@@ -45,7 +45,7 @@ def test_tenant2_telephonist_mailboxes_present():
     assert "[t2]" in content
     assert "t2-recepcao => 1234" in content
     assert "t2-recepcao-2 => 1234" in content
-    assert "#include voicemail_dynamic_t2.conf" in content
+    assert "#include generated/voicemail_dynamic_t2.conf" in content
 
 
 def test_tenant1_telephonist_mailboxes_present():
