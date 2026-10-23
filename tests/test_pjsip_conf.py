@@ -153,7 +153,7 @@ def test_pjsip_conf_includes_admin_panel_dynamic_extensions():
     (backlog #10) nunca aparecem no PJSIP de verdade.
     """
     content = PJSIP_CONF.read_text(encoding="utf-8")
-    assert "#include pjsip_dynamic.conf" in content
+    assert "#include generated/pjsip_dynamic.conf" in content
 
 
 def test_pjsip_includes_wizard_created_tenants_via_wildcard():
