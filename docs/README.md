@@ -159,3 +159,4 @@ registrado como regra permanente no prompt master
 107. [Gravações: isolamento ACL por tenant](manual-107-gravacoes-isolamento-acl.md)
 108. [Roteamento seguro de filas por empresa](manual-108-filas-por-tenant.md)
 109. [Negativas SIP reais entre empresas](manual-109-negativas-sip-entre-empresas.md)
+110. [Catálogo ACL aberto atomicamente, sem symlink](manual-110-catalogo-acl-atomico.md)
