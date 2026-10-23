@@ -85,17 +85,22 @@ def cdr_diagnostics(raw, tenant, source, destination):
             **{name:any(item[name] for item in details) for name in names}}
 
 
+def cdr_runtime_status(modules, status):
+    return {'custom_loaded':'cdr_custom.so' in modules, 'csv_loaded':'cdr_csv.so' in modules,
+            'enabled':bool(re.search(r'(?im)^\s*Logging:\s*Enabled\s*$',status))}
+
+
 def exercise_calls(container, prepared, report):
     from .asterisk_lab import cli, command
     checks = report['checks']
     report['calls'] = []
     report['call_protocol'] = {}
     report['cdr_checks'] = {}
+    # O backend CDR custom abre o arquivo, mas requer o diretório pai existente.
+    command(['docker','exec',container,'mkdir','-p','/var/log/asterisk/cdr-custom'])
     modules = cli(container, 'module show like cdr')
     status = cli(container, 'cdr show status')
-    report['cdr_backend'] = {'custom_loaded':'cdr_custom.so' in modules,
-                             'csv_loaded':'cdr_csv.so' in modules,
-                             'enabled':bool(re.search(r'(?i)CDR logging:\s*Enabled',status))}
+    report['cdr_backend'] = cdr_runtime_status(modules,status)
     for tenant in TENANTS:
         for direction in DIRECTIONS:
             source, destination = ('1001','1002') if direction == 'forward' else ('1002','1001')

@@ -18,6 +18,7 @@ def test_cdr_requires_answered_correct_tenant_context_endpoints_and_duration():
                           ('PJSIP/t1-1002-', 'PJSIP/t2-1002-'), ('ANSWERED', 'NO ANSWER'),
                           ('"1","123.45"', '"0","123.45"'), ('"1001",', '"9999",')]:
         assert cdr_matches(row.replace(before, after), 't1', '1001', '1002') is False
+    assert cdr_matches(row.replace('"t1",', '"t2",')+row.replace('"1001",', '"9999",'), 't1','1001','1002') is False
     for raw in ('', 'garbage', row.replace(',"123.45"', ''), row+'"unterminated'):
         assert cdr_matches(raw, 't1', '1001', '1002') is False
 
@@ -89,3 +90,11 @@ def test_cdr_diagnostics_pinpoint_field_mismatch_without_exporting_values():
     assert invalid['destination'] is True
     assert 'PRIVATE_SOURCE' not in json.dumps(invalid)
     assert cdr_diagnostics('', 't1','1001','1002')['rows'] == 0
+
+
+def test_cdr_runtime_status_understands_asterisk_22_logging_label():
+    from lab.call_checks import cdr_runtime_status
+    modules = 'cdr_csv.so CSV CDR Backend\ncdr_custom.so Customizable CDR Backend\n'
+    status = 'Call Detail Record (CDR) settings\n----------------------------------\n  Logging:                    Enabled\n  Mode:                       Simple\n'
+    assert cdr_runtime_status(modules,status) == {'custom_loaded':True,'csv_loaded':True,'enabled':True}
+    assert cdr_runtime_status(modules,status.replace('Enabled','Disabled'))['enabled'] is False
