@@ -105,6 +105,8 @@ configurar, como testar manualmente, e limitações conhecidas.
 
 82. [Ramais de tenants dinâmicos t3+](manual-82-ramais-tenants-dinamicos.md)
 
+83. [Importação assistida e auditável de gravações](manual-83-catalogo-gravacoes.md)
+
 ## Regra de manutenção
 
 Toda vez que uma funcionalidade nova for implementada no projeto, um
