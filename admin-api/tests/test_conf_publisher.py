@@ -47,7 +47,9 @@ def test_context_error_restores_previous_files_and_removes_new_files(tmp_path):
 
 
 def test_midbatch_replace_error_restores_already_published_config(tmp_path, monkeypatch):
-    old = tmp_path / "pjsip_dynamic.conf"
+    generated = tmp_path / "generated"
+    generated.mkdir()
+    old = generated / "pjsip_dynamic.conf"
     old.write_text("old", encoding="utf-8")
     real_replace = conf_publisher.os.replace
     calls = []
@@ -104,7 +106,9 @@ def test_publish_rejects_non_text_body(tmp_path):
 
 
 def test_ami_success_commits_configs(tmp_path, monkeypatch):
-    old = tmp_path / "pjsip_dynamic.conf"
+    generated = tmp_path / "generated"
+    generated.mkdir()
+    old = generated / "pjsip_dynamic.conf"
     old.write_text("old", encoding="utf-8")
     monkeypatch.setattr(server, "ASTERISK_CONF_DIR", str(tmp_path))
     monkeypatch.setattr(server, "load_store", lambda path: [])
@@ -136,7 +140,9 @@ def test_ami_success_commits_configs(tmp_path, monkeypatch):
 
 
 def test_ami_error_restores_files_and_reloads_previous_configuration(tmp_path, monkeypatch):
-    old = tmp_path / "pjsip_dynamic.conf"
+    generated = tmp_path / "generated"
+    generated.mkdir()
+    old = generated / "pjsip_dynamic.conf"
     old.write_text("prior-configuration", encoding="utf-8")
     monkeypatch.setattr(server, "ASTERISK_CONF_DIR", str(tmp_path))
     monkeypatch.setattr(server, "load_store", lambda path: [])
