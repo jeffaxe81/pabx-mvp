@@ -41,6 +41,7 @@ def peer_on(connection):
     peer.connection = connection
     peer.username, peer.password, peer.port, peer.target_port = 't1-1001', 'PRIVATE', 55000, 5061
     peer.call_id, peer.tag, peer.cseq, peer.buffer = 'old@localhost', 'old', 0, b''
+    peer.events = []
     return peer
 
 
@@ -83,6 +84,8 @@ def test_call_authenticates_acknowledges_and_hangs_up_correlated_dialogue():
         assert not failures
         assert observed == [True] * 6
         assert media.address == ('127.0.0.1', remote_media.port)
+        assert peer.events == ['invite_sent', 'response:401', 'authenticated_invite_sent',
+                               'response:200', 'ack_sent', 'bye_sent', 'response:200']
     finally:
         peer.close()
         media.close()

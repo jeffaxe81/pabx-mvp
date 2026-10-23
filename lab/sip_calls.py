@@ -39,6 +39,10 @@ class Dialog:
 
 
 class CallPeer(SipTLS):
+    def __init__(self, *args):
+        super().__init__(*args)
+        self.events = []
+
     def send_request(self, dialog, method, *, branch=None, body=b'', authorization=None):
         branch = branch or 'z9hG4bK'+secrets.token_hex(12)
         lines = [f'{method} {dialog.uri} SIP/2.0',
@@ -74,6 +78,7 @@ class CallPeer(SipTLS):
                 raise ValueError('resposta de outra transação SIP')
             if tag(single(headers, 'from')) != tag(dialog.local):
                 raise ValueError('resposta de outro diálogo SIP')
+            self.events.append('response:'+match[1])
             if int(match[1]) >= 200:
                 return int(match[1]), headers, body
 
@@ -85,6 +90,7 @@ class CallPeer(SipTLS):
                         f'<sip:{self.username}@localhost>;tag={secrets.token_hex(8)}',
                         f'<sip:{number}@localhost>', uri, 1)
         branch = self.send_request(dialog, 'INVITE', body=media.offer())
+        self.events.append('invite_sent')
         code, headers, _ = self.final_response(dialog, 'INVITE', branch)
         if code != 401:
             raise ValueError('INVITE inicial deve exigir autenticação')
@@ -98,6 +104,7 @@ class CallPeer(SipTLS):
         dialog.remote = original_remote
         dialog.cseq += 1
         branch = self.send_request(dialog, 'INVITE', body=media.offer(), authorization=auth)
+        self.events.append('authenticated_invite_sent')
         code, headers, body = self.final_response(dialog, 'INVITE', branch)
         dialog.remote = single(headers, 'to')
         if code != 200:
@@ -106,6 +113,7 @@ class CallPeer(SipTLS):
         tag(dialog.remote)
         dialog.uri = contact_uri(headers)
         self.send_request(dialog, 'ACK')
+        self.events.append('ack_sent')
         if single(headers, 'content-type').lower() != 'application/sdp':
             raise ValueError('resposta sem SDP')
         media.negotiate(body)
@@ -123,6 +131,7 @@ class CallPeer(SipTLS):
         self.connection.sendall(('\r\n'.join(lines)+f'\r\nContent-Length: {len(body)}\r\n\r\n').encode()+body)
 
     def answer(self, media):
+        self.events.append('awaiting_invite')
         deadline = time.monotonic() + 12
         start, headers, body = self.next_message(deadline)
         if not start.startswith('INVITE ') or single(headers, 'content-type').lower() != 'application/sdp':
@@ -130,6 +139,7 @@ class CallPeer(SipTLS):
         cseq = re.fullmatch(r'([0-9]+) INVITE', single(headers, 'cseq'))
         if not cseq:
             raise ValueError('CSeq de INVITE inválido')
+        self.events.append('invite_received')
         local = single(headers, 'to')+';tag='+secrets.token_hex(8)
         remote = single(headers, 'from')
         tag(remote)
@@ -137,10 +147,12 @@ class CallPeer(SipTLS):
         media.negotiate(body)
         self.send_response(headers, 180, local=local)
         self.send_response(headers, 200, local=local, body=media.offer())
+        self.events.append('answer_sent')
         start, ack, _ = self.next_message(deadline)
         self.validate_incoming(dialog, start, ack, 'ACK')
         if single(ack, 'cseq') != f'{dialog.cseq} ACK':
             raise ValueError('ACK de outra transação SIP')
+        self.events.append('ack_received')
         return dialog
 
     @staticmethod
@@ -153,6 +165,7 @@ class CallPeer(SipTLS):
     def hangup(self, dialog):
         dialog.cseq += 1
         branch = self.send_request(dialog, 'BYE')
+        self.events.append('bye_sent')
         code, headers, _ = self.final_response(dialog, 'BYE', branch)
         if tag(single(headers, 'to')) != tag(dialog.remote):
             raise ValueError('resposta de outro diálogo SIP')

@@ -70,6 +70,7 @@ def exercise_calls(container, prepared, report):
     from .asterisk_lab import cli, command
     checks = report['checks']
     report['calls'] = []
+    report['call_protocol'] = {}
     for tenant in TENANTS:
         for direction in DIRECTIONS:
             source, destination = ('1001','1002') if direction == 'forward' else ('1002','1001')
@@ -84,6 +85,8 @@ def exercise_calls(container, prepared, report):
                 callee = CallPeer('127.0.0.1',5061,prepared['ca'],tenant+'-'+destination,
                                   prepared['credentials'][tenant+'-'+destination])
                 resources.callback(callee.close)
+                report['call_protocol'][tenant+':'+direction] = {
+                    'caller':caller.events, 'callee':callee.events}
                 left, right = SrtpMedia(), SrtpMedia()
                 resources.callback(left.close)
                 resources.callback(right.close)
