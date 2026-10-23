@@ -328,15 +328,18 @@ def test_remove_tenant_validates_before_deleting_any_file():
     source = load_source()
     body = get_function_body(source, "_handle_remove_tenant")
     validate_pos = body.index("validate_tenant_removal(")
-    unlink_pos = body.index("unlink(")
-    assert validate_pos < unlink_pos
+    remove_pos = body.index("remove_tenant(")
+    assert validate_pos < remove_pos
+    assert "with TENANT_TRANSACTION_LOCK, EXTENSIONS_STORE_LOCK:" in body
 
 
 def test_remove_tenant_unregisters_did_and_persists_only_after_attempt():
     source = load_source()
     body = get_function_body(source, "_handle_remove_tenant")
-    assert "unregister_tenant_did(" in body
-    assert "save_tenants(" in body
+    service = (SERVER_PY.parent / "tenant_deprovisioning.py").read_text(encoding="utf-8")
+    assert "remove_tenant(" in body
+    assert service.index("client.unregister_tenant_did(") < service.index("save_tenants(")
+    assert "client.register_tenant_did(" in service
 
 
 def test_sounds_listing_requires_authentication():
@@ -379,10 +382,13 @@ def test_remove_tenant_also_cleans_up_dynamic_extensions_and_files():
     """
     source = load_source()
     body = get_function_body(source, "_handle_remove_tenant")
-    assert "delete_extensions_by_tenant(" in body
-    assert "extensions_dynamic_dial-" in body
-    assert "extensions_dynamic_hints-" in body
-    assert "voicemail_dynamic_" in body
+    service = (SERVER_PY.parent / "tenant_deprovisioning.py").read_text(encoding="utf-8")
+    assert "remove_tenant(" in body
+    assert "remaining_extensions = [" in service
+    assert "save_store(store_path, remaining_extensions)" in service
+    assert "extensions_dynamic_dial-" in service
+    assert "extensions_dynamic_hints-" in service
+    assert "voicemail_dynamic_" in service
 
 
 def test_creating_extension_registers_monitoring_mapping():
@@ -572,8 +578,9 @@ def test_tenant_options_only_show_name_not_did_to_supervisor():
 def test_tenant_removal_prunes_shared_pjsip_dynamic_before_ami_reload():
     source = load_source()
     body = get_function_body(source, "_handle_remove_tenant")
-    remove_at = body.index('delete_extensions_by_tenant(STORE_PATH, record["tenant_id"])')
-    pjsip_at = body.index('"pjsip_dynamic.conf"', remove_at)
-    reload_at = body.index('client.reload_pjsip_and_dialplan()', pjsip_at)
+    service = (SERVER_PY.parent / "tenant_deprovisioning.py").read_text(encoding="utf-8")
+    remove_at = service.index("remaining_extensions = [")
+    pjsip_at = service.index('"pjsip_dynamic.conf"', remove_at)
+    reload_at = service.index("client.reload_pjsip_and_dialplan()", pjsip_at)
     assert remove_at < pjsip_at < reload_at
-    assert "render_pjsip_dynamic(remaining_extensions)" in body
+    assert "render_pjsip_dynamic(remaining_extensions)" in service

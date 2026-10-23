@@ -846,3 +846,11 @@ Uma falha remove os arquivos novos e tenta compensar o DID em nova
 sessão AMI. Se não for possível confirmar a compensação, a API
 sinaliza `rollback_incomplete=true` para reconciliação manual.
 Veja o [Manual 94](docs/manual-94-tenant-create-compensation.md).
+
+## Remoção recuperável de empresas
+
+O wizard agora guarda snapshots dos arquivos Asterisk e do cadastro
+de ramais ao excluir tenants. Se ocorrer erro no AMI ou no salvamento,
+a operação tenta restaurar arquivos, ramais e associação DID,
+retornando erro quando a exclusão não for confirmada. Consulte o
+[Manual 95](docs/manual-95-remocao-tenant-compensavel.md).
