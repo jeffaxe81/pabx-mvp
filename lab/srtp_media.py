@@ -26,10 +26,14 @@ def parse_sdp(body):
     if (not connections or any(line != 'c=IN IP4 127.0.0.1' for line in connections)
             or len(media) != 1 or len(cryptos) != 1):
         raise ValueError('SDP do laboratório deve ser SRTP loopback')
-    match = re.fullmatch(r'm=audio ([0-9]{1,5}) RTP/SAVP 0(?: 101)?', media[0])
+    match = re.fullmatch(r'm=audio ([0-9]{1,5}) RTP/SAVP ([0-9 ]+)', media[0])
     crypto = re.fullmatch(r'a=crypto:([1-9][0-9]*) '+PROFILE+r' inline:([A-Za-z0-9+/=]+)', cryptos[0])
     if not match or not 1024 <= int(match[1]) <= 65535 or not crypto:
         raise ValueError('perfil SDP não suportado')
+    payloads = match[2].split()
+    if ('0' not in payloads or len(payloads) != len(set(payloads))
+            or any(len(value) > 3 or int(value) > 127 for value in payloads)):
+        raise ValueError('codec SDP não suportado')
     if any(line in ('a=sendonly', 'a=recvonly', 'a=inactive') for line in lines):
         raise ValueError('SDP sem mídia bidirecional')
     if any(line.startswith('a=rtpmap:0 ') and line != 'a=rtpmap:0 PCMU/8000' for line in lines):
@@ -67,6 +71,7 @@ class SrtpMedia:
         self.socket.setblocking(False)
         self.port = self.socket.getsockname()[1]
         self.key = secrets.token_bytes(30)
+        self.crypto_tag = '1'
         self.tx = pylibsrtp.Session(pylibsrtp.Policy(
             key=self.key, ssrc_type=pylibsrtp.Policy.SSRC_ANY_OUTBOUND))
         self.rx = None
@@ -81,11 +86,12 @@ class SrtpMedia:
     def offer(self):
         return (f'v=0\r\no=- 1 1 IN IP4 127.0.0.1\r\ns=AXE Private Lab\r\n'
                 f'c=IN IP4 127.0.0.1\r\nt=0 0\r\nm=audio {self.port} RTP/SAVP 0\r\n'
-                f'a=rtpmap:0 PCMU/8000\r\na=crypto:1 {PROFILE} '
+                f'a=rtpmap:0 PCMU/8000\r\na=crypto:{self.crypto_tag} {PROFILE} '
                 f'inline:{base64.b64encode(self.key).decode()}\r\na=sendrecv\r\n').encode('ascii')
 
     def negotiate(self, sdp):
         address, key = parse_sdp(sdp)
+        self.crypto_tag = re.search(rb'(?m)^a=crypto:([1-9][0-9]*) ', sdp)[1].decode('ascii')
         self.rx = pylibsrtp.Session(pylibsrtp.Policy(
             key=key, ssrc_type=pylibsrtp.Policy.SSRC_ANY_INBOUND))
         self.address = address

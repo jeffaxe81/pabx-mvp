@@ -298,7 +298,7 @@ def main(argv=None):
     report = {}
     try:
         success = run(Path(__file__).resolve().parents[1], report, calls=args.calls)
-    except (OSError, ValueError, RuntimeError, TimeoutError, subprocess.TimeoutExpired) as exc:
+    except Exception as exc:
         success = False
         report['success'] = False
         report['error_type'] = type(exc).__name__

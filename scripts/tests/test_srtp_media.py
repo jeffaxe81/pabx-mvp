@@ -74,3 +74,19 @@ def test_sdp_rejects_remote_media_override_and_key_lifetime():
             parse_sdp(peer.offer().replace(b'\r\na=sendrecv', b'|2^20\r\na=sendrecv'))
     finally:
         peer.close()
+
+
+def test_sdp_selects_pcmu_from_asterisk_codec_offer_and_preserves_crypto_tag():
+    from lab.srtp_media import SrtpMedia, parse_sdp
+    local, remote = SrtpMedia(), SrtpMedia()
+    try:
+        offer = remote.offer().replace(b'RTP/SAVP 0\r\n', b'RTP/SAVP 0 8 107 101\r\n')
+        offer = offer.replace(b'a=crypto:1 ', b'a=crypto:7 ')
+        offer += b'a=rtpmap:8 PCMA/8000\r\na=rtpmap:107 opus/48000/2\r\na=rtpmap:101 telephone-event/8000\r\n'
+        assert parse_sdp(offer) == (('127.0.0.1', remote.port), remote.key)
+        local.negotiate(offer)
+        assert b'RTP/SAVP 0\r\n' in local.offer()
+        assert b'a=crypto:7 AES_CM_128_HMAC_SHA1_80 ' in local.offer()
+    finally:
+        local.close()
+        remote.close()

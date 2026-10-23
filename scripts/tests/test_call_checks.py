@@ -58,3 +58,18 @@ def test_call_preparation_generates_secure_t2_t3_without_changing_static_source(
         assert len(prepared['credentials'][name]) >= 24
     assert (prepared['conf']/'cdr_custom.conf').stat().st_mode & 0o077 == 0
     assert 'CDR(accountcode)=t2' in (prepared['conf']/'generated/extensions_dynamic_dial-t2.conf').read_text()
+
+
+def test_cli_writes_sanitized_failure_report_for_libsrtp_error(tmp_path, monkeypatch, capsys):
+    import json
+    import pylibsrtp
+    from lab import asterisk_lab
+    def fail(*args, **kwargs):
+        raise pylibsrtp.Error('PRIVATE_SDES_KEY')
+    monkeypatch.setattr(asterisk_lab, 'run', fail)
+    output = tmp_path/'result.json'
+    assert asterisk_lab.main(['--calls','--report',str(output)]) == 1
+    report = json.loads(output.read_text())
+    assert report['success'] is False
+    assert report['error_type'] == 'Error'
+    assert 'PRIVATE_SDES_KEY' not in output.read_text()+capsys.readouterr().out
