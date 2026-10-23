@@ -164,3 +164,11 @@ def test_render_all_refuses_orphan_and_unsafe_tenant_ids():
         render_all(extension, tenant_ids={"t1", "t2"})
     with pytest.raises(ValueError, match="inválida"):
         render_all([], tenant_ids={"../t3"})
+
+def test_removed_tenant_sip_endpoints_are_not_in_regenerated_shared_pjsip():
+    t3 = {**SAMPLE[0], "name": "atendente-t3", "tenant": "t3"}
+    before = render_pjsip_dynamic(SAMPLE + [t3])
+    after = render_pjsip_dynamic(SAMPLE)
+    assert "[atendente-t3]" in before
+    assert "[atendente-t3]" not in after
+    assert "[recepcao-3]" in after
