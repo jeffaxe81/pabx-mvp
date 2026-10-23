@@ -737,3 +737,13 @@ vazios durante o cadastro. O seletor mostra os tenants habilitados
 para administrador e supervisor sem expor DIDs ao supervisor.
 
 Consulte o [Manual 82](docs/manual-82-ramais-tenants-dinamicos.md).
+
+## Importação em lote de gravações por tenant
+
+O utilitário `queue-api/recording_catalog.py` importa lotes de
+áudios previamente conferidos por um operador para o catálogo
+privado de acesso a gravações. Por padrão somente simula mudanças;
+`--apply` exige referências explícitas de evidência, recusa
+classificações conflitantes entre empresas e persiste os dados com
+lock e troca atômica, sem modificar credenciais existentes.
+Veja o [Manual 83](docs/manual-83-catalogo-gravacoes.md).
