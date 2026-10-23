@@ -76,8 +76,8 @@ def run_cli(commands, *, runtime="docker", container="pabx-mvp", timeout=8):
     for key, command in commands.items():
         if command not in planned_commands({}).values():
             # Permite comandos de t3+ somente se gerados pelo planejador:
-            if not re.fullmatch(r"pjsip show endpoint t[3-9][0-9]*-recepcao", command) and not re.fullmatch(
-                r"dialplan show t[3-9][0-9]*-internal", command
+            if not re.fullmatch(r"pjsip show endpoint t(?:[3-9]|[1-9][0-9]+)-recepcao", command) and not re.fullmatch(
+                r"dialplan show t(?:[3-9]|[1-9][0-9]+)-internal", command
             ):
                 raise ValueError("comando não permitido")
         argv = (["docker", "exec", container] if runtime == "docker" else []) + [
