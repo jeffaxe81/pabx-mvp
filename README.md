@@ -880,3 +880,13 @@ A criação e remoção de empresas agora preservam um snapshot do catálogo
 arquivo, tentam restaurar os bytes e permissões anteriores e sinalizam
 `rollback_incomplete` caso a compensação não seja confirmada.
 Veja o [Manual 98](docs/manual-98-tenant-registry-compensation.md).
+
+## Programa antecipado de quatro meses — 16 semanas
+
+O [plano de 16 semanas](docs/plano-16-semanas-pabx.json) organiza
+homologação SIP real, segurança multiempresa, restauração, carga e
+revisão operacional com critérios de aceite por marco. Consulte o
+[Manual 99](docs/manual-99-plano-16-semanas-pabx.md).
+O progresso pode ser calculado por
+`python3 scripts/program_progress.py --format markdown`.
+O script não testa chamadas nem concede autorização de GO.
