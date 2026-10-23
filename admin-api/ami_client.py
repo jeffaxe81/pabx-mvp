@@ -39,7 +39,8 @@ class AMIClient:
         while b"\r\n\r\n" not in self._recv_buffer:
             self._receive()
         frame, self._recv_buffer = self._recv_buffer.split(b"\r\n\r\n", 1)
-        self._last_frame = frame + b"\r\n\r\n"\n        return self._last_frame
+        self._last_frame = frame + b"\r\n\r\n"
+        return self._last_frame
 
     def _consume_follows_output(self):
         """Compatibilidade com AMI antigo: Command Follows até END COMMAND."""
