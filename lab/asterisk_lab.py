@@ -297,6 +297,8 @@ def run(root, report, *, calls=False, webrtc=False, dids=False):
                 report['checks']['wrong_password:'+tenant] = peer.register() in (401,403)
             finally:
                 peer.close()
+        if dids:
+            command(['docker','exec',container_id,'mkdir','-p','/var/log/asterisk/cel-custom'])
         if calls:
             from .call_checks import exercise_calls
             exercise_calls(container_id, prepared, report)
@@ -371,6 +373,10 @@ def main(argv=None):
         print('Etapa WebRTC: '+report['webrtc_phase'])
     if report.get('webrtc_diagnostics'):
         print('Diagnóstico WebRTC: '+json.dumps(report['webrtc_diagnostics'],sort_keys=True))
+    if report.get('did_cel_backend'):
+        print('Backend CEL: '+json.dumps(report['did_cel_backend'],sort_keys=True))
+    for case, evidence in report.get('did_cel_results',{}).items():
+        print('Trilha DID '+case+': '+json.dumps(evidence,sort_keys=True))
     return 0 if success else 1
 
 

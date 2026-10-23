@@ -7,6 +7,7 @@ import threading
 import time
 
 from .call_checks import cdr_rows
+from .did_evidence import prepare_cel, new_trace, evaluate_trace, evaluate_cdr
 from .sip_calls import CallPeer, CallRejected, single
 from .srtp_media import SrtpMedia, exchange
 
@@ -23,12 +24,13 @@ REJECTED = (('unknown', '5511900009999'),
 
 def required_did_checks():
     checks = {'did_trunk_context', 'did_trunk_registered', 'did_contacts_cleared',
-              'did_mapping_created', 'did_mapping_deleted', 'did_orphan_created'}
+              'did_mapping_created', 'did_mapping_deleted', 'did_orphan_created','did_cel_backend'}
     checks.update(f'{name}:{case}' for case, _, _ in KNOWN for name in (
         'did_answered', 'did_srtp', 'did_hangup', 'did_cdr',
         'did_no_cross_ring', 'did_channels_cleared'))
     checks.update(f'{name}:{case}' for case, _ in REJECTED for name in (
         'did_rejected', 'did_no_cross_ring', 'did_channels_cleared', 'did_no_answered_cdr'))
+    checks.update('did_cel:'+case for case in [item[0] for item in KNOWN+REJECTED])
     return checks
 
 
@@ -58,6 +60,7 @@ max_contacts=1
 remove_existing=yes
 ''')
     target.chmod(0o600)
+    prepare_cel(prepared['conf'])
 
 
 def did_cdr_fields(raw, previous_ids, tenant):
@@ -113,6 +116,20 @@ def exercise_dids(container, prepared, report):
     checks.update({name:False for name in required_did_checks()})
     report['did_results'] = []
     report['did_protocol'] = {}
+    report['did_cel_results'] = {}
+    modules = cli(container,'module show like cel_custom')
+    status = cli(container,'cel show status')
+    report['did_cel_backend'] = {
+        'module_loaded':'cel_custom.so' in modules,
+        'logging_enabled':re.search(r'(?im)^\s*(?:CEL\s+)?Logging:\s*Enabled\s*$',status) is not None}
+    checks['did_cel_backend'] = all(report['did_cel_backend'].values())
+
+    def cel_snapshot():
+        result = command(['docker','exec',container,'head','-c','1048577',
+                          '/var/log/asterisk/cel-custom/Lab.csv'])
+        if len(result.stdout)>1024*1024:
+            raise ValueError('rastro CEL excessivo')
+        return result.stdout
 
     def cdr_snapshot():
         result = command(['docker','exec',container,'cat','/var/log/asterisk/cdr-custom/Lab.csv'])
@@ -154,6 +171,7 @@ def exercise_dids(container, prepared, report):
                 cli(container, f'database del tenant-did {DYNAMIC_DID}')
                 checks['did_mapping_deleted'] = db_value('tenant-did',DYNAMIC_DID) is None
             previous_ids = {row[8] for row in cdr_rows(cdr_snapshot())}
+            previous_trace = cel_snapshot()
             stop = threading.Event()
             with ThreadPoolExecutor(max_workers=4) as executor, ExitStack() as media_resources:
                 observers = []
@@ -202,7 +220,18 @@ def exercise_dids(container, prepared, report):
                         else:
                             checks['did_no_answered_cdr:'+case] = rejected_cdr_matches(raw,previous_ids)
                             recorded = checks['did_no_answered_cdr:'+case]
-                        if checks['did_channels_cleared:'+case] and recorded:
+                        trace = evaluate_trace(new_trace(previous_trace,cel_snapshot()),tenant)
+                        correlated_cdr = evaluate_cdr(raw,trace,tenant)
+                        trace_fields = ('well_formed','correlated','complete','isolated')
+                        trace_fields += ('routed',) if tenant else ('never_answered','no_delivery','no_side_effects','cause_21')
+                        entry_did = trace.get('_original_did')==number
+                        checks['did_cel:'+case] = (entry_did and all(trace.get(key) is True for key in trace_fields)
+                                                    and all(correlated_cdr.values()))
+                        report['did_cel_results'][case] = {
+                            'entry_did':entry_did,
+                            'trace':{key:value for key,value in trace.items() if type(value) is bool},
+                            'cdr':correlated_cdr}
+                        if checks['did_channels_cleared:'+case] and recorded and checks['did_cel:'+case]:
                             break
                         time.sleep(0.2)
                     time.sleep(0.25)
