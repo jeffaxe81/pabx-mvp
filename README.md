@@ -912,3 +912,5 @@ Veja o [Manual 100](docs/manual-100-release-evidence.md).
 111. [Listagem segura de gravações com diretórios ancorados](docs/manual-111-listagem-gravacoes-fd.md)
 112. [Pickup restrito à empresa da fila](docs/manual-112-pickup-isolamento-tenant.md)
 113. [Filas: credenciais temporárias e isolamento de chamadas](docs/manual-113-autenticacao-filas-tenant.md)
+114. [Presença e pausa com autenticação de tenant](docs/manual-114-presenca-pausa-isoladas.md)
+Plano de aceleração: [100 dias do AXE PABX](docs/roadmap-100-dias-antecipacao-pabx.md)

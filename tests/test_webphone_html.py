@@ -254,7 +254,11 @@ def test_presence_update_sends_own_extension_status_and_note():
     fn_start = html.index("el('setPresenceBtn').addEventListener")
     fn_end = html.index("});", html.index("catch", fn_start))
     body = html[fn_start:fn_end]
-    assert "/api/presence/${myExtension}" in body
+    # URL segura evita que caracteres reservados do ramal alterem a rota.
+    assert "/api/presence/${encodeURIComponent(myExtension)}" in body
+    assert "Authorization:" in body
+    assert "Bearer" in body
+    assert "recordingApiIsSecure(apiUrl)" in body
     assert "presenceStatusSelect" in body
     assert "presenceNoteInput" in body
 

@@ -423,15 +423,26 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     return query ? `?${query}` : '';
   }
 
+  function fetchScopedOperator(path) {
+    const token = el('queueToken').value.trim();
+    if (!token || !secureQueueUrl(apiUrl)) return Promise.resolve(null);
+    return fetch(`${apiUrl}${path}`, {
+      headers: { Authorization: `Bearer ${token}` }, cache: 'no-store',
+    }).then((r) => {
+      if (!r.ok) throw new Error('Acesso não autorizado');
+      return r.json();
+    }).catch(() => null);
+  }
+
   function fetchAll() {
     Promise.all([
       fetch(`${apiUrl}/api/metrics/today`).then((r) => r.json()).catch(() => null),
-      fetch(`${apiUrl}/api/extension-states`).then((r) => r.json()).catch(() => null),
+      fetchScopedOperator('/api/extension-states'),
       fetchTenantQueue(),
       fetch(`${apiUrl}/api/fraud-alerts`).then((r) => r.json()).catch(() => null),
       fetch(`${apiUrl}/api/quality?only_poor=true`).then((r) => r.json()).catch(() => null),
       fetch(`${apiUrl}/api/metrics/sla`).then((r) => r.json()).catch(() => null),
-      fetch(`${apiUrl}/api/reports/pauses${buildHistoryQuery(pauseHistoryFilter)}`).then((r) => r.json()).catch(() => null),
+      fetchScopedOperator(`/api/reports/pauses${buildHistoryQuery(pauseHistoryFilter)}`),
       fetch(`${apiUrl}/api/metrics/sla/history${buildHistoryQuery(slaHistoryFilter)}`).then((r) => r.json()).catch(() => null),
     ]).then(([metrics, extensions, queue, fraud, quality, sla, pauses, slaHistory]) => {
       if (metrics) renderMetrics(metrics);

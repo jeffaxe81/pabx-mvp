@@ -1545,17 +1545,24 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   // ---------- Minha presença (ausente/reunião/férias) ----------
   el('setPresenceBtn').addEventListener('click', () => {
     const apiUrl = el('queueApiUrl').value.trim();
-    if (!apiUrl || !myExtension) return;
+    const token = el('queueToken').value.trim();
+    if (!apiUrl || !myExtension || !token || !recordingApiIsSecure(apiUrl)) {
+      alert('Configure HTTPS e credencial da empresa antes de alterar a presença.');
+      return;
+    }
 
-    fetch(`${apiUrl}/api/presence/${myExtension}`, {
+    fetch(`${apiUrl}/api/presence/${encodeURIComponent(myExtension)}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({
         status: el('presenceStatusSelect').value,
         note: el('presenceNoteInput').value,
       }),
     })
-      .then((res) => res.json())
+      .then((res) => {
+        if (!res.ok) throw new Error('Acesso não autorizado');
+        return res.json();
+      })
       .then(() => alert('Presença atualizada.'))
       .catch(() => alert('Não foi possível atualizar a presença (API indisponível).'));
   });
@@ -1563,14 +1570,21 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   // ---------- Pausa da fila (backlog #44) ----------
   function sendPauseRequest(paused, reason) {
     const apiUrl = el('queueApiUrl').value.trim();
-    if (!apiUrl || !myExtension) return;
+    const token = el('queueToken').value.trim();
+    if (!apiUrl || !myExtension || !token || !recordingApiIsSecure(apiUrl)) {
+      alert('Configure HTTPS e credencial da empresa antes de alterar a pausa.');
+      return;
+    }
 
     fetch(`${apiUrl}/api/queue/pause`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({ extension: myExtension, paused, reason }),
     })
-      .then((res) => res.json())
+      .then((res) => {
+        if (!res.ok) throw new Error('Acesso não autorizado');
+        return res.json();
+      })
       .then(() => {
         el('pauseBtn').style.display = paused ? 'none' : 'block';
         el('unpauseBtn').style.display = paused ? 'block' : 'none';
