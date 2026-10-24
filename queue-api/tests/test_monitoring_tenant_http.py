@@ -187,6 +187,7 @@ def test_handle_ami_event_records_queue_abandon_with_verified_tenant(monkeypatch
     log = MissedCallsLog()
     notified = []
     monkeypatch.setattr(server, "missed_calls_log", log)
+    monkeypatch.setattr(server, "NOTIFY_TENANT", "t1")
     monkeypatch.setattr(server, "dispatch_notifications",
                         lambda missed, config: notified.append(missed) or [])
     monkeypatch.setattr(server, "dispatch_screen_pop", lambda *args: None)
@@ -213,3 +214,24 @@ def test_quality_instrumentation_has_tenant_from_channel(monkeypatch):
     assert len(log.list()) == 1
     assert log.list()[0]["tenant"] == "t2"
     assert log.list()[0]["poor"] is True
+
+
+def test_legacy_global_notification_targets_deny_other_tenants(monkeypatch):
+    log = MissedCallsLog()
+    outgoing = []
+    monkeypatch.setattr(server, "missed_calls_log", log)
+    monkeypatch.setattr(server, "NOTIFY_TENANT", "t1")
+    monkeypatch.setattr(server, "dispatch_notifications",
+                        lambda missed, config: outgoing.append(missed) or [])
+    monkeypatch.setattr(server, "dispatch_screen_pop", lambda *args: None)
+    server.handle_ami_event({"Event": "QueueCallerAbandon",
+                             "Queue": "fila-t2", "CallerIDNum": "PRIVATE-t2"})
+    assert len(log.list()) == 1
+    assert log.list()[0]["tenant"] == "t2"
+    assert outgoing == []
+
+    monkeypatch.setattr(server, "NOTIFY_TENANT", "")
+    server.handle_ami_event({"Event": "QueueCallerAbandon",
+                             "Queue": "fila-t1", "CallerIDNum": "PRIVATE-t1"})
+    assert len(log.list()) == 2
+    assert outgoing == []
