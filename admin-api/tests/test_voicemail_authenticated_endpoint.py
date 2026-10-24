@@ -38,8 +38,8 @@ def voicemail_guard_is_safe(source, tenant):
         'same => n,GotoIf($["${PJSIP_ENDPOINT(${VM_ENDPOINT},context)}"'
         f' != "{tenant}-internal"]?voicemail-negado)',
         'same => n,GotoIf($["${PJSIP_ENDPOINT(${VM_ENDPOINT},mailboxes)}"'
-        f' != "${VM_ENDPOINT}@{tenant}"]?voicemail-negado)',
-        f"same => n,VoiceMailMain(${VM_ENDPOINT}@{tenant})",
+        f' != "${{VM_ENDPOINT}}@{tenant}"]?voicemail-negado)',
+        f"same => n,VoiceMailMain(${{VM_ENDPOINT}}@{tenant})",
         "same => n,Hangup()",
         "same => n(voicemail-negado),Hangup(21)",
     ]
