@@ -187,9 +187,11 @@ def test_pause_history_report_exposes_totals_by_reason_and_extension():
     relatório histórico de tempo em pausa por motivo").
     """
     source = load_source()
-    fn_start = source.index('"/api/reports/pauses"')
-    fn_end = source.index("elif", fn_start)
+    fn_start = source.index('elif urlparse(self.path).path == "/api/reports/pauses":')
+    fn_end = source.index("elif", fn_start + 4)
     body = source[fn_start:fn_end]
+    assert "self._require_queue_identity()" in body
+    assert 'tenant_prefix = identity["tenant"] + "-"' in body
     assert "summarize_pause_time_by_reason(" in body
     assert "summarize_pause_time_by_extension(" in body
 
@@ -197,9 +199,11 @@ def test_pause_history_report_exposes_totals_by_reason_and_extension():
 def test_pause_history_report_applies_date_range_filter():
     """Backlog #63 - fecha a limitação documentada no manual 57 ("sem filtro por período")."""
     source = load_source()
-    fn_start = source.index('"/api/reports/pauses"')
-    fn_end = source.index("elif", fn_start)
+    fn_start = source.index('elif urlparse(self.path).path == "/api/reports/pauses":')
+    fn_end = source.index("elif", fn_start + 4)
     body = source[fn_start:fn_end]
+    assert "self._require_queue_identity()" in body
+    assert 'tenant_prefix = identity["tenant"] + "-"' in body
     assert "filter_pause_records_by_date_range(" in body
 
 
