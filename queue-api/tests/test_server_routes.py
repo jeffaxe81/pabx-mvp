@@ -166,11 +166,13 @@ def test_sla_endpoint_exposes_threshold_and_per_queue_breakdown():
     correta, não um número solto sem contexto.
     """
     source = load_source()
-    fn_start = source.index('elif self.path.startswith("/api/metrics/sla"):')
+    fn_start = source.index('elif urlparse(self.path).path == "/api/metrics/sla":')
     fn_end = source.index("elif", fn_start + 1)
     body = source[fn_start:fn_end]
     assert "threshold_seconds" in body
     assert "queue_sla_tracker.snapshot()" in body
+    assert "self._require_queue_identity()" in body
+    assert 'queue_tenant(queue) == identity["tenant"]' in body
 
 
 def test_agent_connect_and_abandon_events_feed_sla_tracker():
@@ -210,7 +212,7 @@ def test_pause_history_report_applies_date_range_filter():
 def test_sla_history_endpoint_applies_date_range_filter():
     """Backlog #63 - fecha a limitação documentada no manual 59 ("sem filtro de intervalo de datas")."""
     source = load_source()
-    fn_start = source.index('elif self.path.startswith("/api/metrics/sla/history"):')
+    fn_start = source.index('elif urlparse(self.path).path == "/api/metrics/sla/history":')
     fn_end = source.index("elif", fn_start + 1)
     body = source[fn_start:fn_end]
     assert "filter_sla_history_by_date_range(" in body
@@ -224,15 +226,17 @@ def test_sla_history_route_checked_before_generic_sla_route():
     dia atual, nunca alcançando a de histórico de verdade.
     """
     source = load_source()
-    history_pos = source.index('elif self.path.startswith("/api/metrics/sla/history"):')
-    generic_pos = source.index('elif self.path.startswith("/api/metrics/sla"):')
+    history_pos = source.index('elif urlparse(self.path).path == "/api/metrics/sla/history":')
+    generic_pos = source.index('elif urlparse(self.path).path == "/api/metrics/sla":')
     assert history_pos < generic_pos
 
 
 def test_sla_history_endpoint_uses_persisted_history_store():
     source = load_source()
-    fn_start = source.index('elif self.path.startswith("/api/metrics/sla/history"):')
+    fn_start = source.index('elif urlparse(self.path).path == "/api/metrics/sla/history":')
     fn_end = source.index("elif", fn_start + 1)
     body = source[fn_start:fn_end]
     assert "summarize_sla_history_by_date(" in body
     assert "sla_history_store.load_all()" in body
+    assert "self._require_queue_identity()" in body
+    assert 'queue_tenant(record.get("queue")) == identity["tenant"]' in body
