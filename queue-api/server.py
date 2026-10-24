@@ -277,7 +277,15 @@ class Handler(BaseHTTPRequestHandler):
     # Rotas de gravações têm política e CORS separados das APIs antigas.
     # Elas jamais herdam o Access-Control-Allow-Origin: * de _send_json.
     def _is_queue_route(self):
-        return urlparse(self.path).path in {"/api/queue", "/api/queue/pickup"}
+        path = urlparse(self.path).path
+        return (
+            path in {
+                "/api/queue", "/api/queue/pickup", "/api/queue/pause",
+                "/api/presence", "/api/reports/pauses",
+            }
+            or path.startswith("/api/presence/")
+            or path == "/api/extension" + "-states"
+        )
 
     def _queue_headers(self):
         origin = self.headers.get("Origin", "")
@@ -419,24 +427,44 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json(200, {"by_date": summarize_sla_history_by_date(records)})
         elif self.path.startswith("/api/metrics/sla"):
             self._send_json(200, {"threshold_seconds": SLA_THRESHOLD_SECONDS, "queues": queue_sla_tracker.snapshot()})
-        elif self.path.startswith("/api/reports/pauses"):
+        elif urlparse(self.path).path == "/api/reports/pauses":
+            identity = self._require_queue_identity()
+            if identity is None:
+                return
             query = parse_qs(urlparse(self.path).query)
+            tenant_prefix = identity["tenant"] + "-"
             records = filter_pause_records_by_date_range(
-                pause_history_store.load_all(),
+                [record for record in pause_history_store.load_all()
+                 if isinstance(record, dict)
+                 and isinstance(record.get("extension"), str)
+                 and record["extension"].startswith(tenant_prefix)],
                 start=query.get("start", [None])[0],
                 end=query.get("end", [None])[0],
             )
-            self._send_json(200, {
+            self._send_queue_json(200, {
                 "by_reason": summarize_pause_time_by_reason(records),
                 "by_extension": summarize_pause_time_by_extension(records),
                 "total_records": len(records),
             })
-        elif self.path.startswith("/api/extension-states"):
-            merged = merge_presence_into_states(extension_states.snapshot(), load_presence(PRESENCE_PATH))
+        elif urlparse(self.path).path == "/api/extension-states":
+            identity = self._require_queue_identity()
+            if identity is None:
+                return
+            # Hint context is the authoritative namespace for BLF numbers
+            # (which are reused across tenants, e.g. extension 1010).
+            scoped = [entry for entry in extension_states.snapshot()
+                      if entry.get("context") == identity["tenant"] + "-hints"]
+            merged = merge_presence_into_states(scoped, load_presence(PRESENCE_PATH))
             merged = merge_pause_into_states(merged, agent_pause_store.snapshot())
-            self._send_json(200, {"extensions": merged})
-        elif self.path.startswith("/api/presence"):
-            self._send_json(200, {"presence": load_presence(PRESENCE_PATH)})
+            self._send_queue_json(200, {"extensions": merged})
+        elif urlparse(self.path).path == "/api/presence":
+            identity = self._require_queue_identity()
+            if identity is None:
+                return
+            prefix = identity["tenant"] + "-"
+            allowed_presence = {ext: entry for ext, entry in load_presence(PRESENCE_PATH).items()
+                                if isinstance(ext, str) and ext.startswith(prefix)}
+            self._send_queue_json(200, {"presence": allowed_presence})
         elif self.path.startswith("/api/reports"):
             self._handle_reports()
         elif self.path.startswith("/api/campaigns/"):
@@ -551,7 +579,7 @@ class Handler(BaseHTTPRequestHandler):
             self._handle_dial_next_contact()
         elif self.path == "/api/callbacks/dial-next":
             self._handle_dial_next_callback()
-        elif self.path.startswith("/api/presence/"):
+        elif urlparse(self.path).path.startswith("/api/presence/"):
             self._handle_set_presence()
         elif self.path == "/api/queue/pause":
             self._handle_set_pause()
@@ -559,63 +587,93 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json(404, {"error": "not found"})
 
     def _handle_set_pause(self):
-        """
-        Motivo de pausa do agente (backlog #44) - autoatendimento,
-        mesmo princípio da presença manual (manual 34): o próprio
-        agente pausa a si mesmo, sem checagem extra de "é você mesmo
-        quem está discando" (mesma limitação já aceita nos outros
-        endpoints deste serviço).
-        """
-        length = int(self.headers.get("Content-Length", 0))
-        try:
-            data = json.loads(self.rfile.read(length) or b"{}")
-        except json.JSONDecodeError:
-            self._send_json(400, {"error": "JSON inválido"})
+        identity = self._require_queue_identity()
+        if identity is None:
             return
-
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+        except (TypeError, ValueError):
+            self._send_queue_json(400, {"error": "Content-Length invalido"})
+            return
+        if not 0 < length <= 16384:
+            self._send_queue_json(400, {"error": "tamanho de requisicao invalido"})
+            return
+        try:
+            data = json.loads(self.rfile.read(length))
+        except (ValueError, UnicodeError):
+            self._send_queue_json(400, {"error": "JSON invalido"})
+            return
+        if not isinstance(data, dict):
+            self._send_queue_json(400, {"error": "JSON deve ser objeto"})
+            return
         ok, error, cleaned = validate_pause_request(data)
         if not ok:
-            self._send_json(400, {"error": error})
+            self._send_queue_json(400, {"error": error})
             return
-
+        if not may_pickup(identity, cleaned["extension"]):
+            self._send_queue_json(403, {"error": "ramal nao autorizado para pausa"})
+            return
         if ami is None:
-            self._send_json(503, {"error": "AMI nao conectado"})
+            self._send_queue_json(503, {"error": "AMI nao conectado"})
             return
-
         interface = f"PJSIP/{cleaned['extension']}"
         response = ami.pause_member(interface, cleaned["paused"], cleaned["reason"])
         if response.get("Response") == "Success":
-            self._send_json(200, {"extension": cleaned["extension"], "paused": cleaned["paused"], "reason": cleaned["reason"]})
+            self._send_queue_json(200, {
+                "extension": cleaned["extension"], "paused": cleaned["paused"],
+                "reason": cleaned["reason"],
+            })
         else:
-            self._send_json(502, {"error": "falha ao pausar/despausar", "detail": response})
+            self._send_queue_json(502, {"error": "falha ao pausar/despausar"})
+
 
     def do_DELETE(self):
-        if self.path.startswith("/api/presence/"):
+        if urlparse(self.path).path.startswith("/api/presence/"):
             self._handle_clear_presence()
         else:
             self._send_json(404, {"error": "not found"})
 
     def _handle_set_presence(self):
-        extension = self.path[len("/api/presence/"):]
-        length = int(self.headers.get("Content-Length", 0))
-        try:
-            data = json.loads(self.rfile.read(length) or b"{}")
-        except json.JSONDecodeError:
-            self._send_json(400, {"error": "JSON invalido"})
+        identity = self._require_queue_identity()
+        if identity is None:
             return
-
+        extension = urlparse(self.path).path[len("/api/presence/"):]
+        if not may_pickup(identity, extension):
+            self._send_queue_json(403, {"error": "ramal nao autorizado para presenca"})
+            return
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+        except (TypeError, ValueError):
+            self._send_queue_json(400, {"error": "Content-Length invalido"})
+            return
+        if not 0 < length <= 16384:
+            self._send_queue_json(400, {"error": "tamanho de requisicao invalido"})
+            return
+        try:
+            data = json.loads(self.rfile.read(length))
+        except (ValueError, UnicodeError):
+            self._send_queue_json(400, {"error": "JSON invalido"})
+            return
+        if not isinstance(data, dict):
+            self._send_queue_json(400, {"error": "JSON deve ser objeto"})
+            return
         ok, error, cleaned = validate_presence_input(data)
         if not ok:
-            self._send_json(400, {"error": error})
+            self._send_queue_json(400, {"error": error})
             return
-
         entry = set_presence(PRESENCE_PATH, extension, cleaned["status"], cleaned["note"])
-        self._send_json(200, {"extension": extension, **entry})
+        self._send_queue_json(200, {"extension": extension, **entry})
 
     def _handle_clear_presence(self):
-        extension = self.path[len("/api/presence/"):]
+        identity = self._require_queue_identity()
+        if identity is None:
+            return
+        extension = urlparse(self.path).path[len("/api/presence/"):]
+        if not may_pickup(identity, extension):
+            self._send_queue_json(403, {"error": "ramal nao autorizado para presenca"})
+            return
         ok = clear_presence(PRESENCE_PATH, extension)
-        self._send_json(200, {"ok": ok})
+        self._send_queue_json(200, {"ok": ok})
 
     def _handle_pickup(self):
         identity = self._require_queue_identity()
