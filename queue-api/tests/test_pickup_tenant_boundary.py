@@ -59,6 +59,7 @@ def pickup_http(tmp_path, monkeypatch):
         })
     policy_file = tmp_path / "queue-access.json"
     policy_file.write_text(json.dumps({"credentials": credentials}))
+    policy_file.chmod(0o600)
     monkeypatch.setattr(server, "QUEUE_ACCESS_POLICY_PATH", str(policy_file))
     monkeypatch.setattr(server, "QUEUE_CORS_ORIGINS", {"http://localhost:8082"})
     monkeypatch.setattr(server, "ami", mock_ami)
