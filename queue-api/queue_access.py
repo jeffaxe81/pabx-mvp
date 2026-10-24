@@ -25,7 +25,8 @@ def load_queue_policy(path):
         return None
     try:
         info = os.fstat(fd)
-        if not stat.S_ISREG(info.st_mode) or info.st_size > MAX_POLICY_BYTES:
+        if (not stat.S_ISREG(info.st_mode) or stat.S_IMODE(info.st_mode) & 0o077
+                or info.st_size > MAX_POLICY_BYTES):
             return None
         with os.fdopen(fd, "rb") as opened:
             fd = None
