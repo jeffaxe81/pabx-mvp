@@ -51,6 +51,7 @@ from reports import parse_cdr_for_report, CallLogStore, aggregate, group_by, ext
 from screen_pop import dispatch_screen_pop
 from fraud_detection import CallRateTracker, FraudAlertsLog, is_external_call, is_over_spending_limit
 from quality_monitoring import parse_quality_event, is_poor_quality, QualityLog
+from monitoring_access import monitoring_event_tenant, scoped_monitoring_entries
 
 AMI_HOST = os.environ.get("AMI_HOST", "127.0.0.1")
 AMI_PORT = int(os.environ.get("AMI_PORT", "5038"))
@@ -162,10 +163,11 @@ def handle_ami_event(event: dict):
     extension_states.apply_event(event)
     agent_pause_store.apply_event(event)
 
+    tenant = monitoring_event_tenant(event)
     quality = parse_quality_event(event)
-    if quality:
+    if quality and tenant:
         poor = is_poor_quality(quality, QUALITY_JITTER_THRESHOLD_MS, QUALITY_PACKET_LOSS_THRESHOLD_PERCENT)
-        quality_log.append(quality, poor)
+        quality_log.append({**quality, "tenant": tenant}, poor)
 
     report_record = parse_cdr_for_report(event)
     if report_record:
@@ -184,6 +186,15 @@ def handle_ami_event(event: dict):
                 )
 
     check_call_volume(event)
+
+    # Eventos AMI sem tenant demonstrável não entram em histórico nem
+    # disparam notificação para outra empresa.
+    missed = parse_missed_call_event(event)
+    if missed and tenant:
+        missed["tenant"] = tenant
+        missed_calls_log.append(missed)
+        for error in dispatch_notifications(missed, NOTIFY_CONFIG):
+            print(f"[AVISO] falha ao notificar chamada perdida: {error}")
 
     screen_pop_error = dispatch_screen_pop(event, CRM_WEBHOOK_URL)
     if screen_pop_error:
@@ -267,14 +278,6 @@ def check_call_volume(event: dict):
             except Exception as exc:  # noqa: BLE001
                 print(f"[AVISO] falha ao bloquear automaticamente {destination}: {exc}")
 
-    missed = parse_missed_call_event(event)
-    if missed:
-        missed_calls_log.append(missed)
-        errors = dispatch_notifications(missed, NOTIFY_CONFIG)
-        for error in errors:
-            print(f"[AVISO] falha ao notificar chamada perdida: {error}")
-
-
 class Handler(BaseHTTPRequestHandler):
     # Rotas de gravações têm política e CORS separados das APIs antigas.
     # Elas jamais herdam o Access-Control-Allow-Origin: * de _send_json.
@@ -285,6 +288,7 @@ class Handler(BaseHTTPRequestHandler):
                 "/api/queue", "/api/queue/pickup", "/api/queue/pause",
                 "/api/presence", "/api/reports/pauses", "/api/reports",
                 "/api/metrics/today", "/api/metrics/sla", "/api/metrics/sla/history",
+                "/api/missed-calls", "/api/fraud-alerts", "/api/quality",
             }
             or path.startswith("/api/presence/")
             or path == "/api/extension" + "-states"
@@ -408,11 +412,21 @@ class Handler(BaseHTTPRequestHandler):
             self._send_queue_json(200, {"waiting": waiting})
         elif urlparse(self.path).path == "/api/recordings":
             self._handle_list_recordings()
-        elif self.path.startswith("/api/missed-calls"):
-            self._send_json(200, {"missed_calls": missed_calls_log.list()})
-        elif self.path.startswith("/api/fraud-alerts"):
-            self._send_json(200, {"alerts": fraud_alerts_log.list()})
-        elif self.path.startswith("/api/quality"):
+        elif urlparse(self.path).path == "/api/missed-calls":
+            identity = self._require_queue_identity()
+            if identity is None:
+                return
+            self._send_queue_json(200, {"missed_calls": scoped_monitoring_entries(
+                missed_calls_log.list(limit=100), identity["tenant"],
+            )[:20]})
+        elif urlparse(self.path).path == "/api/fraud-alerts":
+            identity = self._require_queue_identity()
+            if identity is None:
+                return
+            self._send_queue_json(200, {"alerts": scoped_monitoring_entries(
+                fraud_alerts_log.list(limit=100), identity["tenant"],
+            )[:20]})
+        elif urlparse(self.path).path == "/api/quality":
             self._handle_quality_query()
         elif urlparse(self.path).path == "/api/metrics/today":
             identity = self._require_queue_identity()
@@ -500,9 +514,15 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json(404, {"error": "not found"})
 
     def _handle_quality_query(self):
+        identity = self._require_queue_identity()
+        if identity is None:
+            return
         query = parse_qs(urlparse(self.path).query)
         only_poor = query.get("only_poor", ["false"])[0].lower() == "true"
-        self._send_json(200, {"quality_reports": quality_log.list(only_poor=only_poor)})
+        visible = scoped_monitoring_entries(
+            quality_log.list(limit=100, only_poor=only_poor), identity["tenant"],
+        )[:20]
+        self._send_queue_json(200, {"quality_reports": visible})
 
     def _handle_satisfaction_query(self):
         query = parse_qs(urlparse(self.path).query)
