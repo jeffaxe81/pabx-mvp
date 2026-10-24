@@ -38,6 +38,21 @@ eventos que não fossem discagem externa `DialBegin`, impedindo
 registro de `QueueCallerAbandon`. Agora é executada no fluxo geral
 `handle_ami_event`, antes da notificação, com tenant verificado.
 
+### Destinatários globais de notificações
+
+A versão legada utiliza um SMTP_TO e um WHATSAPP_TO globais. Para
+evitar que informações de uma empresa sejam enviadas aos destinatários
+de outra, o envio exige **NOTIFY_TENANT** com tenant exato, além
+de `NOTIFY_CHANNELS`. Sem `NOTIFY_TENANT`, envio externo permanece
+bloqueado inclusive se canais forem habilitados. Uma ocorrência de
+outro tenant pode constar do histórico autorizado dele, mas jamais
+ser encaminhada ao destinatário global configurado para o primeiro.
+
+No compose, configure por exemplo `NOTIFY_TENANT=t1` **somente**
+quando os destinatários globais forem autorizados a receber alertas
+de t1. Suporte a destinos distintos por tenant requer evolução futura,
+sem utilização insegura dos destinatários globais.
+
 ### Interface
 
 Webphone e painel operacional enviam `Authorization: Bearer` apenas
