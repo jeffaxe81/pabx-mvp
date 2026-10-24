@@ -374,7 +374,7 @@ class Handler(BaseHTTPRequestHandler):
                 return
             self.send_response(204)
             self._queue_headers()
-            self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+            self.send_header("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
             self.send_header("Access-Control-Allow-Headers", "Authorization, Content-Type")
             self.send_header("Content-Length", "0")
             self.end_headers()
