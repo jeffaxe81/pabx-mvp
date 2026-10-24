@@ -34,6 +34,14 @@ _PICKUP_EXTENSION = re.compile(r"^(t[1-9][0-9]*)-[a-z0-9][a-z0-9_-]{0,79}$")
 _TENANT_QUEUE = re.compile(r"^fila-(t[1-9][0-9]*)(?:-(?:en|es))?$")
 
 
+def queue_tenant(queue_name):
+    """Extrai tenant apenas de filas com nome exato registrado pelo AMI."""
+    if not isinstance(queue_name, str):
+        return None
+    match = _TENANT_QUEUE.fullmatch(queue_name)
+    return match.group(1) if match else None
+
+
 def pickup_matches_queue(extension, queue_name):
     """Exige vínculo exato entre ramal autorizado e fila AMI observada."""
     if not isinstance(extension, str) or not isinstance(queue_name, str):
