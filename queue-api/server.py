@@ -9,8 +9,9 @@ Endpoints:
                                      chamada específica pro ramal da
                                      telefonista (Redirect via AMI)
 
-CORS liberado (Access-Control-Allow-Origin: *) porque o webphone é
-servido por um container nginx diferente (porta 8082) do desta API.
+Rotas legadas seguem com CORS amplo, mas /api/queue e /api/queue/pickup
+exigem Bearer com tenant e Origin explicitamente permitido. Nunca colocar
+tokens de fila em URLs ou em código estático publicado pelo Nginx.
 """
 import json
 import os
@@ -43,7 +44,8 @@ from presence import validate_presence_input, load_presence, set_presence, clear
 from agent_pause import validate_pause_request, AgentPauseStore, merge_pause_into_states, PauseHistoryStore, summarize_pause_time_by_reason, summarize_pause_time_by_extension, filter_pause_records_by_date_range
 from metrics import DailyMetrics
 from queue_sla import QueueSLATracker, SLAHistoryStore, summarize_sla_history_by_date, filter_sla_history_by_date_range
-from pickup import validate_pickup_request, pickup_matches_queue
+from pickup import validate_pickup_request, pickup_matches_queue, queue_tenant
+from queue_access import load_queue_policy, authenticate_queue, may_pickup
 from extension_states import ExtensionStateTracker
 from reports import parse_cdr_for_report, CallLogStore, aggregate, group_by, extract_operator
 from screen_pop import dispatch_screen_pop
@@ -64,6 +66,8 @@ SLA_HISTORY_PATH = os.environ.get("SLA_HISTORY_PATH", "/app/data/sla_history.jso
 RECORDINGS_DIR = os.environ.get("RECORDINGS_DIR", "/app/recordings")
 RECORDINGS_ACCESS_POLICY_PATH = os.environ.get("RECORDINGS_ACCESS_POLICY_PATH", "/app/data/recording_access.json")
 RECORDINGS_CORS_ORIGINS = set(filter(None, (v.strip() for v in os.environ.get("RECORDINGS_CORS_ORIGINS", "").split(","))))
+QUEUE_ACCESS_POLICY_PATH = os.environ.get("QUEUE_ACCESS_POLICY_PATH", "/app/data/queue_access.json")
+QUEUE_CORS_ORIGINS = set(filter(None, (v.strip() for v in os.environ.get("QUEUE_CORS_ORIGINS", "").split(","))))
 # Retenção de gravações (backlog #15) - 0 (padrão) = desabilitado.
 # Apagar gravação é irreversível, então isso é opt-in de propósito.
 RECORDINGS_RETENTION_DAYS = int(os.environ.get("RECORDINGS_RETENTION_DAYS", "0"))
@@ -272,6 +276,41 @@ def check_call_volume(event: dict):
 class Handler(BaseHTTPRequestHandler):
     # Rotas de gravações têm política e CORS separados das APIs antigas.
     # Elas jamais herdam o Access-Control-Allow-Origin: * de _send_json.
+    def _is_queue_route(self):
+        return urlparse(self.path).path in {"/api/queue", "/api/queue/pickup"}
+
+    def _queue_headers(self):
+        origin = self.headers.get("Origin", "")
+        if origin and allowed_browser_origin(origin, QUEUE_CORS_ORIGINS):
+            self.send_header("Access-Control-Allow-Origin", origin)
+        self.send_header("Vary", "Origin")
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("X-Content-Type-Options", "nosniff")
+
+    def _send_queue_json(self, status, payload):
+        body = b"" if status == 204 else json.dumps(payload).encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json")
+        if status == 401:
+            self.send_header("WWW-Authenticate", "Bearer")
+        self._queue_headers()
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        if body:
+            self.wfile.write(body)
+
+    def _require_queue_identity(self):
+        origin = self.headers.get("Origin")
+        if origin is not None and not allowed_browser_origin(origin, QUEUE_CORS_ORIGINS):
+            self._send_queue_json(403, {"error": "origem nao permitida"})
+            return None
+        policy = load_queue_policy(QUEUE_ACCESS_POLICY_PATH)
+        identity = authenticate_queue(self.headers.get("Authorization"), policy)
+        if identity is None:
+            self._send_queue_json(401, {"error": "credencial da fila invalida ou nao configurada"})
+            return None
+        return identity
+
     def _is_recording_route(self):
         path = urlparse(self.path).path
         return path == "/api/recordings" or path.startswith("/recordings/")
@@ -320,6 +359,18 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_OPTIONS(self):
+        if self._is_queue_route():
+            origin = self.headers.get("Origin")
+            if not allowed_browser_origin(origin, QUEUE_CORS_ORIGINS):
+                self._send_queue_json(403, {"error": "origem nao permitida"})
+                return
+            self.send_response(204)
+            self._queue_headers()
+            self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+            self.send_header("Access-Control-Allow-Headers", "Authorization, Content-Type")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
         if self._is_recording_route():
             origin = self.headers.get("Origin")
             if not allowed_browser_origin(origin, RECORDINGS_CORS_ORIGINS):
@@ -335,8 +386,15 @@ class Handler(BaseHTTPRequestHandler):
         self._send_json(204, {})
 
     def do_GET(self):
-        if self.path.startswith("/api/queue"):
-            self._send_json(200, {"waiting": state.waiting_list()})
+        if urlparse(self.path).path == "/api/queue":
+            identity = self._require_queue_identity()
+            if identity is None:
+                return
+            waiting = [
+                item for item in state.waiting_list()
+                if queue_tenant(item.get("queue")) == identity["tenant"]
+            ]
+            self._send_queue_json(200, {"waiting": waiting})
         elif urlparse(self.path).path == "/api/recordings":
             self._handle_list_recordings()
         elif self.path.startswith("/api/missed-calls"):
@@ -560,37 +618,56 @@ class Handler(BaseHTTPRequestHandler):
         self._send_json(200, {"ok": ok})
 
     def _handle_pickup(self):
-        length = int(self.headers.get("Content-Length", 0))
+        identity = self._require_queue_identity()
+        if identity is None:
+            return
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+        except (ValueError, TypeError):
+            self._send_queue_json(400, {"error": "Content-Length invalido"})
+            return
+        if length <= 0 or length > 16384:
+            self._send_queue_json(400, {"error": "tamanho de requisicao invalido"})
+            return
         try:
             data = json.loads(self.rfile.read(length) or b"{}")
-        except json.JSONDecodeError:
-            self._send_json(400, {"error": "JSON invalido"})
+        except (json.JSONDecodeError, UnicodeError):
+            self._send_queue_json(400, {"error": "JSON invalido"})
             return
 
+        if not isinstance(data, dict):
+            self._send_queue_json(400, {"error": "JSON deve ser objeto"})
+            return
         ok, error, channel, extension = validate_pickup_request(
             data, {"allowed_extensions": PICKUP_ALLOWED_EXTENSIONS}
         )
         if not ok:
             status = 403 if "autorizado" in error else 400
-            self._send_json(status, {"error": error})
+            self._send_queue_json(status, {"error": error})
+            return
+
+        if not may_pickup(identity, extension):
+            self._send_queue_json(403, {"error": "ramal nao pertence a identidade autorizada"})
             return
 
         # Uma extensão autorizada não pode puxar fila de outra empresa.
         # O vínculo canal/fila vem do AMI, e nunca do corpo da requisição.
-        if not pickup_matches_queue(extension, state.queue_for_channel(channel)):
-            self._send_json(403, {"error": "pickup nao autorizado para esta fila"})
+        queue_name = state.queue_for_channel(channel)
+        if (queue_tenant(queue_name) != identity["tenant"]
+                or not pickup_matches_queue(extension, queue_name)):
+            self._send_queue_json(403, {"error": "pickup nao autorizado para esta fila"})
             return
 
         if ami is None:
-            self._send_json(503, {"error": "AMI nao conectado"})
+            self._send_queue_json(503, {"error": "AMI nao conectado"})
             return
 
         response = ami.redirect_channel(channel, PICKUP_CONTEXT, exten=extension)
         if response.get("Response") == "Success":
             state.remove(channel)
-            self._send_json(200, {"ok": True})
+            self._send_queue_json(200, {"ok": True})
         else:
-            self._send_json(502, {"error": "falha no redirect", "detail": response})
+            self._send_queue_json(502, {"error": "falha no redirect", "detail": response})
 
     def _handle_click_to_call(self):
         length = int(self.headers.get("Content-Length", 0))

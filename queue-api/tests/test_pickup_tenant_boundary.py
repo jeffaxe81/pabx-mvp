@@ -3,6 +3,7 @@
 O operador informa um ramal da allowlist, mas o tenant da fila é lido
 somente do rastreador AMI, nunca do JSON de quem solicita o pickup.
 """
+import hashlib
 import json
 import threading
 import urllib.error
@@ -39,7 +40,7 @@ def test_queue_and_extension_tenants_must_match_exactly(extension, queue, allowe
 
 
 @pytest.fixture
-def pickup_http(monkeypatch):
+def pickup_http(tmp_path, monkeypatch):
     tracker = QueueStateTracker()
     class AMISpy:
         def __init__(self):
@@ -50,6 +51,17 @@ def pickup_http(monkeypatch):
             return {"Response": "Success"}
 
     mock_ami = AMISpy()
+    credentials = []
+    for tenant, token in [("t1", "Q"*48), ("t2", "R"*48), ("t10", "T"*48)]:
+        credentials.append({
+            "token_sha256": hashlib.sha256(token.encode()).hexdigest(),
+            "tenant": tenant, "role": "supervisor", "expires_at": 4102444800,
+        })
+    policy_file = tmp_path / "queue-access.json"
+    policy_file.write_text(json.dumps({"credentials": credentials}))
+    policy_file.chmod(0o600)
+    monkeypatch.setattr(server, "QUEUE_ACCESS_POLICY_PATH", str(policy_file))
+    monkeypatch.setattr(server, "QUEUE_CORS_ORIGINS", {"http://localhost:8082"})
     monkeypatch.setattr(server, "ami", mock_ami)
     monkeypatch.setattr(server, "state", tracker)
     monkeypatch.setattr(
@@ -67,11 +79,14 @@ def pickup_http(monkeypatch):
         thread.join(timeout=3)
 
 
-def pickup(base, channel, extension, **extra):
+def pickup(base, channel, extension, *, token="Q"*48, **extra):
     raw = json.dumps({"channel": channel, "extension": extension, **extra}).encode()
     request = urllib.request.Request(
         base + "/api/queue/pickup", data=raw, method="POST",
-        headers={"Content-Type": "application/json"},
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": "Bearer " + token,
+        },
     )
     try:
         with urllib.request.urlopen(request, timeout=4) as response:
@@ -100,7 +115,7 @@ def test_real_http_rejects_prefix_collision_t1_and_t10(pickup_http):
     join(tracker, "CH10", "fila-t10")
     assert pickup(base, "CH10", "t1-recepcao")[0] == 403
     assert ami.calls == []
-    assert pickup(base, "CH10", "t10-recepcao")[0] == 200
+    assert pickup(base, "CH10", "t10-recepcao", token="T"*48)[0] == 200
     assert ami.calls == [("CH10", server.PICKUP_CONTEXT, "t10-recepcao")]
 
 

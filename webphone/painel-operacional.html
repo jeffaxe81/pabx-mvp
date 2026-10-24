@@ -306,7 +306,13 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 
   <div class="panel">
     <h2>Fila de espera</h2>
-    <div id="queueList"><div class="empty">Carregando...</div></div>
+    <label for="queueToken">Credencial temporária da fila</label>
+    <div style="display:flex; gap:8px; margin:8px 0 12px;">
+      <input id="queueToken" type="password" autocomplete="off" spellcheck="false"
+             placeholder="Token da empresa" style="flex:1; min-width:0;">
+      <button id="refreshQueueBtn" type="button" style="border-radius:6px; border:1px solid var(--border); padding:8px;">Atualizar fila</button>
+    </div>
+    <div id="queueList"><div class="empty">Informe a credencial da fila.</div></div>
   </div>
 </div>
 
@@ -362,6 +368,45 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 
   const params = new URLSearchParams(window.location.search);
   const apiUrl = params.get('api') || 'http://pabx.local:8090';
+
+  // O token vive apenas no campo desta página, nunca na URL ou no storage.
+  function secureQueueUrl(url) {
+    try {
+      const parsed = new URL(url);
+      return !parsed.username && !parsed.password &&
+        (parsed.protocol === 'https:' ||
+        (parsed.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(parsed.hostname)));
+    } catch (error) {
+      return false;
+    }
+  }
+
+  function fetchTenantQueue() {
+    const token = el('queueToken').value.trim();
+    if (!token) {
+      el('queueList').textContent = 'Informe a credencial da empresa para ver sua fila.';
+      return Promise.resolve(null);
+    }
+    if (!secureQueueUrl(apiUrl)) {
+      el('queueList').textContent = 'A consulta de filas exige HTTPS fora de localhost.';
+      return Promise.resolve(null);
+    }
+    return fetch(`${apiUrl}/api/queue`, {
+      headers: { Authorization: `Bearer ${token}` }, cache: 'no-store',
+    }).then((response) => {
+      if (!response.ok) throw new Error('Sem permissão');
+      return response.json();
+    }).catch(() => {
+      el('queueList').textContent = 'Acesso à fila negado ou indisponível.';
+      return null;
+    });
+  }
+  el('refreshQueueBtn').addEventListener('click', () => {
+    fetchTenantQueue().then((queue) => {
+      if (queue) renderQueue(queue.waiting || []);
+    });
+  });
+
   el('reportsLink').href = `relatorios.html?api=${encodeURIComponent(apiUrl)}`;
 
   // ---------- Filtro de intervalo de datas (backlog #63) ----------
@@ -382,7 +427,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     Promise.all([
       fetch(`${apiUrl}/api/metrics/today`).then((r) => r.json()).catch(() => null),
       fetch(`${apiUrl}/api/extension-states`).then((r) => r.json()).catch(() => null),
-      fetch(`${apiUrl}/api/queue`).then((r) => r.json()).catch(() => null),
+      fetchTenantQueue(),
       fetch(`${apiUrl}/api/fraud-alerts`).then((r) => r.json()).catch(() => null),
       fetch(`${apiUrl}/api/quality?only_poor=true`).then((r) => r.json()).catch(() => null),
       fetch(`${apiUrl}/api/metrics/sla`).then((r) => r.json()).catch(() => null),
@@ -569,19 +614,29 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   }
 
   function renderQueue(waiting) {
-    if (waiting.length === 0) {
-      el('queueList').innerHTML = '<div class="empty">Nenhuma chamada esperando.</div>';
+    const container = el('queueList');
+    container.replaceChildren();
+    if (!Array.isArray(waiting) || waiting.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'empty';
+      empty.textContent = 'Nenhuma chamada esperando.';
+      container.appendChild(empty);
       return;
     }
-    el('queueList').innerHTML = waiting.map((call) => {
-      const minutes = String(Math.floor(call.waiting_seconds / 60)).padStart(2, '0');
-      const seconds = String(call.waiting_seconds % 60).padStart(2, '0');
-      const label = call.caller_id_name || call.caller_id_num || call.channel;
-      return `<div class="item-row">
-        <span>${label}</span>
-        <span class="wait-time mono">${minutes}:${seconds}</span>
-      </div>`;
-    }).join('');
+
+    // Nomes e números podem vir de CallerID externo: somente textContent.
+    for (const call of waiting) {
+      const row = document.createElement('div');
+      row.className = 'item-row';
+      const label = document.createElement('span');
+      label.textContent = String(call.caller_id_name || call.caller_id_num || call.channel || '');
+      const timer = document.createElement('span');
+      timer.className = 'wait-time mono';
+      const total = Math.max(0, Number(call.waiting_seconds) || 0);
+      timer.textContent = `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(Math.floor(total % 60)).padStart(2, '0')}`;
+      row.append(label, timer);
+      container.appendChild(row);
+    }
   }
 
   fetchAll();

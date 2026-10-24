@@ -648,7 +648,10 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
       <input id="extPassword" type="password" placeholder="senha do ramal">
 
       <label for="queueApiUrl">API da fila (opcional)</label>
-      <input id="queueApiUrl" placeholder="http://pabx.local:8090" value="http://pabx.local:8090">
+      <input id="queueApiUrl" placeholder="https://pabx.exemplo.com/api" value="http://pabx.local:8090">
+      <label for="queueToken">Credencial temporária da fila (por empresa)</label>
+      <input id="queueToken" type="password" autocomplete="off" spellcheck="false"
+             placeholder="Token de acesso fornecido pelo administrador">
 
       <label for="crmScreenPopUrl">URL de screen-pop do CRM (opcional)</label>
       <input id="crmScreenPopUrl" placeholder="https://seu-crm.com/contatos?telefone={numero}">
@@ -1209,6 +1212,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     myExtension = null;
     recordingsRequestEpoch += 1;
     el('recordingsToken').value = '';
+    el('queueToken').value = '';
     clearRecordingPlayers();
     if (ua) ua.stop();
     setStatus('', 'Desconectado');
@@ -1226,6 +1230,14 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   function startQueuePolling() {
     const apiUrl = el('queueApiUrl').value.trim();
     if (!apiUrl) return;
+    if (!el('queueToken').value.trim()) {
+      el('queueList').textContent = 'Informe a credencial temporária da fila para visualizar as chamadas.';
+      return;
+    }
+    if (!recordingApiIsSecure(apiUrl)) {
+      el('queueList').textContent = 'A API de filas exige HTTPS fora de localhost.';
+      return;
+    }
 
     fetchQueue(apiUrl);
     queuePollInterval = setInterval(() => fetchQueue(apiUrl), 3000);
@@ -1237,8 +1249,18 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   }
 
   function fetchQueue(apiUrl) {
-    fetch(`${apiUrl}/api/queue`)
-      .then((res) => res.json())
+    const token = el('queueToken').value.trim();
+    if (!token) {
+      el('queueList').textContent = 'Credencial da fila ausente.';
+      return;
+    }
+    fetch(`${apiUrl}/api/queue`, {
+      headers: { Authorization: `Bearer ${token}` }, cache: 'no-store',
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error('Fila não autorizada');
+        return res.json();
+      })
       .then((data) => renderQueue(apiUrl, data.waiting || []))
       .catch(() => {
         el('queueList').innerHTML = '<div class="log-empty">API da fila indisponível.</div>';
@@ -1246,33 +1268,51 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   }
 
   function renderQueue(apiUrl, waiting) {
-    if (waiting.length === 0) {
-      el('queueList').innerHTML = '<div class="log-empty">Nenhuma chamada esperando.</div>';
+    const container = el('queueList');
+    container.replaceChildren();
+    if (!Array.isArray(waiting) || waiting.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'log-empty';
+      empty.textContent = 'Nenhuma chamada esperando.';
+      container.appendChild(empty);
       return;
     }
 
-    el('queueList').innerHTML = waiting.map((call) => {
-      const minutes = String(Math.floor(call.waiting_seconds / 60)).padStart(2, '0');
-      const seconds = String(call.waiting_seconds % 60).padStart(2, '0');
-      const label = call.caller_id_name || call.caller_id_num || call.channel;
-      return `<div class="queue-item">
-        <div class="info">
-          <div class="peer">${label}</div>
-          <div class="wait mono">esperando ${minutes}:${seconds}</div>
-        </div>
-        <button class="btn-primary" data-channel="${call.channel}" style="margin:0;">Atender</button>
-      </div>`;
-    }).join('');
-
-    document.querySelectorAll('#queueList button[data-channel]').forEach((btn) => {
-      btn.addEventListener('click', () => pickupFromQueue(apiUrl, btn.dataset.channel));
-    });
+    // O caller ID vem de terceiros via SIP; nunca injetá-lo como HTML.
+    for (const call of waiting) {
+      const row = document.createElement('div');
+      row.className = 'queue-item';
+      const info = document.createElement('div');
+      info.className = 'info';
+      const label = document.createElement('div');
+      label.className = 'peer';
+      label.textContent = String(call.caller_id_name || call.caller_id_num || call.channel || '');
+      const timer = document.createElement('div');
+      timer.className = 'wait mono';
+      const secondsTotal = Math.max(0, Number(call.waiting_seconds) || 0);
+      const minutes = String(Math.floor(secondsTotal / 60)).padStart(2, '0');
+      const seconds = String(Math.floor(secondsTotal % 60)).padStart(2, '0');
+      timer.textContent = `esperando ${minutes}:${seconds}`;
+      const button = document.createElement('button');
+      button.className = 'btn-primary';
+      button.style.margin = '0';
+      button.textContent = 'Atender';
+      button.addEventListener('click', () => pickupFromQueue(apiUrl, call.channel));
+      info.append(label, timer);
+      row.append(info, button);
+      container.appendChild(row);
+    }
   }
 
-  function pickupFromQueue(apiUrl, channel) {
+    function pickupFromQueue(apiUrl, channel) {
+    const token = el('queueToken').value.trim();
+    if (!token || !recordingApiIsSecure(apiUrl)) {
+      alert('É necessário configurar credencial da fila e HTTPS.');
+      return;
+    }
     fetch(`${apiUrl}/api/queue/pickup`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({ channel, extension: myExtension }),
     })
       .then((res) => res.json())
