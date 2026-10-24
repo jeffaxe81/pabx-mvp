@@ -1344,8 +1344,18 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   }
 
   function fetchMissedCalls(apiUrl) {
-    fetch(`${apiUrl}/api/missed-calls`)
-      .then((res) => res.json())
+    const token = el('queueToken').value.trim();
+    if (!token || !recordingApiIsSecure(apiUrl)) {
+      el('missedCallsList').textContent = 'Informe credencial da empresa e HTTPS.';
+      return;
+    }
+    fetch(`${apiUrl}/api/missed-calls`, {
+      headers: { Authorization: `Bearer ${token}` }, cache: 'no-store',
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error('Chamadas perdidas não autorizadas');
+        return res.json();
+      })
       .then((data) => renderMissedCalls(data.missed_calls || []))
       .catch(() => {
         el('missedCallsList').innerHTML = '<div class="log-empty">API indisponível.</div>';
