@@ -1268,30 +1268,43 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   }
 
   function renderQueue(apiUrl, waiting) {
-    if (waiting.length === 0) {
-      el('queueList').innerHTML = '<div class="log-empty">Nenhuma chamada esperando.</div>';
+    const container = el('queueList');
+    container.replaceChildren();
+    if (!Array.isArray(waiting) || waiting.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'log-empty';
+      empty.textContent = 'Nenhuma chamada esperando.';
+      container.appendChild(empty);
       return;
     }
 
-    el('queueList').innerHTML = waiting.map((call) => {
-      const minutes = String(Math.floor(call.waiting_seconds / 60)).padStart(2, '0');
-      const seconds = String(call.waiting_seconds % 60).padStart(2, '0');
-      const label = call.caller_id_name || call.caller_id_num || call.channel;
-      return `<div class="queue-item">
-        <div class="info">
-          <div class="peer">${label}</div>
-          <div class="wait mono">esperando ${minutes}:${seconds}</div>
-        </div>
-        <button class="btn-primary" data-channel="${call.channel}" style="margin:0;">Atender</button>
-      </div>`;
-    }).join('');
-
-    document.querySelectorAll('#queueList button[data-channel]').forEach((btn) => {
-      btn.addEventListener('click', () => pickupFromQueue(apiUrl, btn.dataset.channel));
-    });
+    // O caller ID vem de terceiros via SIP; nunca injetá-lo como HTML.
+    for (const call of waiting) {
+      const row = document.createElement('div');
+      row.className = 'queue-item';
+      const info = document.createElement('div');
+      info.className = 'info';
+      const label = document.createElement('div');
+      label.className = 'peer';
+      label.textContent = String(call.caller_id_name || call.caller_id_num || call.channel || '');
+      const timer = document.createElement('div');
+      timer.className = 'wait mono';
+      const secondsTotal = Math.max(0, Number(call.waiting_seconds) || 0);
+      const minutes = String(Math.floor(secondsTotal / 60)).padStart(2, '0');
+      const seconds = String(Math.floor(secondsTotal % 60)).padStart(2, '0');
+      timer.textContent = `esperando ${minutes}:${seconds}`;
+      const button = document.createElement('button');
+      button.className = 'btn-primary';
+      button.style.margin = '0';
+      button.textContent = 'Atender';
+      button.addEventListener('click', () => pickupFromQueue(apiUrl, call.channel));
+      info.append(label, timer);
+      row.append(info, button);
+      container.appendChild(row);
+    }
   }
 
-  function pickupFromQueue(apiUrl, channel) {
+    function pickupFromQueue(apiUrl, channel) {
     const token = el('queueToken').value.trim();
     if (!token || !recordingApiIsSecure(apiUrl)) {
       alert('É necessário configurar credencial da fila e HTTPS.');
