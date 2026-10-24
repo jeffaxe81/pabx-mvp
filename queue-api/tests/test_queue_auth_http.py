@@ -33,6 +33,7 @@ def put_policy(path):
         credential(TOKENS["t2"], "t2"),
         credential(TOKENS["t10"], "t10", "agent", "t10-recepcao"),
     ]}), encoding="utf-8")
+    path.chmod(0o600)
 
 
 @pytest.fixture
@@ -191,6 +192,7 @@ def test_policy_revocation_invalid_schema_and_symlink_fail_closed(api, tmp_path)
 def test_invalid_credential_schema_rejected(tmp_path, invalid):
     policy = tmp_path / "access.json"
     policy.write_text(json.dumps(invalid))
+    policy.chmod(0o600)
     assert queue_access.load_queue_policy(policy) is None
 
 
@@ -198,6 +200,7 @@ def test_queue_policy_expiration_and_agent_role_restriction(tmp_path):
     policy = tmp_path / "access.json"
     item = credential("X"*48, "t1", "agent", "t1-recepcao", expiry=1000)
     policy.write_text(json.dumps({"credentials": [item]}))
+    policy.chmod(0o600)
     loaded = queue_access.load_queue_policy(policy)
     assert queue_access.authenticate_queue("Bearer " + "X"*48, loaded, now=999) is not None
     assert queue_access.authenticate_queue("Bearer " + "X"*48, loaded, now=1000) is None
