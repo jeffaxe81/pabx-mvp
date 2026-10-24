@@ -123,6 +123,10 @@ services:
       # Notificação de chamada perdida - vazio = desabilitado.
       # Preencha com "email", "whatsapp" ou "email,whatsapp" pra ativar.
       NOTIFY_CHANNELS: ""
+      # Destinatários SMTP/WhatsApp são globais nesta versão. Sem
+      # NOTIFY_TENANT explícito, envio externo é bloqueado mesmo com
+      # NOTIFY_CHANNELS ativo. Configure um tenant por destinatário.
+      NOTIFY_TENANT: ""
       SMTP_HOST: ""
       SMTP_PORT: "587"
       SMTP_USERNAME: ""
