@@ -63,7 +63,7 @@ def load_queue_policy(path):
             or not isinstance(digest, str) or not HEX_SHA256.fullmatch(digest)
             or digest in seen
             or not isinstance(tenant, str) or not TENANT.fullmatch(tenant)
-            or role not in ROLES
+            or not isinstance(role, str) or role not in ROLES
             or type(expires) not in (int, float) or not math.isfinite(expires)
             or expires <= 0
             or (role == "agent" and not _extension_belongs_to_tenant(extension, tenant))
