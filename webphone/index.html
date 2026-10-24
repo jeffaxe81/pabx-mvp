@@ -1363,27 +1363,35 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   }
 
   function renderMissedCalls(missedCalls) {
-    if (missedCalls.length === 0) {
-      el('missedCallsList').innerHTML = '<div class="log-empty">Nenhuma chamada perdida registrada.</div>';
+    const container = el('missedCallsList');
+    container.replaceChildren();
+    if (!Array.isArray(missedCalls) || missedCalls.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'log-empty';
+      empty.textContent = 'Nenhuma chamada perdida registrada.';
+      container.appendChild(empty);
       return;
     }
-
     const reasonLabel = {
-      NOANSWER: 'não atendida',
-      BUSY: 'ocupado',
-      CANCEL: 'cancelada pelo cliente',
-      CONGESTION: 'congestionamento',
+      NOANSWER: 'não atendida', BUSY: 'ocupado',
+      CANCEL: 'cancelada pelo cliente', CONGESTION: 'congestionamento',
       ABANDONED: 'desistiu na fila',
     };
-
-    el('missedCallsList').innerHTML = missedCalls.map((m) => {
-      const label = m.caller_id_name || m.caller_id_num;
-      const when = new Date(m.timestamp * 1000).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-      return `<div class="log-item">
-        <div class="peer">${label}</div>
-        <div class="meta missed">${reasonLabel[m.reason] || m.reason} · ${when}</div>
-      </div>`;
-    }).join('');
+    for (const missed of missedCalls) {
+      const item = document.createElement('div');
+      item.className = 'log-item';
+      const peer = document.createElement('div');
+      peer.className = 'peer';
+      peer.textContent = String(missed.caller_id_name || missed.caller_id_num || 'desconhecido');
+      const meta = document.createElement('div');
+      meta.className = 'meta missed';
+      const time = new Date(Number(missed.timestamp) * 1000);
+      const when = Number.isFinite(time.getTime())
+        ? time.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '—';
+      meta.textContent = `${reasonLabel[missed.reason] || String(missed.reason || '')} · ${when}`;
+      item.append(peer, meta);
+      container.appendChild(item);
+    }
   }
 
   // ---------- Métricas do dia ----------
