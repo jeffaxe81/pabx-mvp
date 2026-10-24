@@ -439,8 +439,8 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
       fetchScopedOperator('/api/metrics/today'),
       fetchScopedOperator('/api/extension-states'),
       fetchTenantQueue(),
-      fetch(`${apiUrl}/api/fraud-alerts`).then((r) => r.json()).catch(() => null),
-      fetch(`${apiUrl}/api/quality?only_poor=true`).then((r) => r.json()).catch(() => null),
+      fetchScopedOperator('/api/fraud-alerts'),
+      fetchScopedOperator('/api/quality?only_poor=true'),
       fetchScopedOperator('/api/metrics/sla'),
       fetchScopedOperator(`/api/reports/pauses${buildHistoryQuery(pauseHistoryFilter)}`),
       fetchScopedOperator(`/api/metrics/sla/history${buildHistoryQuery(slaHistoryFilter)}`),
@@ -531,41 +531,61 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     }).join('');
   }
 
+  function appendMonitorRow(container, labelText, valueText, detailText) {
+    const row = document.createElement('div');
+    row.className = 'item-row';
+    const label = document.createElement('span');
+    const dot = document.createElement('span');
+    dot.className = 'dot em-espera';
+    label.appendChild(dot);
+    label.appendChild(document.createTextNode(String(labelText)));
+    const value = document.createElement('span');
+    value.className = 'mono';
+    value.textContent = String(valueText);
+    row.append(label, value);
+    container.appendChild(row);
+    if (detailText !== undefined) {
+      const note = document.createElement('div');
+      note.style.fontSize = '12px';
+      note.style.color = 'var(--text-muted)';
+      note.style.margin = '-4px 0 6px 16px';
+      note.textContent = String(detailText);
+      container.appendChild(note);
+    }
+  }
+
   function renderQuality(reports) {
-    if (reports.length === 0) {
-      el('qualityList').innerHTML = '<div class="empty">Nenhum problema de qualidade detectado.</div>';
+    const container = el('qualityList');
+    container.replaceChildren();
+    if (!Array.isArray(reports) || reports.length === 0) {
+      container.textContent = 'Nenhum problema de qualidade detectado.';
       return;
     }
-    el('qualityList').innerHTML = reports.map((q) => {
-      const when = new Date(q.timestamp * 1000).toLocaleString('pt-BR');
+    for (const q of reports) {
+      const when = new Date(Number(q.timestamp) * 1000).toLocaleString('pt-BR');
       const jitter = q.jitter_ms != null ? `${q.jitter_ms}ms` : '—';
       const loss = q.packet_loss_percent != null ? `${q.packet_loss_percent}%` : '—';
-      return `<div class="item-row">
-        <span><span class="dot em-espera"></span>${q.channel}</span>
-        <span class="mono">jitter ${jitter} · perda ${loss}</span>
-      </div>
-      <div style="font-size:12px; color:var(--text-muted); margin:-4px 0 6px 16px;">${when}</div>`;
-    }).join('');
+      appendMonitorRow(container, q.channel || '', `jitter ${jitter} · perda ${loss}`, when);
+    }
   }
 
   function renderFraudAlerts(alerts) {
-    if (alerts.length === 0) {
-      el('fraudAlertsList').innerHTML = '<div class="empty">Nenhum alerta.</div>';
+    const container = el('fraudAlertsList');
+    container.replaceChildren();
+    if (!Array.isArray(alerts) || alerts.length === 0) {
+      container.textContent = 'Nenhum alerta.';
       return;
     }
     const typeLabel = {
-      volume_anormal: 'Volume anormal',
-      limite_gasto: 'Limite de gasto excedido',
+      volume_anormal: 'Volume anormal', limite_gasto: 'Limite de gasto excedido',
       bloqueio_automatico: 'Bloqueio automático',
     };
-    el('fraudAlertsList').innerHTML = alerts.map((a) => {
-      const when = new Date(a.timestamp * 1000).toLocaleString('pt-BR');
-      return `<div class="item-row">
-        <span><span class="dot em-espera"></span>${typeLabel[a.type] || a.type} — ramal ${a.extension}</span>
-        <span class="mono">${when}</span>
-      </div>
-      <div style="font-size:12px; color:var(--text-muted); margin:-4px 0 6px 16px;">${a.detail}</div>`;
-    }).join('');
+    for (const alert of alerts) {
+      const when = new Date(Number(alert.timestamp) * 1000).toLocaleString('pt-BR');
+      appendMonitorRow(container,
+        `${typeLabel[alert.type] || String(alert.type || '')} — ramal ${alert.extension || ''}`,
+        when, alert.detail || '');
+    }
   }
 
   function renderMetrics(m) {
