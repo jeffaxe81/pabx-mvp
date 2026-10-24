@@ -43,7 +43,7 @@ from presence import validate_presence_input, load_presence, set_presence, clear
 from agent_pause import validate_pause_request, AgentPauseStore, merge_pause_into_states, PauseHistoryStore, summarize_pause_time_by_reason, summarize_pause_time_by_extension, filter_pause_records_by_date_range
 from metrics import DailyMetrics
 from queue_sla import QueueSLATracker, SLAHistoryStore, summarize_sla_history_by_date, filter_sla_history_by_date_range
-from pickup import validate_pickup_request
+from pickup import validate_pickup_request, pickup_matches_queue
 from extension_states import ExtensionStateTracker
 from reports import parse_cdr_for_report, CallLogStore, aggregate, group_by, extract_operator
 from screen_pop import dispatch_screen_pop
@@ -573,6 +573,12 @@ class Handler(BaseHTTPRequestHandler):
         if not ok:
             status = 403 if "autorizado" in error else 400
             self._send_json(status, {"error": error})
+            return
+
+        # Uma extensão autorizada não pode puxar fila de outra empresa.
+        # O vínculo canal/fila vem do AMI, e nunca do corpo da requisição.
+        if not pickup_matches_queue(extension, state.queue_for_channel(channel)):
+            self._send_json(403, {"error": "pickup nao autorizado para esta fila"})
             return
 
         if ami is None:
