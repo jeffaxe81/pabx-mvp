@@ -42,7 +42,7 @@ from callbacks import (
 from survey import parse_survey_event, SurveyStore, average_score, score_distribution, summarize_by_operator
 from presence import validate_presence_input, load_presence, set_presence, clear_presence, merge_presence_into_states
 from agent_pause import validate_pause_request, AgentPauseStore, merge_pause_into_states, PauseHistoryStore, summarize_pause_time_by_reason, summarize_pause_time_by_extension, filter_pause_records_by_date_range
-from metrics import DailyMetrics
+from metrics import DailyMetrics, TenantDailyMetrics
 from queue_sla import QueueSLATracker, SLAHistoryStore, summarize_sla_history_by_date, filter_sla_history_by_date_range
 from pickup import validate_pickup_request, pickup_matches_queue, queue_tenant
 from queue_access import load_queue_policy, authenticate_queue, may_pickup
@@ -140,6 +140,7 @@ PAUSE_HISTORY_PATH = os.environ.get("PAUSE_HISTORY_PATH", "/app/data/pause_histo
 state = QueueStateTracker()
 missed_calls_log = MissedCallsLog()
 daily_metrics = DailyMetrics()
+tenant_daily_metrics = TenantDailyMetrics()
 sla_history_store = SLAHistoryStore(SLA_HISTORY_PATH)
 queue_sla_tracker = QueueSLATracker(threshold_seconds=SLA_THRESHOLD_SECONDS, history_store=sla_history_store)
 extension_states = ExtensionStateTracker()
@@ -156,6 +157,7 @@ def handle_ami_event(event: dict):
     """Callback único do AMI: alimenta fila, chamadas perdidas, métricas, estado dos ramais, relatórios, fraude e qualidade."""
     state.apply_event(event)
     daily_metrics.apply_cdr_event(event)
+    tenant_daily_metrics.apply_cdr_event(event)
     queue_sla_tracker.apply_event(event)
     extension_states.apply_event(event)
     agent_pause_store.apply_event(event)
@@ -281,7 +283,8 @@ class Handler(BaseHTTPRequestHandler):
         return (
             path in {
                 "/api/queue", "/api/queue/pickup", "/api/queue/pause",
-                "/api/presence", "/api/reports/pauses",
+                "/api/presence", "/api/reports/pauses", "/api/reports",
+                "/api/metrics/today", "/api/metrics/sla", "/api/metrics/sla/history",
             }
             or path.startswith("/api/presence/")
             or path == "/api/extension" + "-states"
@@ -411,22 +414,38 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json(200, {"alerts": fraud_alerts_log.list()})
         elif self.path.startswith("/api/quality"):
             self._handle_quality_query()
-        elif self.path.startswith("/api/metrics/today"):
-            self._send_json(200, daily_metrics.snapshot())
-        elif self.path.startswith("/api/metrics/sla/history"):
-            # Precisa vir ANTES de "/api/metrics/sla" - startswith()
-            # faria essa rota cair na de hoje por engano, já que
-            # "/api/metrics/sla/history" também começa com
-            # "/api/metrics/sla".
+        elif urlparse(self.path).path == "/api/metrics/today":
+            identity = self._require_queue_identity()
+            if identity is None:
+                return
+            self._send_queue_json(200, tenant_daily_metrics.snapshot(identity["tenant"]))
+        elif urlparse(self.path).path == "/api/metrics/sla/history":
+            identity = self._require_queue_identity()
+            if identity is None:
+                return
             query = parse_qs(urlparse(self.path).query)
+            tenant_records = [
+                record for record in sla_history_store.load_all()
+                if isinstance(record, dict)
+                and queue_tenant(record.get("queue")) == identity["tenant"]
+            ]
             records = filter_sla_history_by_date_range(
-                sla_history_store.load_all(),
+                tenant_records,
                 start=query.get("start", [None])[0],
                 end=query.get("end", [None])[0],
             )
-            self._send_json(200, {"by_date": summarize_sla_history_by_date(records)})
-        elif self.path.startswith("/api/metrics/sla"):
-            self._send_json(200, {"threshold_seconds": SLA_THRESHOLD_SECONDS, "queues": queue_sla_tracker.snapshot()})
+            self._send_queue_json(200, {"by_date": summarize_sla_history_by_date(records)})
+        elif urlparse(self.path).path == "/api/metrics/sla":
+            identity = self._require_queue_identity()
+            if identity is None:
+                return
+            scoped = {
+                queue: stats for queue, stats in queue_sla_tracker.snapshot().items()
+                if queue_tenant(queue) == identity["tenant"]
+            }
+            self._send_queue_json(200, {
+                "threshold_seconds": SLA_THRESHOLD_SECONDS, "queues": scoped,
+            })
         elif urlparse(self.path).path == "/api/reports/pauses":
             identity = self._require_queue_identity()
             if identity is None:
@@ -465,7 +484,7 @@ class Handler(BaseHTTPRequestHandler):
             allowed_presence = {ext: entry for ext, entry in load_presence(PRESENCE_PATH).items()
                                 if isinstance(ext, str) and ext.startswith(prefix)}
             self._send_queue_json(200, {"presence": allowed_presence})
-        elif self.path.startswith("/api/reports"):
+        elif urlparse(self.path).path == "/api/reports":
             self._handle_reports()
         elif self.path.startswith("/api/campaigns/"):
             self._handle_get_campaign()
@@ -500,19 +519,24 @@ class Handler(BaseHTTPRequestHandler):
             })
 
     def _handle_reports(self):
+        identity = self._require_queue_identity()
+        if identity is None:
+            return
         query = parse_qs(urlparse(self.path).query)
         start = query.get("start", [None])[0]
         end = query.get("end", [None])[0]
         operator = query.get("operator", [None])[0]
-        tenant = query.get("tenant", [None])[0]
         group_field = query.get("group_by", [None])[0]
 
-        records = call_log_store.query(start=start, end=end, operator=operator, tenant=tenant)
+        # Ignore tenant supplied by client, even in a grouped report.
+        records = call_log_store.query(
+            start=start, end=end, operator=operator, tenant=identity["tenant"],
+        )
 
         if group_field in ("operator", "tenant", "date"):
-            self._send_json(200, {"groups": group_by(records, group_field)})
+            self._send_queue_json(200, {"groups": group_by(records, group_field)})
         else:
-            self._send_json(200, aggregate(records))
+            self._send_queue_json(200, aggregate(records))
 
     def _handle_list_recordings(self):
         access = self._require_recording_identity()
