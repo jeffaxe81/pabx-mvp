@@ -103,7 +103,9 @@ def test_authenticated_tenant_only_sees_own_entries(api, path, key):
         assert b"UNATTRIBUTED" not in raw
         for other in TOKENS:
             if other != tenant:
-                assert ("PRIVATE-" + other).encode() not in raw
+                # Compara o valor completo: PRIVATE-t1 é prefixo de
+                # PRIVATE-t10 e não indica vazamento entre empresas.
+                assert ("PRIVATE-" + other + '"').encode() not in raw
 
 
 @pytest.mark.parametrize("path", [
