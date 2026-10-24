@@ -164,3 +164,4 @@ registrado como regra permanente no prompt master
 112. [Pickup de chamadas restrito à empresa](manual-112-pickup-isolamento-tenant.md)
 113. [Filas: autenticação Bearer e visibilidade por tenant](manual-113-autenticacao-filas-tenant.md)
 114. [Presença, pausa e estados por empresa](manual-114-presenca-pausa-isoladas.md)
+115. [Métricas, SLA e relatórios CDR por tenant](manual-115-metricas-sla-tenant.md)

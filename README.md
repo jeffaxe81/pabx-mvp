@@ -914,3 +914,4 @@ Veja o [Manual 100](docs/manual-100-release-evidence.md).
 113. [Filas: credenciais temporárias e isolamento de chamadas](docs/manual-113-autenticacao-filas-tenant.md)
 114. [Presença e pausa com autenticação de tenant](docs/manual-114-presenca-pausa-isoladas.md)
 Plano de aceleração: [100 dias do AXE PABX](docs/roadmap-100-dias-antecipacao-pabx.md)
+115. [Indicadores e SLA com isolamento entre empresas](docs/manual-115-metricas-sla-tenant.md)
