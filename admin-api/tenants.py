@@ -292,8 +292,14 @@ exten => 600,1,Answer()
  same => n,Echo()
  same => n,Hangup()
 
-exten => *97,1,VoiceMailMain(${{CALLERID(num)}}@{tenant_id})
+; *97 só pode abrir o mailbox do endpoint SIP autenticado.
+exten => *97,1,Set(VM_ENDPOINT=${{CHANNEL(endpoint)}})
+ same => n,GotoIf($["${{VM_ENDPOINT}}" = ""]?voicemail-negado)
+ same => n,GotoIf($["${{PJSIP_ENDPOINT(${{VM_ENDPOINT}},context)}}" != "{tenant_id}-internal"]?voicemail-negado)
+ same => n,GotoIf($["${{PJSIP_ENDPOINT(${{VM_ENDPOINT}},mailboxes)}}" != "${{VM_ENDPOINT}}@{tenant_id}"]?voicemail-negado)
+ same => n,VoiceMailMain(${{VM_ENDPOINT}}@{tenant_id})
  same => n,Hangup()
+ same => n(voicemail-negado),Hangup(21)
 
 exten => _0.,1,Set(DESTINO=${{EXTEN:1}})
  same => n,GotoIf($["${{DB(blocklist-{tenant_id}/${{DESTINO}})}}" = "1"]?numero-bloqueado,1)
