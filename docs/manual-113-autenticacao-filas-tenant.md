@@ -76,6 +76,15 @@ da política de gravações.
   clientes de teste para o novo Bearer; permanecem negativos de
   redirecionamento entre empresas.
 
+## Proteção adicional da interface
+
+A identificação do chamador vem de origem externa e pode conter caracteres
+interpretáveis como HTML. Os componentes de fila do Webphone e do painel
+operacional usam agora `createElement` e `textContent` em vez de gerar
+`innerHTML` com CallerID. A regressão estática
+`scripts/tests/test_queue_ui_security.py` impede esse retorno e verifica
+que o Bearer não é gravado em links ou armazenamento do navegador.
+
 ## Limitações — sem GO
 
 O token é uma credencial temporária independente do SIP/SSO. A identidade
