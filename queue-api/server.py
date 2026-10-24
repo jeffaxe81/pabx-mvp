@@ -97,6 +97,10 @@ QUALITY_PACKET_LOSS_THRESHOLD_PERCENT = float(os.environ.get("QUALITY_PACKET_LOS
 # ambiente (ex: "email,whatsapp"). Vazio = notificação desabilitada,
 # mas o histórico de chamadas perdidas continua funcionando.
 NOTIFY_CHANNELS = [c.strip() for c in os.environ.get("NOTIFY_CHANNELS", "").split(",") if c.strip()]
+# Destinatários SMTP/WhatsApp legados são globais. Só um tenant
+# explicitamente cadastrado pode usar estes destinatários.
+# Sem NOTIFY_TENANT, notificações externas ficam negadas.
+NOTIFY_TENANT = os.environ.get("NOTIFY_TENANT", "").strip()
 NOTIFY_CONFIG = {
     "channels": NOTIFY_CHANNELS,
     "smtp": {
@@ -193,8 +197,9 @@ def handle_ami_event(event: dict):
     if missed and tenant:
         missed["tenant"] = tenant
         missed_calls_log.append(missed)
-        for error in dispatch_notifications(missed, NOTIFY_CONFIG):
-            print(f"[AVISO] falha ao notificar chamada perdida: {error}")
+        if tenant == NOTIFY_TENANT:
+            for error in dispatch_notifications(missed, NOTIFY_CONFIG):
+                print(f"[AVISO] falha ao notificar chamada perdida: {error}")
 
     screen_pop_error = dispatch_screen_pop(event, CRM_WEBHOOK_URL)
     if screen_pop_error:
