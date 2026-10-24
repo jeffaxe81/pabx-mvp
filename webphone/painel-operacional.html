@@ -614,19 +614,29 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   }
 
   function renderQueue(waiting) {
-    if (waiting.length === 0) {
-      el('queueList').innerHTML = '<div class="empty">Nenhuma chamada esperando.</div>';
+    const container = el('queueList');
+    container.replaceChildren();
+    if (!Array.isArray(waiting) || waiting.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'empty';
+      empty.textContent = 'Nenhuma chamada esperando.';
+      container.appendChild(empty);
       return;
     }
-    el('queueList').innerHTML = waiting.map((call) => {
-      const minutes = String(Math.floor(call.waiting_seconds / 60)).padStart(2, '0');
-      const seconds = String(call.waiting_seconds % 60).padStart(2, '0');
-      const label = call.caller_id_name || call.caller_id_num || call.channel;
-      return `<div class="item-row">
-        <span>${label}</span>
-        <span class="wait-time mono">${minutes}:${seconds}</span>
-      </div>`;
-    }).join('');
+
+    // Nomes e números podem vir de CallerID externo: somente textContent.
+    for (const call of waiting) {
+      const row = document.createElement('div');
+      row.className = 'item-row';
+      const label = document.createElement('span');
+      label.textContent = String(call.caller_id_name || call.caller_id_num || call.channel || '');
+      const timer = document.createElement('span');
+      timer.className = 'wait-time mono';
+      const total = Math.max(0, Number(call.waiting_seconds) || 0);
+      timer.textContent = `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(Math.floor(total % 60)).padStart(2, '0')}`;
+      row.append(label, timer);
+      container.appendChild(row);
+    }
   }
 
   fetchAll();
