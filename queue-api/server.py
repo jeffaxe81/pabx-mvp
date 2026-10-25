@@ -53,6 +53,7 @@ from fraud_detection import CallRateTracker, FraudAlertsLog, is_external_call, i
 from quality_monitoring import parse_quality_event, is_poor_quality, QualityLog
 from monitoring_access import extension_tenant, channel_tenant
 from monitoring_access import monitoring_event_tenant, scoped_monitoring_entries
+from outbound_safety import outbound_lock
 
 AMI_HOST = os.environ.get("AMI_HOST", "127.0.0.1")
 AMI_PORT = int(os.environ.get("AMI_PORT", "5038"))
@@ -219,7 +220,7 @@ def handle_ami_event(event: dict):
                 and extension_tenant(tenant + "-recepcao") == tenant
                 and all(event.get(key) == tenant for key in ("AccountCode", "Accountcode")
                         if key in event)):
-            with OUTBOUND_LOCK:
+            with outbound_lock(CALLBACKS_PATH):
                 add_callback_request(CALLBACKS_PATH, callback_request["caller_id_num"],
                                      callback_request["caller_id_name"], tenant=tenant)
 
@@ -258,7 +259,7 @@ def apply_callback_dial_result(event: dict):
     if not tenant or not disposition or not number:
         return
 
-    with OUTBOUND_LOCK:
+    with outbound_lock(CALLBACKS_PATH):
         for callback in load_callbacks(CALLBACKS_PATH):
             if (callback.get("tenant") == tenant
                     and callback["caller_id_num"] == number
@@ -277,7 +278,7 @@ def apply_campaign_dial_result(event: dict):
     if not tenant or not disposition or not number:
         return
 
-    with OUTBOUND_LOCK:
+    with outbound_lock(CAMPAIGNS_PATH):
         for campaign in load_campaigns(CAMPAIGNS_PATH):
             if campaign.get("tenant") != tenant:
                 continue
@@ -950,7 +951,7 @@ class Handler(BaseHTTPRequestHandler):
             self._send_queue_json(403, {"error": "ramal de outra empresa"})
             return
         data["tenant"] = identity["tenant"]
-        with OUTBOUND_LOCK:
+        with outbound_lock(CAMPAIGNS_PATH):
             ok, error, campaign = create_campaign(CAMPAIGNS_PATH, data)
         if not ok:
             self._send_queue_json(400, {"error": error})
@@ -982,7 +983,7 @@ class Handler(BaseHTTPRequestHandler):
 
         # Claim precisa incluir a leitura do pendente: duas requisições
         # HTTP simultâneas não podem originar o mesmo contato.
-        with OUTBOUND_LOCK:
+        with outbound_lock(CAMPAIGNS_PATH):
             campaign = find_campaign(load_campaigns(CAMPAIGNS_PATH), campaign_id)
             if not campaign or campaign.get("tenant") != identity["tenant"] or not may_pickup(
                     identity, campaign.get("agent_extension")):
@@ -1041,7 +1042,7 @@ class Handler(BaseHTTPRequestHandler):
             self._send_queue_json(503, {"error": "AMI nao conectado"})
             return
 
-        with OUTBOUND_LOCK:
+        with outbound_lock(CALLBACKS_PATH):
             callback = next_pending_callback([
                 c for c in load_callbacks(CALLBACKS_PATH)
                 if c.get("tenant") == identity["tenant"]
