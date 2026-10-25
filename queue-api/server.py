@@ -219,8 +219,9 @@ def handle_ami_event(event: dict):
                 and extension_tenant(tenant + "-recepcao") == tenant
                 and all(event.get(key) == tenant for key in ("AccountCode", "Accountcode")
                         if key in event)):
-            add_callback_request(CALLBACKS_PATH, callback_request["caller_id_num"],
-                                 callback_request["caller_id_name"], tenant=tenant)
+            with OUTBOUND_LOCK:
+                add_callback_request(CALLBACKS_PATH, callback_request["caller_id_num"],
+                                     callback_request["caller_id_name"], tenant=tenant)
 
     survey_result = parse_survey_event(event)
     if survey_result and survey_result.get("tenant"):
@@ -1038,24 +1039,43 @@ class Handler(BaseHTTPRequestHandler):
             self._send_queue_json(503, {"error": "AMI nao conectado"})
             return
 
-        mark_callback_calling(CALLBACKS_PATH, callback["id"])
-        action = {
-            "Action": "Originate",
-            "Channel": f"PJSIP/{number}@gateway-tdm",
-            "Context": CALLBACK_CONNECT_CONTEXT,
-            "Exten": "s",
-            "Priority": "1",
-            "Async": "true",
-            "Timeout": "30000",
-            "CallerID": f'"Retorno de chamada" <{number}>',
-            "Variable": "TENANT=" + identity["tenant"],
-            "Account": identity["tenant"],
-        }
-        response = ami.send_action(action)
-        if response.get("Response") == "Success":
-            self._send_queue_json(200, {"ok": True, "dialing": number})
-        else:
-            self._send_queue_json(502, {"error": "falha ao originar chamada"})
+        with OUTBOUND_LOCK:
+            callback = next_pending_callback([
+                c for c in load_callbacks(CALLBACKS_PATH)
+                if c.get("tenant") == identity["tenant"]
+            ])
+            if not callback:
+                self._send_queue_json(200, {"done": True, "message": "nenhum callback pendente"})
+                return
+            number = callback.get("caller_id_num")
+            if not isinstance(number, str) or sanitize_phone_number(number) != number:
+                self._send_queue_json(400, {"error": "numero de callback invalido"})
+                return
+            ok, error = mark_callback_calling(CALLBACKS_PATH, callback["id"])
+            if not ok:
+                self._send_queue_json(409, {"error": "callback nao reservado"})
+                return
+            action = {
+                "Action": "Originate",
+                "Channel": f"PJSIP/{number}@gateway-tdm",
+                "Context": CALLBACK_CONNECT_CONTEXT,
+                "Exten": "s",
+                "Priority": "1",
+                "Async": "true",
+                "Timeout": "30000",
+                "CallerID": f'"Retorno de chamada" <{number}>',
+                "Variable": "TENANT=" + identity["tenant"],
+                "Account": identity["tenant"],
+            }
+            try:
+                response = ami.send_action(action)
+            except (OSError, TimeoutError, ConnectionError):
+                self._send_queue_json(502, {"error": "resultado AMI incerto; conferir estado"})
+                return
+            if response.get("Response") == "Success":
+                self._send_queue_json(200, {"ok": True, "dialing": number})
+            else:
+                self._send_queue_json(502, {"error": "falha ao originar chamada"})
 
     def log_message(self, format, *args):
         pass  # log padrão do BaseHTTPRequestHandler é barulhento demais
