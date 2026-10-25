@@ -15,6 +15,8 @@ import secrets
 import time
 from pathlib import Path
 
+from outbound_safety import atomic_write_json
+
 NUMBER_RE = re.compile(r"^[0-9]{8,20}$")
 MAX_ATTEMPTS = 3
 
@@ -60,7 +62,7 @@ def load_campaigns(path) -> list:
 
 
 def save_campaigns(path, campaigns: list):
-    Path(path).write_text(json.dumps(campaigns, indent=2, ensure_ascii=False), encoding="utf-8")
+    atomic_write_json(path, campaigns)
 
 
 def find_campaign(campaigns: list, campaign_id: str):
@@ -162,6 +164,9 @@ def mark_contact_result(path, campaign_id: str, number: str, disposition: str):
     contact = next((c for c in campaign["contacts"] if c["number"] == number), None)
     if not contact:
         return False, f"contato '{number}' não encontrado na campanha"
+
+    if contact["status"] != "discando":
+        return False, "contato nao esta discando"
 
     status = DISPOSITION_TO_STATUS.get(disposition, "falha")
     if status != "atendida" and contact["attempts"] < MAX_ATTEMPTS:
