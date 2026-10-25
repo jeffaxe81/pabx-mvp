@@ -947,7 +947,8 @@ class Handler(BaseHTTPRequestHandler):
             self._send_queue_json(403, {"error": "ramal de outra empresa"})
             return
         data["tenant"] = identity["tenant"]
-        ok, error, campaign = create_campaign(CAMPAIGNS_PATH, data)
+        with OUTBOUND_LOCK:
+            ok, error, campaign = create_campaign(CAMPAIGNS_PATH, data)
         if not ok:
             self._send_queue_json(400, {"error": error})
             return
@@ -976,15 +977,35 @@ class Handler(BaseHTTPRequestHandler):
             self._send_queue_json(503, {"error": "AMI nao conectado"})
             return
 
-        mark_contact_calling(CAMPAIGNS_PATH, campaign_id, contact["number"])
-        action = build_originate_action(f"PJSIP/{campaign['agent_extension']}",
-                                        contact["number"], CLICK_TO_CALL_CONTEXT)
-        action["Account"] = identity["tenant"]
-        response = ami.send_action(action)
-        if response.get("Response") == "Success":
-            self._send_queue_json(200, {"ok": True, "dialing": contact["number"]})
-        else:
-            self._send_queue_json(502, {"error": "falha ao originar chamada"})
+        # Claim precisa incluir a leitura do pendente: duas requisições
+        # HTTP simultâneas não podem originar o mesmo contato.
+        with OUTBOUND_LOCK:
+            campaign = find_campaign(load_campaigns(CAMPAIGNS_PATH), campaign_id)
+            if not campaign or campaign.get("tenant") != identity["tenant"] or not may_pickup(
+                    identity, campaign.get("agent_extension")):
+                self._send_queue_json(404, {"error": "campanha nao encontrada"})
+                return
+            contact = next_pending_contact(campaign)
+            if not contact:
+                self._send_queue_json(200, {"done": True, "message": "nenhum contato pendente"})
+                return
+            ok, error = mark_contact_calling(CAMPAIGNS_PATH, campaign_id, contact["number"])
+            if not ok:
+                self._send_queue_json(409, {"error": "contato nao reservado"})
+                return
+            action = build_originate_action(f"PJSIP/{campaign['agent_extension']}",
+                                            contact["number"], CLICK_TO_CALL_CONTEXT)
+            action["Account"] = identity["tenant"]
+            action["Variable"] = "TENANT=" + identity["tenant"]
+            try:
+                response = ami.send_action(action)
+            except (OSError, TimeoutError, ConnectionError):
+                self._send_queue_json(502, {"error": "resultado AMI incerto; conferir estado"})
+                return
+            if response.get("Response") == "Success":
+                self._send_queue_json(200, {"ok": True, "dialing": contact["number"]})
+            else:
+                self._send_queue_json(502, {"error": "falha ao originar chamada"})
 
     def _handle_list_callbacks(self):
         identity = self._require_campaign_api_key()
