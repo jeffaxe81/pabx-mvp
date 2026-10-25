@@ -818,122 +818,174 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json(502, {"error": "falha ao originar chamada", "detail": response})
 
     def _require_campaign_api_key(self):
+        """Autorização dupla: Bearer do tenant + chave de originação.
+
+        A chave global sozinha nunca autoriza listar, criar ou discar.
+        Agentes não podem iniciar discagem massiva/callbacks.
         """
-        Campanhas usam a MESMA chave e checagem do click-to-call
-        (mesma categoria de risco: originar chamada via AMI). Retorna
-        True se autorizado, senão já respondeu o erro e retorna False.
-        """
-        api_key = self.headers.get("X-Click-To-Call-Key", "")
+        identity = self._require_queue_identity()
+        if identity is None:
+            return None
+        if identity.get("role") not in {"supervisor", "admin"}:
+            self._send_queue_json(403, {"error": "papel nao autorizado"})
+            return None
         configured_key = CLICK_TO_CALL_CONFIG.get("api_key", "")
+        api_key = self.headers.get("X-Click-To-Call-Key", "")
         if not configured_key:
-            self._send_json(503, {"error": "campanhas não configuradas (sem API key definida)"})
-            return False
-        if api_key != configured_key:
-            self._send_json(403, {"error": "chave de API inválida"})
-            return False
-        return True
+            self._send_queue_json(503, {"error": "campanhas nao configuradas"})
+            return None
+        import hmac
+        if not hmac.compare_digest(api_key, configured_key):
+            self._send_queue_json(403, {"error": "chave de API invalida"})
+            return None
+        return identity
+
+    def _read_campaign_json(self):
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+        except (TypeError, ValueError):
+            self._send_queue_json(400, {"error": "Content-Length invalido"})
+            return None
+        if not 0 < length <= 65536:
+            self._send_queue_json(400, {"error": "corpo invalido ou muito grande"})
+            return None
+        try:
+            data = json.loads(self.rfile.read(length))
+        except (ValueError, UnicodeError):
+            self._send_queue_json(400, {"error": "JSON invalido"})
+            return None
+        if not isinstance(data, dict):
+            self._send_queue_json(400, {"error": "JSON deve ser objeto"})
+            return None
+        return data
 
     def _handle_list_campaigns(self):
-        if not self._require_campaign_api_key():
+        identity = self._require_campaign_api_key()
+        if identity is None:
             return
-        campaigns = load_campaigns(CAMPAIGNS_PATH)
+        campaigns = [
+            c for c in load_campaigns(CAMPAIGNS_PATH)
+            if c.get("tenant") == identity["tenant"]
+            and may_pickup(identity, c.get("agent_extension"))
+        ]
         summaries = [{**c, "summary": campaign_summary(c)} for c in campaigns]
-        self._send_json(200, {"campaigns": summaries})
+        self._send_queue_json(200, {"campaigns": summaries})
 
     def _handle_get_campaign(self):
-        if not self._require_campaign_api_key():
+        identity = self._require_campaign_api_key()
+        if identity is None:
             return
-        campaign_id = self.path[len("/api/campaigns/"):].split("/")[0]
+        path = urlparse(self.path).path
+        campaign_id = path[len("/api/campaigns/"):]
+        if not campaign_id or "/" in campaign_id:
+            self._send_queue_json(404, {"error": "campanha nao encontrada"})
+            return
         campaign = find_campaign(load_campaigns(CAMPAIGNS_PATH), campaign_id)
-        if not campaign:
-            self._send_json(404, {"error": "campanha não encontrada"})
+        if not campaign or campaign.get("tenant") != identity["tenant"] or not may_pickup(
+                identity, campaign.get("agent_extension")):
+            self._send_queue_json(404, {"error": "campanha nao encontrada"})
             return
-        self._send_json(200, {**campaign, "summary": campaign_summary(campaign)})
+        self._send_queue_json(200, {**campaign, "summary": campaign_summary(campaign)})
 
     def _handle_create_campaign(self):
-        if not self._require_campaign_api_key():
+        identity = self._require_campaign_api_key()
+        if identity is None:
             return
-        length = int(self.headers.get("Content-Length", 0))
-        try:
-            data = json.loads(self.rfile.read(length) or b"{}")
-        except json.JSONDecodeError:
-            self._send_json(400, {"error": "JSON invalido"})
+        data = self._read_campaign_json()
+        if data is None:
             return
-
+        if not may_pickup(identity, data.get("agent_extension")):
+            self._send_queue_json(403, {"error": "ramal de outra empresa"})
+            return
+        data["tenant"] = identity["tenant"]
         ok, error, campaign = create_campaign(CAMPAIGNS_PATH, data)
         if not ok:
-            self._send_json(400, {"error": error})
+            self._send_queue_json(400, {"error": error})
             return
-        self._send_json(201, campaign)
+        self._send_queue_json(201, campaign)
 
     def _handle_dial_next_contact(self):
-        if not self._require_campaign_api_key():
+        identity = self._require_campaign_api_key()
+        if identity is None:
             return
-
-        campaign_id = self.path[len("/api/campaigns/"):].split("/")[0]
+        path = urlparse(self.path).path
+        campaign_id = path[len("/api/campaigns/"):-len("/dial-next")].rstrip("/")
+        if not campaign_id or "/" in campaign_id:
+            self._send_queue_json(404, {"error": "campanha nao encontrada"})
+            return
         campaign = find_campaign(load_campaigns(CAMPAIGNS_PATH), campaign_id)
-        if not campaign:
-            self._send_json(404, {"error": "campanha não encontrada"})
+        if not campaign or campaign.get("tenant") != identity["tenant"] or not may_pickup(
+                identity, campaign.get("agent_extension")):
+            self._send_queue_json(404, {"error": "campanha nao encontrada"})
             return
 
         contact = next_pending_contact(campaign)
         if not contact:
-            self._send_json(200, {"done": True, "message": "nenhum contato pendente"})
+            self._send_queue_json(200, {"done": True, "message": "nenhum contato pendente"})
             return
-
         if ami is None:
-            self._send_json(503, {"error": "AMI nao conectado"})
+            self._send_queue_json(503, {"error": "AMI nao conectado"})
             return
 
         mark_contact_calling(CAMPAIGNS_PATH, campaign_id, contact["number"])
-        action = build_originate_action(f"PJSIP/{campaign['agent_extension']}", contact["number"], CLICK_TO_CALL_CONTEXT)
+        action = build_originate_action(f"PJSIP/{campaign['agent_extension']}",
+                                        contact["number"], CLICK_TO_CALL_CONTEXT)
+        action["Account"] = identity["tenant"]
         response = ami.send_action(action)
         if response.get("Response") == "Success":
-            self._send_json(200, {"ok": True, "dialing": contact["number"]})
+            self._send_queue_json(200, {"ok": True, "dialing": contact["number"]})
         else:
-            self._send_json(502, {"error": "falha ao originar chamada", "detail": response})
+            self._send_queue_json(502, {"error": "falha ao originar chamada"})
 
     def _handle_list_callbacks(self):
-        if not self._require_campaign_api_key():
+        identity = self._require_campaign_api_key()
+        if identity is None:
             return
-        self._send_json(200, {"callbacks": load_callbacks(CALLBACKS_PATH)})
+        callbacks = [c for c in load_callbacks(CALLBACKS_PATH)
+                     if c.get("tenant") == identity["tenant"]]
+        self._send_queue_json(200, {"callbacks": callbacks})
 
     def _handle_dial_next_callback(self):
-        """
-        Diferente de campanhas: aqui o Originate disca DIRETO pro
-        número do cliente através do tronco (não pra um ramal interno
-        primeiro) - quando ele atender, o contexto callback-connect
-        conecta com o atendente. É o mesmo mecanismo do click-to-call,
-        só que na ordem inversa.
-        """
-        if not self._require_campaign_api_key():
+        identity = self._require_campaign_api_key()
+        if identity is None:
             return
-
-        callback = next_pending_callback(load_callbacks(CALLBACKS_PATH))
+        callback = next_pending_callback([
+            c for c in load_callbacks(CALLBACKS_PATH)
+            if c.get("tenant") == identity["tenant"]
+        ])
         if not callback:
-            self._send_json(200, {"done": True, "message": "nenhum callback pendente"})
+            self._send_queue_json(200, {"done": True, "message": "nenhum callback pendente"})
             return
-
+        from campaigns import sanitize_phone_number
+        number = callback.get("caller_id_num")
+        if (not isinstance(number, str) or sanitize_phone_number(number) != number):
+            self._send_queue_json(400, {"error": "numero de callback invalido"})
+            return
+        if not CALLBACK_CONNECT_CONTEXT:
+            self._send_queue_json(503, {"error": "contexto de callback nao configurado"})
+            return
         if ami is None:
-            self._send_json(503, {"error": "AMI nao conectado"})
+            self._send_queue_json(503, {"error": "AMI nao conectado"})
             return
 
         mark_callback_calling(CALLBACKS_PATH, callback["id"])
         action = {
             "Action": "Originate",
-            "Channel": f"PJSIP/{callback['caller_id_num']}@gateway-tdm",
+            "Channel": f"PJSIP/{number}@gateway-tdm",
             "Context": CALLBACK_CONNECT_CONTEXT,
             "Exten": "s",
             "Priority": "1",
             "Async": "true",
             "Timeout": "30000",
-            "CallerID": f'"Retorno de chamada" <{callback["caller_id_num"]}>',
+            "CallerID": f'"Retorno de chamada" <{number}>',
+            "Variable": "TENANT=" + identity["tenant"],
+            "Account": identity["tenant"],
         }
         response = ami.send_action(action)
         if response.get("Response") == "Success":
-            self._send_json(200, {"ok": True, "dialing": callback["caller_id_num"]})
+            self._send_queue_json(200, {"ok": True, "dialing": number})
         else:
-            self._send_json(502, {"error": "falha ao originar chamada", "detail": response})
+            self._send_queue_json(502, {"error": "falha ao originar chamada"})
 
     def log_message(self, format, *args):
         pass  # log padrão do BaseHTTPRequestHandler é barulhento demais
