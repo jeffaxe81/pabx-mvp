@@ -275,7 +275,9 @@ def test_click_to_call_malformed_bodies_and_no_ami_side_effects(api):
 def test_click_to_call_preflight_and_cors_restrict_origin(api):
     base, _, _, ami, policy = api
     url = "/api/click-to-call"
-    bad = request(base, url, TOKENS["t1"], KEY, origin="https://evil.invalid")
+    bad = request(base, url, TOKENS["t1"], KEY, method="POST",
+                  payload={"extension": "t1-recepcao", "number": "11999998888"},
+                  origin="https://evil.invalid")
     assert bad[0] == 403
     ok = request(base, url, method="OPTIONS", origin="http://localhost:8082")
     assert ok[0] == 204
