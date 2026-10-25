@@ -224,39 +224,60 @@ def handle_ami_event(event: dict):
         SurveyStore(SURVEY_PATH).append(survey_result)
 
 
+def outbound_event_tenant(event):
+    """Atribuição do resultado pelo AccountCode AMI ou ramal originador.
+
+    Não inferir pela lista de contatos nem pelo número do cliente.
+    Se informações se contradizem, nenhuma campanha é modificada.
+    """
+    account = event.get("AccountCode", event.get("Accountcode"))
+    source = channel_tenant(event.get("Channel"))
+    if account is not None:
+        if not isinstance(account, str) or extension_tenant(account + "-recepcao") != account:
+            return None
+        other = event.get("Accountcode")
+        if other is not None and other != account:
+            return None
+        if source is not None and source != account:
+            return None
+        return account
+    return source
+
+
 def apply_callback_dial_result(event: dict):
-    """Mesmo mecanismo de correlação de campanhas, aplicado aos callbacks 'discando'."""
+    """Retorno de callback só é atualizado com tenant confiável no AMI."""
     if event.get("Event") != "DialEnd":
         return
-
+    tenant = outbound_event_tenant(event)
     disposition = event.get("DialStatus")
     number = extract_dialed_number(event)
-    if not disposition or not number:
+    if not tenant or not disposition or not number:
         return
 
     for callback in load_callbacks(CALLBACKS_PATH):
-        if callback["caller_id_num"] == number and callback["status"] == "discando":
+        if (callback.get("tenant") == tenant
+                and callback["caller_id_num"] == number
+                and callback["status"] == "discando"):
             mark_callback_result(CALLBACKS_PATH, callback["id"], disposition)
             break
 
 
 def apply_campaign_dial_result(event: dict):
-    """
-    Quando um DialEnd chega, confere se o número discado corresponde a
-    um contato de campanha "discando" no momento - se sim, registra o
-    resultado (atendida/ocupado/sem resposta/etc.).
-    """
+    """Campanha e evento DialEnd precisam pertencer ao mesmo tenant."""
     if event.get("Event") != "DialEnd":
         return
-
+    tenant = outbound_event_tenant(event)
     disposition = event.get("DialStatus")
     number = extract_dialed_number(event)
-    if not disposition or not number:
+    if not tenant or not disposition or not number:
         return
 
     for campaign in load_campaigns(CAMPAIGNS_PATH):
+        if campaign.get("tenant") != tenant:
+            continue
         contact = next(
-            (c for c in campaign["contacts"] if c["number"] == number and c["status"] == "discando"),
+            (c for c in campaign["contacts"] if c["number"] == number
+             and c["status"] == "discando"),
             None,
         )
         if contact:
