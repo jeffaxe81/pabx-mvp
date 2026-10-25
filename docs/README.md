@@ -166,3 +166,4 @@ registrado como regra permanente no prompt master
 114. [Presença, pausa e estados por empresa](manual-114-presenca-pausa-isoladas.md)
 115. [Métricas, SLA e relatórios CDR por tenant](manual-115-metricas-sla-tenant.md)
 116. [Monitoramento e alertas de chamadas por tenant](manual-116-monitoramento-tenant.md)
+117. [Campanhas, callbacks e satisfação por tenant](manual-117-campanhas-callbacks-tenant.md)
