@@ -168,3 +168,4 @@ registrado como regra permanente no prompt master
 116. [Monitoramento e alertas de chamadas por tenant](manual-116-monitoramento-tenant.md)
 117. [Campanhas, callbacks e satisfação por tenant](manual-117-campanhas-callbacks-tenant.md)
 118. [Click-to-call autorizado por tenant e concorrência](manual-118-click-to-call-tenant-concorrencia.md)
+119. [Reservas de discagem duráveis e recuperação auditável](manual-119-reservas-outbound-auditoria.md)
