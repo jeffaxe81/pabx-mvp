@@ -157,6 +157,9 @@ rate_tracker = CallRateTracker()
 fraud_alerts_log = FraudAlertsLog()
 quality_log = QualityLog()
 ami = None  # inicializado em main(), None durante os testes automatizados
+# Serializa seleção + claim persistido + Originate entre threads HTTP.
+# Para múltiplos processos/instâncias ainda serão necessários locks distribuídos.
+OUTBOUND_LOCK = threading.RLock()
 
 
 def handle_ami_event(event: dict):
@@ -323,7 +326,7 @@ class Handler(BaseHTTPRequestHandler):
                 "/api/metrics/today", "/api/metrics/sla", "/api/metrics/sla/history",
                 "/api/missed-calls", "/api/fraud-alerts", "/api/quality",
                 "/api/campaigns", "/api/callbacks", "/api/callbacks/dial-next",
-                "/api/satisfaction",
+                "/api/satisfaction", "/api/click-to-call",
             }
             or path.startswith("/api/presence/")
             or path.startswith("/api/campaigns/")
@@ -418,7 +421,10 @@ class Handler(BaseHTTPRequestHandler):
             self.send_response(204)
             self._queue_headers()
             self.send_header("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
-            self.send_header("Access-Control-Allow-Headers", "Authorization, Content-Type")
+            allowed_headers = "Authorization, Content-Type"
+            if urlparse(self.path).path.startswith(("/api/campaigns", "/api/callbacks")) or urlparse(self.path).path == "/api/click-to-call":
+                allowed_headers += ", X-Click-To-Call-Key"
+            self.send_header("Access-Control-Allow-Headers", allowed_headers)
             self.send_header("Content-Length", "0")
             self.end_headers()
             return
@@ -812,31 +818,53 @@ class Handler(BaseHTTPRequestHandler):
             self._send_queue_json(502, {"error": "falha no redirect", "detail": response})
 
     def _handle_click_to_call(self):
-        length = int(self.headers.get("Content-Length", 0))
+        identity = self._require_queue_identity()
+        if identity is None:
+            return
+        # Bearer é obrigatório além da chave operacional, em especial
+        # para evitar que uma chave global acione o ramal de outro tenant.
         try:
-            data = json.loads(self.rfile.read(length) or b"{}")
-        except json.JSONDecodeError:
-            self._send_json(400, {"error": "JSON invalido"})
+            length = int(self.headers.get("Content-Length", 0))
+        except (ValueError, TypeError):
+            self._send_queue_json(400, {"error": "Content-Length invalido"})
+            return
+        if not 0 < length <= 16384:
+            self._send_queue_json(400, {"error": "tamanho invalido"})
+            return
+        try:
+            data = json.loads(self.rfile.read(length))
+        except (ValueError, UnicodeError):
+            self._send_queue_json(400, {"error": "JSON invalido"})
+            return
+        if not isinstance(data, dict):
+            self._send_queue_json(400, {"error": "JSON deve ser objeto"})
             return
 
         api_key = self.headers.get("X-Click-To-Call-Key", "")
         ok, error, extension, number = validate_click_to_call_request(data, api_key, CLICK_TO_CALL_CONFIG)
-
         if not ok:
             status = 403 if ("chave" in error or "autorizado" in error or "configurado" in error) else 400
-            self._send_json(status, {"error": error})
+            self._send_queue_json(status, {"error": error})
             return
-
+        if not may_pickup(identity, extension):
+            self._send_queue_json(403, {"error": "ramal nao autorizado para este tenant"})
+            return
         if ami is None:
-            self._send_json(503, {"error": "AMI nao conectado"})
+            self._send_queue_json(503, {"error": "AMI nao conectado"})
             return
 
         action = build_originate_action(f"PJSIP/{extension}", number, CLICK_TO_CALL_CONTEXT)
-        response = ami.send_action(action)
+        action["Account"] = identity["tenant"]
+        action["Variable"] = "TENANT=" + identity["tenant"]
+        try:
+            response = ami.send_action(action)
+        except (OSError, TimeoutError, ConnectionError):
+            self._send_queue_json(502, {"error": "falha de comunicacao AMI"})
+            return
         if response.get("Response") == "Success":
-            self._send_json(200, {"ok": True})
+            self._send_queue_json(200, {"ok": True})
         else:
-            self._send_json(502, {"error": "falha ao originar chamada", "detail": response})
+            self._send_queue_json(502, {"error": "falha ao originar chamada"})
 
     def _require_campaign_api_key(self):
         """Autorização dupla: Bearer do tenant + chave de originação.
