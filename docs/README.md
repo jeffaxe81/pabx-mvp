@@ -167,3 +167,4 @@ registrado como regra permanente no prompt master
 115. [Métricas, SLA e relatórios CDR por tenant](manual-115-metricas-sla-tenant.md)
 116. [Monitoramento e alertas de chamadas por tenant](manual-116-monitoramento-tenant.md)
 117. [Campanhas, callbacks e satisfação por tenant](manual-117-campanhas-callbacks-tenant.md)
+118. [Click-to-call autorizado por tenant e concorrência](manual-118-click-to-call-tenant-concorrencia.md)
