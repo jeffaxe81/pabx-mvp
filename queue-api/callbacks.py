@@ -56,7 +56,7 @@ def find_callback(callbacks: list, callback_id: str):
     return next((c for c in callbacks if c["id"] == callback_id), None)
 
 
-def add_callback_request(path, caller_id_num: str, caller_id_name: str = ""):
+def add_callback_request(path, caller_id_num: str, caller_id_name: str = "", tenant=None):
     callbacks = load_callbacks(path)
     entry = {
         "id": secrets.token_hex(6),
@@ -67,6 +67,11 @@ def add_callback_request(path, caller_id_num: str, caller_id_name: str = ""):
         "requested_at": time.time(),
         "last_attempt_at": None,
     }
+    if tenant is not None:
+        from monitoring_access import extension_tenant
+        if not isinstance(tenant, str) or extension_tenant(tenant + "-recepcao") != tenant:
+            return None
+        entry["tenant"] = tenant
     callbacks.append(entry)
     save_callbacks(path, callbacks)
     return entry
