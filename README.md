@@ -918,3 +918,4 @@ Plano de aceleração: [100 dias do AXE PABX](docs/roadmap-100-dias-antecipacao-
 116. [Chamadas perdidas, fraude e qualidade isoladas por empresa](docs/manual-116-monitoramento-tenant.md)
 117. [Campanhas e callbacks com isolamento de empresa](docs/manual-117-campanhas-callbacks-tenant.md)
 118. [Click-to-call isolado por empresa e antidisparo duplicado](docs/manual-118-click-to-call-tenant-concorrencia.md)
+119. [Proteção multi-instância de discagens e revisão auditável](docs/manual-119-reservas-outbound-auditoria.md)
