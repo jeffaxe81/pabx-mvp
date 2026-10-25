@@ -51,6 +51,7 @@ from reports import parse_cdr_for_report, CallLogStore, aggregate, group_by, ext
 from screen_pop import dispatch_screen_pop
 from fraud_detection import CallRateTracker, FraudAlertsLog, is_external_call, is_over_spending_limit
 from quality_monitoring import parse_quality_event, is_poor_quality, QualityLog
+from monitoring_access import extension_tenant, channel_tenant
 from monitoring_access import monitoring_event_tenant, scoped_monitoring_entries
 
 AMI_HOST = os.environ.get("AMI_HOST", "127.0.0.1")
@@ -210,10 +211,16 @@ def handle_ami_event(event: dict):
 
     callback_request = parse_callback_request_event(event)
     if callback_request:
-        add_callback_request(CALLBACKS_PATH, callback_request["caller_id_num"], callback_request["caller_id_name"])
+        tenant = event.get("Tenant")
+        if (isinstance(tenant, str)
+                and extension_tenant(tenant + "-recepcao") == tenant
+                and all(event.get(key) == tenant for key in ("AccountCode", "Accountcode")
+                        if key in event)):
+            add_callback_request(CALLBACKS_PATH, callback_request["caller_id_num"],
+                                 callback_request["caller_id_name"], tenant=tenant)
 
     survey_result = parse_survey_event(event)
-    if survey_result:
+    if survey_result and survey_result.get("tenant"):
         SurveyStore(SURVEY_PATH).append(survey_result)
 
 
@@ -294,8 +301,11 @@ class Handler(BaseHTTPRequestHandler):
                 "/api/presence", "/api/reports/pauses", "/api/reports",
                 "/api/metrics/today", "/api/metrics/sla", "/api/metrics/sla/history",
                 "/api/missed-calls", "/api/fraud-alerts", "/api/quality",
+                "/api/campaigns", "/api/callbacks", "/api/callbacks/dial-next",
+                "/api/satisfaction",
             }
             or path.startswith("/api/presence/")
+            or path.startswith("/api/campaigns/")
             or path == "/api/extension" + "-states"
         )
 
@@ -505,13 +515,13 @@ class Handler(BaseHTTPRequestHandler):
             self._send_queue_json(200, {"presence": allowed_presence})
         elif urlparse(self.path).path == "/api/reports":
             self._handle_reports()
-        elif self.path.startswith("/api/campaigns/"):
+        elif urlparse(self.path).path.startswith("/api/campaigns/"):
             self._handle_get_campaign()
-        elif self.path.startswith("/api/campaigns"):
+        elif urlparse(self.path).path == "/api/campaigns":
             self._handle_list_campaigns()
-        elif self.path.startswith("/api/callbacks"):
+        elif urlparse(self.path).path == "/api/callbacks":
             self._handle_list_callbacks()
-        elif self.path.startswith("/api/satisfaction"):
+        elif urlparse(self.path).path == "/api/satisfaction":
             self._handle_satisfaction_query()
         elif self.path.startswith("/recordings/"):
             self._serve_recording_file()
@@ -530,14 +540,18 @@ class Handler(BaseHTTPRequestHandler):
         self._send_queue_json(200, {"quality_reports": visible})
 
     def _handle_satisfaction_query(self):
+        identity = self._require_queue_identity()
+        if identity is None:
+            return
         query = parse_qs(urlparse(self.path).query)
         operator = query.get("operator", [None])[0]
-        records = SurveyStore(SURVEY_PATH).query(operator=operator)
-
+        records = SurveyStore(SURVEY_PATH).query(
+            operator=operator, tenant=identity["tenant"],
+        )
         if query.get("group_by", [None])[0] == "operator":
-            self._send_json(200, {"by_operator": summarize_by_operator(records)})
+            self._send_queue_json(200, {"by_operator": summarize_by_operator(records)})
         else:
-            self._send_json(200, {
+            self._send_queue_json(200, {
                 "average": average_score(records),
                 "count": len(records),
                 "distribution": score_distribution(records),
