@@ -258,12 +258,13 @@ def apply_callback_dial_result(event: dict):
     if not tenant or not disposition or not number:
         return
 
-    for callback in load_callbacks(CALLBACKS_PATH):
-        if (callback.get("tenant") == tenant
-                and callback["caller_id_num"] == number
-                and callback["status"] == "discando"):
-            mark_callback_result(CALLBACKS_PATH, callback["id"], disposition)
-            break
+    with OUTBOUND_LOCK:
+        for callback in load_callbacks(CALLBACKS_PATH):
+            if (callback.get("tenant") == tenant
+                    and callback["caller_id_num"] == number
+                    and callback["status"] == "discando"):
+                mark_callback_result(CALLBACKS_PATH, callback["id"], disposition)
+                break
 
 
 def apply_campaign_dial_result(event: dict):
@@ -276,17 +277,18 @@ def apply_campaign_dial_result(event: dict):
     if not tenant or not disposition or not number:
         return
 
-    for campaign in load_campaigns(CAMPAIGNS_PATH):
-        if campaign.get("tenant") != tenant:
-            continue
-        contact = next(
-            (c for c in campaign["contacts"] if c["number"] == number
-             and c["status"] == "discando"),
-            None,
-        )
-        if contact:
-            mark_contact_result(CAMPAIGNS_PATH, campaign["id"], number, disposition)
-            break
+    with OUTBOUND_LOCK:
+        for campaign in load_campaigns(CAMPAIGNS_PATH):
+            if campaign.get("tenant") != tenant:
+                continue
+            contact = next(
+                (c for c in campaign["contacts"] if c["number"] == number
+                 and c["status"] == "discando"),
+                None,
+            )
+            if contact:
+                mark_contact_result(CAMPAIGNS_PATH, campaign["id"], number, disposition)
+                break
 
 
 def check_call_volume(event: dict):
