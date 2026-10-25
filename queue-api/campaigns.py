@@ -95,13 +95,21 @@ def validate_campaign_input(data: dict):
     if not contacts:
         return False, "nenhum número válido na lista de contatos", None
 
-    return True, None, {
+    result = {
         "id": secrets.token_hex(6),
         "name": name,
         "agent_extension": agent_extension,
         "created_at": time.time(),
         "contacts": contacts,
     }
+    # A identidade só é inserida pelo serviço HTTP autenticado.
+    if data.get("tenant") is not None:
+        from monitoring_access import extension_tenant
+        tenant = data["tenant"]
+        if not isinstance(tenant, str) or extension_tenant(agent_extension) != tenant:
+            return False, "ramal ou tenant nao autorizado", None
+        result["tenant"] = tenant
+    return True, None, result
 
 
 def create_campaign(path, data: dict):
