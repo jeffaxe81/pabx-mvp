@@ -38,6 +38,7 @@ def test_attempt_ids_are_unique_persisted_and_repeat_claims_are_denied(tmp_path)
 def test_same_tenant_same_phone_multiple_campaigns_fails_closed(tmp_path, monkeypatch):
     path = tmp_path / "campaigns.json"
     monkeypatch.setattr(server, "CAMPAIGNS_PATH", str(path))
+    monkeypatch.setattr(server, "CALLBACKS_PATH", str(tmp_path / "callbacks.json"))
     names = ["primeira", "segunda"]
     campaigns = []
     for name in names:
@@ -63,6 +64,7 @@ def test_same_tenant_same_phone_multiple_campaigns_fails_closed(tmp_path, monkey
 def test_same_tenant_same_phone_multiple_callbacks_fails_closed(tmp_path, monkeypatch):
     path = tmp_path / "callbacks.json"
     monkeypatch.setattr(server, "CALLBACKS_PATH", str(path))
+    monkeypatch.setattr(server, "CAMPAIGNS_PATH", str(tmp_path / "campaigns.json"))
     for _ in range(2):
         callback = add_callback_request(path, "11999998888", tenant="t1")
         assert mark_callback_calling(path, callback["id"])[0]
