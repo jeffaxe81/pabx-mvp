@@ -260,15 +260,21 @@ def apply_callback_dial_result(event: dict):
     if not tenant or not disposition or not number:
         return
 
-    with outbound_lock(CALLBACKS_PATH):
+    # Always acquire shared locks in the same order, even when AMI
+    # events arrive during an Originate request in another process.
+    with outbound_lock(CALLBACKS_PATH), outbound_lock(CAMPAIGNS_PATH):
         matches = [c for c in load_callbacks(CALLBACKS_PATH)
                    if c.get("tenant") == tenant and c.get("caller_id_num") == number
                    and c.get("status") == "discando"]
-        # Numeros iguais podem estar discando duas vezes na mesma empresa.
-        # Nunca atribua um resultado AMI ao primeiro registro por acaso.
+        other = [item for campaign in load_campaigns(CAMPAIGNS_PATH)
+                 if campaign.get("tenant") == tenant
+                 for item in campaign.get("contacts", [])
+                 if item.get("number") == number and item.get("status") == "discando"]
         attempt_id = event.get("AttemptID")
         if attempt_id is not None:
             matches = [c for c in matches if c.get("attempt_id") == attempt_id]
+        elif other:
+            return  # cross-kind ambiguity: same number in a campaign
         if len(matches) == 1:
             mark_callback_result(CALLBACKS_PATH, matches[0]["id"], disposition)
 
@@ -283,17 +289,22 @@ def apply_campaign_dial_result(event: dict):
     if not tenant or not disposition or not number:
         return
 
-    with outbound_lock(CAMPAIGNS_PATH):
+    with outbound_lock(CALLBACKS_PATH), outbound_lock(CAMPAIGNS_PATH):
         matches = [(campaign, contact)
                    for campaign in load_campaigns(CAMPAIGNS_PATH)
                    if campaign.get("tenant") == tenant
                    for contact in campaign.get("contacts", [])
                    if contact.get("number") == number
                    and contact.get("status") == "discando"]
+        other = [c for c in load_callbacks(CALLBACKS_PATH)
+                 if c.get("tenant") == tenant and c.get("caller_id_num") == number
+                 and c.get("status") == "discando"]
         attempt_id = event.get("AttemptID")
         if attempt_id is not None:
             matches = [(campaign, contact) for campaign, contact in matches
                        if contact.get("attempt_id") == attempt_id]
+        elif other:
+            return  # cross-kind ambiguity: same number in a callback
         if len(matches) == 1:
             campaign, contact = matches[0]
             mark_contact_result(CAMPAIGNS_PATH, campaign["id"], contact["number"], disposition)
