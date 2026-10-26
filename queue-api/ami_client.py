@@ -72,7 +72,7 @@ class AMIClient:
             self._events_thread = threading.Thread(target=self._process_events, name="ami-events", daemon=True)
             self._reader_thread.start()
             self._events_thread.start()
-            reply = self.send_action({
+            reply = self._send_action_and_wait({
                 "Action": "Login", "Username": self.username, "Secret": self.secret,
             }, timeout=timeout)
             if reply.get("Response") != "Success":
