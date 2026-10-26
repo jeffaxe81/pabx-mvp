@@ -157,6 +157,9 @@ def test_campaign_dial_next_rejects_foreign_id_before_ami(api):
     assert result[0] == 200
     assert len(ami.actions) == 1
     assert ami.actions[0]["Account"] == "t1"
+    assert ami.actions[0]["ActionID"] == next(
+        c for c in load_campaigns(campaigns) if c["id"] == allowed["id"]
+    )["contacts"][0]["attempt_id"]
 
 
 def test_callback_list_and_originate_never_mix_tenants(api):
@@ -169,6 +172,9 @@ def test_callback_list_and_originate_never_mix_tenants(api):
     assert out[0] == 200
     assert ami.actions[-1]["Variable"] == "TENANT=t1"
     assert ami.actions[-1]["Account"] == "t1"
+    assert ami.actions[-1]["ActionID"] == next(
+        c for c in load_callbacks(callbacks) if c.get("tenant") == "t1"
+    )["attempt_id"]
     assert ami.actions[-1]["Context"] == server.CALLBACK_CONNECT_CONTEXT
     assert load_callbacks(callbacks)[0]["status"] == "discando"
     assert own(api, "/api/callbacks/dial-next", method="POST")[2]["done"] is True
