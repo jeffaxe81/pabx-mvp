@@ -133,7 +133,7 @@ def next_pending_contact(campaign: dict):
     return None
 
 
-def mark_contact_calling(path, campaign_id: str, number: str):
+def mark_contact_calling(path, campaign_id: str, number: str, attempt_id=None):
     campaigns = load_campaigns(path)
     campaign = find_campaign(campaigns, campaign_id)
     if not campaign:
@@ -143,9 +143,15 @@ def mark_contact_calling(path, campaign_id: str, number: str):
     if not contact:
         return False, f"contato '{number}' não encontrado na campanha"
 
+    if contact.get("status") != "pendente":
+        return False, "contato ja reservado"
+    attempt_id = attempt_id or secrets.token_hex(16)
+    if not isinstance(attempt_id, str) or not re.fullmatch(r"[a-f0-9]{32}", attempt_id):
+        return False, "id de tentativa invalido"
     contact["status"] = "discando"
     contact["attempts"] += 1
     contact["last_attempt_at"] = time.time()
+    contact["attempt_id"] = attempt_id
     save_campaigns(path, campaigns)
     return True, None
 
