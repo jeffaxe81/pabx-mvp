@@ -84,9 +84,11 @@ def validate_campaign_input(data: dict):
         return False, "lista de contatos não pode ser vazia", None
 
     contacts = []
+    numbers_seen = set()
     for raw_number in raw_contacts:
         number = sanitize_phone_number(raw_number)
-        if number:
+        if number and number not in numbers_seen:
+            numbers_seen.add(number)
             contacts.append({
                 "number": number,
                 "status": "pendente",
@@ -167,9 +169,10 @@ def mark_contact_result(path, campaign_id: str, number: str, disposition: str):
     if not campaign:
         return False, f"campanha '{campaign_id}' não encontrada"
 
-    contact = next((c for c in campaign["contacts"] if c["number"] == number), None)
+    contact = next((c for c in campaign["contacts"]
+                    if c["number"] == number and c["status"] == "discando"), None)
     if not contact:
-        return False, f"contato '{number}' não encontrado na campanha"
+        return False, "contato nao esta discando"
 
     if contact["status"] != "discando":
         return False, "contato nao esta discando"
