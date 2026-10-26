@@ -228,11 +228,23 @@ def test_outbound_results_require_known_tenant_even_if_numbers_equal(api, monkey
     server.apply_callback_dial_result(event)
     assert next(c for c in load_campaigns(campaigns) if c["id"] == t1["id"])["contacts"][0]["status"] == "discando"
     event["AccountCode"] = "t2"
+    # Mesmo tenant e número existem simultaneamente em campanha e
+    # callback: um DialEnd sem AttemptID nao pode marcar os dois.
+    server.apply_campaign_dial_result(event)
+    server.apply_callback_dial_result(event)
+    assert next(c for c in load_campaigns(campaigns) if c["id"] == t2["id"])["contacts"][0]["status"] == "discando"
+    assert next(c for c in load_callbacks(callbacks) if c["id"] == t2callback["id"])["status"] == "discando"
+    event["AttemptID"] = next(c for c in load_campaigns(campaigns)
+                              if c["id"] == t2["id"])["contacts"][0]["attempt_id"]
     server.apply_campaign_dial_result(event)
     server.apply_callback_dial_result(event)
     assert next(c for c in load_campaigns(campaigns) if c["id"] == t2["id"])["contacts"][0]["status"] == "atendida"
-    assert next(c for c in load_campaigns(campaigns) if c["id"] == t1["id"])["contacts"][0]["status"] == "discando"
+    assert next(c for c in load_callbacks(callbacks) if c["id"] == t2callback["id"])["status"] == "discando"
+    event["AttemptID"] = next(c for c in load_callbacks(callbacks)
+                              if c["id"] == t2callback["id"])["attempt_id"]
+    server.apply_callback_dial_result(event)
     assert next(c for c in load_callbacks(callbacks) if c["id"] == t2callback["id"])["status"] == "concluido"
+    assert next(c for c in load_campaigns(campaigns) if c["id"] == t1["id"])["contacts"][0]["status"] == "discando"
     assert next(c for c in load_callbacks(callbacks) if c["id"] == t1callback["id"])["status"] == "discando"
     event["AccountCode"] = "t1"
     event["Channel"] = "PJSIP/t2-recepcao-00000001"
