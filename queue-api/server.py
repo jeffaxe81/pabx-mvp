@@ -14,6 +14,7 @@ exigem Bearer com tenant e Origin explicitamente permitido. Nunca colocar
 tokens de fila em URLs ou em código estático publicado pelo Nginx.
 """
 import json
+import secrets
 import os
 import threading
 import time
@@ -260,12 +261,16 @@ def apply_callback_dial_result(event: dict):
         return
 
     with outbound_lock(CALLBACKS_PATH):
-        for callback in load_callbacks(CALLBACKS_PATH):
-            if (callback.get("tenant") == tenant
-                    and callback["caller_id_num"] == number
-                    and callback["status"] == "discando"):
-                mark_callback_result(CALLBACKS_PATH, callback["id"], disposition)
-                break
+        matches = [c for c in load_callbacks(CALLBACKS_PATH)
+                   if c.get("tenant") == tenant and c.get("caller_id_num") == number
+                   and c.get("status") == "discando"]
+        # Numeros iguais podem estar discando duas vezes na mesma empresa.
+        # Nunca atribua um resultado AMI ao primeiro registro por acaso.
+        attempt_id = event.get("AttemptID")
+        if attempt_id is not None:
+            matches = [c for c in matches if c.get("attempt_id") == attempt_id]
+        if len(matches) == 1:
+            mark_callback_result(CALLBACKS_PATH, matches[0]["id"], disposition)
 
 
 def apply_campaign_dial_result(event: dict):
@@ -279,17 +284,19 @@ def apply_campaign_dial_result(event: dict):
         return
 
     with outbound_lock(CAMPAIGNS_PATH):
-        for campaign in load_campaigns(CAMPAIGNS_PATH):
-            if campaign.get("tenant") != tenant:
-                continue
-            contact = next(
-                (c for c in campaign["contacts"] if c["number"] == number
-                 and c["status"] == "discando"),
-                None,
-            )
-            if contact:
-                mark_contact_result(CAMPAIGNS_PATH, campaign["id"], number, disposition)
-                break
+        matches = [(campaign, contact)
+                   for campaign in load_campaigns(CAMPAIGNS_PATH)
+                   if campaign.get("tenant") == tenant
+                   for contact in campaign.get("contacts", [])
+                   if contact.get("number") == number
+                   and contact.get("status") == "discando"]
+        attempt_id = event.get("AttemptID")
+        if attempt_id is not None:
+            matches = [(campaign, contact) for campaign, contact in matches
+                       if contact.get("attempt_id") == attempt_id]
+        if len(matches) == 1:
+            campaign, contact = matches[0]
+            mark_contact_result(CAMPAIGNS_PATH, campaign["id"], contact["number"], disposition)
 
 
 def check_call_volume(event: dict):
@@ -993,7 +1000,10 @@ class Handler(BaseHTTPRequestHandler):
             if not contact:
                 self._send_queue_json(200, {"done": True, "message": "nenhum contato pendente"})
                 return
-            ok, error = mark_contact_calling(CAMPAIGNS_PATH, campaign_id, contact["number"])
+            attempt_id = secrets.token_hex(16)
+            ok, error = mark_contact_calling(
+                CAMPAIGNS_PATH, campaign_id, contact["number"], attempt_id=attempt_id,
+            )
             if not ok:
                 self._send_queue_json(409, {"error": "contato nao reservado"})
                 return
@@ -1001,6 +1011,7 @@ class Handler(BaseHTTPRequestHandler):
                                             contact["number"], CLICK_TO_CALL_CONTEXT)
             action["Account"] = identity["tenant"]
             action["Variable"] = "TENANT=" + identity["tenant"]
+            action["ActionID"] = attempt_id
             try:
                 response = ami.send_action(action)
             except (OSError, TimeoutError, ConnectionError):
@@ -1054,7 +1065,10 @@ class Handler(BaseHTTPRequestHandler):
             if not isinstance(number, str) or sanitize_phone_number(number) != number:
                 self._send_queue_json(400, {"error": "numero de callback invalido"})
                 return
-            ok, error = mark_callback_calling(CALLBACKS_PATH, callback["id"])
+            attempt_id = secrets.token_hex(16)
+            ok, error = mark_callback_calling(
+                CALLBACKS_PATH, callback["id"], attempt_id=attempt_id,
+            )
             if not ok:
                 self._send_queue_json(409, {"error": "callback nao reservado"})
                 return
@@ -1069,6 +1083,7 @@ class Handler(BaseHTTPRequestHandler):
                 "CallerID": f'"Retorno de chamada" <{number}>',
                 "Variable": "TENANT=" + identity["tenant"],
                 "Account": identity["tenant"],
+                "ActionID": attempt_id,
             }
             try:
                 response = ami.send_action(action)
