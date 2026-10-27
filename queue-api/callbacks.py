@@ -13,6 +13,8 @@ import secrets
 import time
 from pathlib import Path
 
+from outbound_safety import atomic_write_json
+
 MAX_ATTEMPTS = 2  # menos tentativas que campanha - é o cliente esperando, não uma lista fria
 
 DISPOSITION_TO_STATUS = {
@@ -49,14 +51,14 @@ def load_callbacks(path) -> list:
 
 
 def save_callbacks(path, callbacks: list):
-    Path(path).write_text(json.dumps(callbacks, indent=2, ensure_ascii=False), encoding="utf-8")
+    atomic_write_json(path, callbacks)
 
 
 def find_callback(callbacks: list, callback_id: str):
     return next((c for c in callbacks if c["id"] == callback_id), None)
 
 
-def add_callback_request(path, caller_id_num: str, caller_id_name: str = ""):
+def add_callback_request(path, caller_id_num: str, caller_id_name: str = "", tenant=None):
     callbacks = load_callbacks(path)
     entry = {
         "id": secrets.token_hex(6),
@@ -67,6 +69,11 @@ def add_callback_request(path, caller_id_num: str, caller_id_name: str = ""):
         "requested_at": time.time(),
         "last_attempt_at": None,
     }
+    if tenant is not None:
+        from monitoring_access import extension_tenant
+        if not isinstance(tenant, str) or extension_tenant(tenant + "-recepcao") != tenant:
+            return None
+        entry["tenant"] = tenant
     callbacks.append(entry)
     save_callbacks(path, callbacks)
     return entry
@@ -83,15 +90,22 @@ def next_pending_callback(callbacks: list):
     return min(pending, key=lambda c: c["requested_at"])
 
 
-def mark_callback_calling(path, callback_id: str):
+def mark_callback_calling(path, callback_id: str, attempt_id=None):
     callbacks = load_callbacks(path)
     callback = find_callback(callbacks, callback_id)
     if not callback:
         return False, f"callback '{callback_id}' não encontrado"
 
+    if callback.get("status") != "pendente":
+        return False, "callback ja reservado"
+    attempt_id = attempt_id or secrets.token_hex(16)
+    if not isinstance(attempt_id, str) or not re.fullmatch(r"[a-f0-9]{32}", attempt_id):
+        return False, "id de tentativa invalido"
     callback["status"] = "discando"
     callback["attempts"] += 1
     callback["last_attempt_at"] = time.time()
+    callback["attempt_id"] = attempt_id
+    callback["channel_id"] = "axe-" + attempt_id
     save_callbacks(path, callbacks)
     return True, None
 
@@ -101,6 +115,9 @@ def mark_callback_result(path, callback_id: str, disposition: str):
     callback = find_callback(callbacks, callback_id)
     if not callback:
         return False, f"callback '{callback_id}' não encontrado"
+
+    if callback["status"] != "discando":
+        return False, "callback nao esta discando"
 
     status = DISPOSITION_TO_STATUS.get(disposition, "falha")
     if status != "concluido" and callback["attempts"] < MAX_ATTEMPTS:

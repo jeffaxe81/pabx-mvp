@@ -23,7 +23,7 @@ STATUS_LABELS = {
 
 class ExtensionStateTracker:
     def __init__(self):
-        self._states = {}  # exten -> {status_code, status_text, context}
+        self._states = {}  # (context, exten) -> {status_code, status_text, context}
 
     def apply_event(self, event: dict):
         if event.get("Event") != "ExtensionStatus":
@@ -34,12 +34,15 @@ class ExtensionStateTracker:
             return
 
         status_code = event.get("Status", "-1")
-        self._states[exten] = {
+        context = event.get("Context", "")
+        if not isinstance(context, str):
+            return
+        self._states[(context, exten)] = {
             "exten": exten,
-            "context": event.get("Context", ""),
+            "context": context,
             "status_code": status_code,
             "status_label": STATUS_LABELS.get(status_code, "desconhecido"),
         }
 
     def snapshot(self):
-        return sorted(self._states.values(), key=lambda s: s["exten"])
+        return sorted(self._states.values(), key=lambda s: (s["exten"], s["context"]))

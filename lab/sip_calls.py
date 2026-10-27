@@ -91,7 +91,7 @@ class CallPeer(SipTLS):
                 return int(match[1]), headers, body
 
     def dial(self, number, media):
-        if not re.fullmatch(r'(?:t[1-9][0-9]*-[0-9]{3,6}|[0-9]{3,15})', number):
+        if not re.fullmatch(r'(?:\*97|t[1-9][0-9]*-[0-9]{3,6}|[0-9]{3,15})', number):
             raise ValueError('destino do laboratório inválido')
         uri = f'sip:{number}@127.0.0.1:{self.target_port};transport=tls'
         dialog = Dialog(secrets.token_hex(16)+'@localhost',

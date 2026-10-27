@@ -18,6 +18,39 @@ ALLOWED_EXTENSIONS = {".wav", ".gsm", ".mp3"}
 # outro padrão do próprio Asterisk e não batem aqui - ficam listadas,
 # só não são filtráveis por atendente/número (ver manual 21).
 FILENAME_RE = re.compile(r"^(\d{8}-\d{6})-([^-]*)-([^.]+)\.\w+$")
+_OPEN_SUPPORTS_DIR_FD = os.open in getattr(os, "supports_dir_fd", ())
+
+
+def _recording_directory_fd(directory):
+    """Ancora cada componente da pasta sem seguir links simbólicos.
+
+    Abertura relativa por FD impede que a troca de um ancestral
+    redirecione a listagem ou o download para outro diretório.
+    """
+    if not _OPEN_SUPPORTS_DIR_FD or not all(
+        hasattr(os, attr) for attr in ("O_DIRECTORY", "O_NOFOLLOW")
+    ):
+        return None
+    current_fd = None
+    try:
+        path = Path(directory)
+        components = path.parts[1:] if path.is_absolute() else path.parts
+        if any(part in {"", ".", ".."} for part in components):
+            return None
+        flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+        current_fd = os.open("/" if path.is_absolute() else ".", flags)
+        for part in components:
+            next_fd = os.open(part, flags, dir_fd=current_fd)
+            os.close(current_fd)
+            current_fd = next_fd
+        opened_fd, current_fd = current_fd, None
+        return opened_fd
+    except (OSError, TypeError, ValueError, NotImplementedError):
+        return None
+    finally:
+        if current_fd is not None:
+            os.close(current_fd)
+
 
 
 def parse_recording_filename(filename: str):
@@ -47,52 +80,62 @@ def list_recordings(directory, limit=50, caller_number=None, destination=None, s
     Gravações cujo nome não bate no padrão esperado só aparecem
     quando nenhum filtro de atendente/número/período é usado.
     """
-    path = Path(directory)
-    if not path.is_dir() or not isinstance(limit, int) or limit <= 0:
+    if not isinstance(limit, int) or limit <= 0:
+        return []
+    directory_fd = _recording_directory_fd(directory)
+    if directory_fd is None:
         return []
 
-    # Links simbólicos podem apontar para gravações fora do volume
-    # autorizado. A listagem nunca deve publicar seus metadados.
-    files = [
-        f for f in path.iterdir()
-        if f.is_file() and not f.is_symlink()
-        and f.suffix.lower() in ALLOWED_EXTENSIONS
-    ]
-    files.sort(key=lambda f: f.stat().st_mtime, reverse=True)
-
     has_filter = any([caller_number, destination, start_date, end_date])
+    candidates = []
+    try:
+        # scandir(fd) usa o diretório já aberto. stat(..., follow_symlinks=False)
+        # não segue um link inserido depois da enumeração.
+        with os.scandir(directory_fd) as entries:
+            for entry in entries:
+                name = entry.name
+                if (not isinstance(name, str) or len(name) > 240
+                        or "/" in name or "\\" in name
+                        or any(ord(char) < 32 or ord(char) == 127 for char in name)
+                        or Path(name).suffix.lower() not in ALLOWED_EXTENSIONS):
+                    continue
+                parsed = parse_recording_filename(name)
+                if has_filter:
+                    if not parsed:
+                        continue
+                    if caller_number and parsed["caller_number"] != caller_number:
+                        continue
+                    if destination and parsed["destination"] != destination:
+                        continue
+                    file_date = parsed["timestamp"][:8]
+                    if start_date and file_date < start_date:
+                        continue
+                    if end_date and file_date > end_date:
+                        continue
+                try:
+                    info = os.stat(name, dir_fd=directory_fd, follow_symlinks=False)
+                except (OSError, ValueError):
+                    # Renomeado/removido entre scandir e fstatat: não publicar.
+                    continue
+                if not stat.S_ISREG(info.st_mode):
+                    continue
+                candidates.append((info.st_mtime, name, info, parsed))
+    except (OSError, TypeError, ValueError, NotImplementedError):
+        return []
+    finally:
+        os.close(directory_fd)
 
-    result = []
-    for f in files:
-        parsed = parse_recording_filename(f.name)
-
-        if has_filter:
-            if not parsed:
-                continue  # não dá pra filtrar o que não sabemos parsear
-            if caller_number and parsed["caller_number"] != caller_number:
-                continue
-            if destination and parsed["destination"] != destination:
-                continue
-            file_date = parsed["timestamp"][:8]
-            if start_date and file_date < start_date:
-                continue
-            if end_date and file_date > end_date:
-                continue
-
-        stat = f.stat()
-        entry = {
-            "filename": f.name,
-            "size_bytes": stat.st_size,
-            "modified_at": datetime.fromtimestamp(stat.st_mtime).isoformat(timespec="seconds"),
+    candidates.sort(key=lambda item: (-item[0], item[1]))
+    return [
+        {
+            "filename": name,
+            "size_bytes": info.st_size,
+            "modified_at": datetime.fromtimestamp(info.st_mtime).isoformat(timespec="seconds"),
             "caller_number": parsed["caller_number"] if parsed else None,
             "destination": parsed["destination"] if parsed else None,
         }
-        result.append(entry)
-
-        if len(result) >= limit:
-            break
-
-    return result
+        for _, name, info, parsed in candidates[:limit]
+    ]
 
 
 def safe_recording_path(directory, filename: str):
@@ -170,7 +213,9 @@ def open_recording_file(directory, filename):
     directory_fd = None
     file_fd = None
     try:
-        directory_fd = os.open(directory, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        directory_fd = _recording_directory_fd(directory)
+        if directory_fd is None:
+            return None
         file_fd = os.open(
             filename,
             os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK,

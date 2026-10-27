@@ -35,6 +35,36 @@ def test_cross_tenant_cdr_requires_new_isolated_rejection():
             '"FAILED"', '"ANSWERED"'), set(), 't1-1001', 't2-1001')
 
 
+
+def test_asterisk_predial_rejection_has_no_new_cdr_after_six_proven_calls():
+    from lab.tenant_isolation_checks import (
+        rejected_cdr_is_isolated, cdr_rejection_diagnostics,
+    )
+    baseline = ''.join(
+        f'"t1","1001","1002","t1-internal","PJSIP/t1-1001-{i:08x}",'
+        f'"PJSIP/t1-1002-{i:08x}","ANSWERED","1","100.{i}"\n'
+        for i in range(1, 7)
+    )
+    known = {f"100.{i}" for i in range(1, 7)}
+    assert rejected_cdr_is_isolated(baseline, known, 't1-1001', 't2-1001')
+    diagnostic = cdr_rejection_diagnostics(baseline, known, 't1-1001', 't2-1001')
+    assert diagnostic['positive_cdr_baseline_verified']
+    assert diagnostic['predial_rejection_without_new_cdr']
+    assert diagnostic['new_rows'] == 0
+    assert not rejected_cdr_is_isolated(baseline, set(), 't1-1001', 't2-1001')
+    assert not rejected_cdr_is_isolated(
+        baseline, set(list(sorted(known))[:5]), 't1-1001', 't2-1001')
+    assert not rejected_cdr_is_isolated(
+        baseline, known | {'unexpected-id'}, 't1-1001', 't2-1001')
+    # Se surgir qualquer CDR de atendimento, não se aceita como pré-dial.
+    compromised = baseline + (
+        '"t2","1001","t2-1001","t2-internal",'
+        '"PJSIP/t1-1001-0000abcd","PJSIP/t2-1001-0000dcba",'
+        '"ANSWERED","3","100.999"\n'
+    )
+    assert not rejected_cdr_is_isolated(compromised, known, 't1-1001', 't2-1001')
+
+
 def test_isolation_summary_requires_all_cases_and_real_sip_contexts():
     from lab.asterisk_lab import summarize
     from lab.call_checks import required_call_checks
