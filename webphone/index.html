@@ -9,7 +9,8 @@
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/jssip@3.10.1/dist/jssip.min.js"></script>
+<script src="vendor/jssip-3.10.1.min.js" integrity="sha384-s3q+Ad9KMHjvPAHFr44EBPSqbUXANLVA3OZw1CMbTi7P3ve/iEbGZVL3B7hbWi2b" crossorigin="anonymous"></script>
+<script src="remote-audio.js"></script>
 <style>
   :root {
     --bg: #14181F;
@@ -647,7 +648,10 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
       <input id="extPassword" type="password" placeholder="senha do ramal">
 
       <label for="queueApiUrl">API da fila (opcional)</label>
-      <input id="queueApiUrl" placeholder="http://pabx.local:8090" value="http://pabx.local:8090">
+      <input id="queueApiUrl" placeholder="https://pabx.exemplo.com/api" value="http://pabx.local:8090">
+      <label for="queueToken">Credencial temporária da fila (por empresa)</label>
+      <input id="queueToken" type="password" autocomplete="off" spellcheck="false"
+             placeholder="Token de acesso fornecido pelo administrador">
 
       <label for="crmScreenPopUrl">URL de screen-pop do CRM (opcional)</label>
       <input id="crmScreenPopUrl" placeholder="https://seu-crm.com/contatos?telefone={numero}">
@@ -1028,6 +1032,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     line.session.unhold();
     line.state = 'active';
     activeLineIndex = index;
+    line.refreshAudio?.();
     el('activePeer').textContent = line.peer;
     el('activeState').textContent = 'Em chamada';
     showView('activeView');
@@ -1056,6 +1061,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     el('secondLineBanner').style.display = 'none';
     line.session.answer({ mediaConstraints: { audio: true, video: false } });
     activeLineIndex = index;
+    line.refreshAudio?.();
     el('activePeer').textContent = line.peer;
     el('activeState').textContent = 'Em chamada';
     showView('activeView');
@@ -1082,6 +1088,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
           otherLine.session.unhold();
           otherLine.state = 'active';
         }
+        otherLine.refreshAudio?.();
         el('activePeer').textContent = otherLine.peer;
         el('activeState').textContent = 'Em chamada';
         showView('activeView');
@@ -1205,6 +1212,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     myExtension = null;
     recordingsRequestEpoch += 1;
     el('recordingsToken').value = '';
+    el('queueToken').value = '';
     clearRecordingPlayers();
     if (ua) ua.stop();
     setStatus('', 'Desconectado');
@@ -1222,6 +1230,14 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   function startQueuePolling() {
     const apiUrl = el('queueApiUrl').value.trim();
     if (!apiUrl) return;
+    if (!el('queueToken').value.trim()) {
+      el('queueList').textContent = 'Informe a credencial temporária da fila para visualizar as chamadas.';
+      return;
+    }
+    if (!recordingApiIsSecure(apiUrl)) {
+      el('queueList').textContent = 'A API de filas exige HTTPS fora de localhost.';
+      return;
+    }
 
     fetchQueue(apiUrl);
     queuePollInterval = setInterval(() => fetchQueue(apiUrl), 3000);
@@ -1233,8 +1249,18 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   }
 
   function fetchQueue(apiUrl) {
-    fetch(`${apiUrl}/api/queue`)
-      .then((res) => res.json())
+    const token = el('queueToken').value.trim();
+    if (!token) {
+      el('queueList').textContent = 'Credencial da fila ausente.';
+      return;
+    }
+    fetch(`${apiUrl}/api/queue`, {
+      headers: { Authorization: `Bearer ${token}` }, cache: 'no-store',
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error('Fila não autorizada');
+        return res.json();
+      })
       .then((data) => renderQueue(apiUrl, data.waiting || []))
       .catch(() => {
         el('queueList').innerHTML = '<div class="log-empty">API da fila indisponível.</div>';
@@ -1242,33 +1268,51 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   }
 
   function renderQueue(apiUrl, waiting) {
-    if (waiting.length === 0) {
-      el('queueList').innerHTML = '<div class="log-empty">Nenhuma chamada esperando.</div>';
+    const container = el('queueList');
+    container.replaceChildren();
+    if (!Array.isArray(waiting) || waiting.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'log-empty';
+      empty.textContent = 'Nenhuma chamada esperando.';
+      container.appendChild(empty);
       return;
     }
 
-    el('queueList').innerHTML = waiting.map((call) => {
-      const minutes = String(Math.floor(call.waiting_seconds / 60)).padStart(2, '0');
-      const seconds = String(call.waiting_seconds % 60).padStart(2, '0');
-      const label = call.caller_id_name || call.caller_id_num || call.channel;
-      return `<div class="queue-item">
-        <div class="info">
-          <div class="peer">${label}</div>
-          <div class="wait mono">esperando ${minutes}:${seconds}</div>
-        </div>
-        <button class="btn-primary" data-channel="${call.channel}" style="margin:0;">Atender</button>
-      </div>`;
-    }).join('');
-
-    document.querySelectorAll('#queueList button[data-channel]').forEach((btn) => {
-      btn.addEventListener('click', () => pickupFromQueue(apiUrl, btn.dataset.channel));
-    });
+    // O caller ID vem de terceiros via SIP; nunca injetá-lo como HTML.
+    for (const call of waiting) {
+      const row = document.createElement('div');
+      row.className = 'queue-item';
+      const info = document.createElement('div');
+      info.className = 'info';
+      const label = document.createElement('div');
+      label.className = 'peer';
+      label.textContent = String(call.caller_id_name || call.caller_id_num || call.channel || '');
+      const timer = document.createElement('div');
+      timer.className = 'wait mono';
+      const secondsTotal = Math.max(0, Number(call.waiting_seconds) || 0);
+      const minutes = String(Math.floor(secondsTotal / 60)).padStart(2, '0');
+      const seconds = String(Math.floor(secondsTotal % 60)).padStart(2, '0');
+      timer.textContent = `esperando ${minutes}:${seconds}`;
+      const button = document.createElement('button');
+      button.className = 'btn-primary';
+      button.style.margin = '0';
+      button.textContent = 'Atender';
+      button.addEventListener('click', () => pickupFromQueue(apiUrl, call.channel));
+      info.append(label, timer);
+      row.append(info, button);
+      container.appendChild(row);
+    }
   }
 
-  function pickupFromQueue(apiUrl, channel) {
+    function pickupFromQueue(apiUrl, channel) {
+    const token = el('queueToken').value.trim();
+    if (!token || !recordingApiIsSecure(apiUrl)) {
+      alert('É necessário configurar credencial da fila e HTTPS.');
+      return;
+    }
     fetch(`${apiUrl}/api/queue/pickup`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({ channel, extension: myExtension }),
     })
       .then((res) => res.json())
@@ -1300,8 +1344,18 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   }
 
   function fetchMissedCalls(apiUrl) {
-    fetch(`${apiUrl}/api/missed-calls`)
-      .then((res) => res.json())
+    const token = el('queueToken').value.trim();
+    if (!token || !recordingApiIsSecure(apiUrl)) {
+      el('missedCallsList').textContent = 'Informe credencial da empresa e HTTPS.';
+      return;
+    }
+    fetch(`${apiUrl}/api/missed-calls`, {
+      headers: { Authorization: `Bearer ${token}` }, cache: 'no-store',
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error('Chamadas perdidas não autorizadas');
+        return res.json();
+      })
       .then((data) => renderMissedCalls(data.missed_calls || []))
       .catch(() => {
         el('missedCallsList').innerHTML = '<div class="log-empty">API indisponível.</div>';
@@ -1309,27 +1363,35 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   }
 
   function renderMissedCalls(missedCalls) {
-    if (missedCalls.length === 0) {
-      el('missedCallsList').innerHTML = '<div class="log-empty">Nenhuma chamada perdida registrada.</div>';
+    const container = el('missedCallsList');
+    container.replaceChildren();
+    if (!Array.isArray(missedCalls) || missedCalls.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'log-empty';
+      empty.textContent = 'Nenhuma chamada perdida registrada.';
+      container.appendChild(empty);
       return;
     }
-
     const reasonLabel = {
-      NOANSWER: 'não atendida',
-      BUSY: 'ocupado',
-      CANCEL: 'cancelada pelo cliente',
-      CONGESTION: 'congestionamento',
+      NOANSWER: 'não atendida', BUSY: 'ocupado',
+      CANCEL: 'cancelada pelo cliente', CONGESTION: 'congestionamento',
       ABANDONED: 'desistiu na fila',
     };
-
-    el('missedCallsList').innerHTML = missedCalls.map((m) => {
-      const label = m.caller_id_name || m.caller_id_num;
-      const when = new Date(m.timestamp * 1000).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-      return `<div class="log-item">
-        <div class="peer">${label}</div>
-        <div class="meta missed">${reasonLabel[m.reason] || m.reason} · ${when}</div>
-      </div>`;
-    }).join('');
+    for (const missed of missedCalls) {
+      const item = document.createElement('div');
+      item.className = 'log-item';
+      const peer = document.createElement('div');
+      peer.className = 'peer';
+      peer.textContent = String(missed.caller_id_name || missed.caller_id_num || 'desconhecido');
+      const meta = document.createElement('div');
+      meta.className = 'meta missed';
+      const time = new Date(Number(missed.timestamp) * 1000);
+      const when = Number.isFinite(time.getTime())
+        ? time.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '—';
+      meta.textContent = `${reasonLabel[missed.reason] || String(missed.reason || '')} · ${when}`;
+      item.append(peer, meta);
+      container.appendChild(item);
+    }
   }
 
   // ---------- Métricas do dia ----------
@@ -1352,8 +1414,18 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   }
 
   function fetchMetrics(apiUrl) {
-    fetch(`${apiUrl}/api/metrics/today`)
-      .then((res) => res.json())
+    const token = el('queueToken').value.trim();
+    if (!token || !recordingApiIsSecure(apiUrl)) {
+      el('metricsGrid').textContent = 'Informe credencial da empresa e HTTPS.';
+      return;
+    }
+    fetch(`${apiUrl}/api/metrics/today`, {
+      headers: { Authorization: `Bearer ${token}` }, cache: 'no-store',
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error('Métricas não autorizadas');
+        return res.json();
+      })
       .then(renderMetrics)
       .catch(() => {
         el('metricsGrid').innerHTML = '<div class="log-empty">API indisponível.</div>';
@@ -1501,17 +1573,24 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   // ---------- Minha presença (ausente/reunião/férias) ----------
   el('setPresenceBtn').addEventListener('click', () => {
     const apiUrl = el('queueApiUrl').value.trim();
-    if (!apiUrl || !myExtension) return;
+    const token = el('queueToken').value.trim();
+    if (!apiUrl || !myExtension || !token || !recordingApiIsSecure(apiUrl)) {
+      alert('Configure HTTPS e credencial da empresa antes de alterar a presença.');
+      return;
+    }
 
-    fetch(`${apiUrl}/api/presence/${myExtension}`, {
+    fetch(`${apiUrl}/api/presence/${encodeURIComponent(myExtension)}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({
         status: el('presenceStatusSelect').value,
         note: el('presenceNoteInput').value,
       }),
     })
-      .then((res) => res.json())
+      .then((res) => {
+        if (!res.ok) throw new Error('Acesso não autorizado');
+        return res.json();
+      })
       .then(() => alert('Presença atualizada.'))
       .catch(() => alert('Não foi possível atualizar a presença (API indisponível).'));
   });
@@ -1519,14 +1598,21 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   // ---------- Pausa da fila (backlog #44) ----------
   function sendPauseRequest(paused, reason) {
     const apiUrl = el('queueApiUrl').value.trim();
-    if (!apiUrl || !myExtension) return;
+    const token = el('queueToken').value.trim();
+    if (!apiUrl || !myExtension || !token || !recordingApiIsSecure(apiUrl)) {
+      alert('Configure HTTPS e credencial da empresa antes de alterar a pausa.');
+      return;
+    }
 
     fetch(`${apiUrl}/api/queue/pause`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({ extension: myExtension, paused, reason }),
     })
-      .then((res) => res.json())
+      .then((res) => {
+        if (!res.ok) throw new Error('Acesso não autorizado');
+        return res.json();
+      })
       .then(() => {
         el('pauseBtn').style.display = paused ? 'none' : 'block';
         el('unpauseBtn').style.display = paused ? 'block' : 'none';
@@ -1545,6 +1631,12 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   // ---------- Presença dos colegas (BLF via SUBSCRIBE) ----------
   function startPresenceMonitoring(domain) {
     el('colleaguesPanel').style.display = 'block';
+    // JsSIP 3.10.1 não expõe Subscriber. Isso não pode interromper
+    // o registro, os painéis nem o áudio de chamadas normais.
+    if (typeof JsSIP.Subscriber !== 'function') {
+      el('colleaguesList').innerHTML = '<div class="log-empty">Presença SIP indisponível neste cliente.</div>';
+      return;
+    }
     COLLEAGUES.forEach((colleague) => {
       colleagueState[colleague.ext] = 'indisponivel';
       subscribeToPresence(colleague.ext, domain);
@@ -1652,11 +1744,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
         el('consultTargetState').textContent = 'em conversa';
         el('completeConsultBtn').disabled = false;
       });
-      session.on('confirmed', () => {
-        session.connection.addEventListener('track', (ev) => {
-          remoteAudio.srcObject = ev.streams[0];
-        });
-      });
+      AxeRemoteAudio.bindSessionAudio(session, remoteAudio, () => consultSession === session);
       session.on('ended', () => handleConsultEnded());
       session.on('failed', () => handleConsultEnded());
       return;
@@ -1706,6 +1794,8 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   }
 
   function wireSessionEvents(session, index) {
+    lines[index].refreshAudio = AxeRemoteAudio.bindSessionAudio(session, remoteAudio,
+      () => activeLineIndex === index && lines[index]?.session === session && !consultSession);
     session.on('progress', () => {
       if (session.direction === 'outgoing' && activeLineIndex === index) {
         el('activeState').textContent = 'Chamando…';
@@ -1724,12 +1814,6 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
         setStatus('online', 'Em chamada');
       }
       renderLineSwitcher();
-    });
-
-    session.on('confirmed', () => {
-      session.connection.addEventListener('track', (ev) => {
-        if (activeLineIndex === index) remoteAudio.srcObject = ev.streams[0];
-      });
     });
 
     session.on('ended', () => handleLineEnded(index, 'concluída'));
@@ -1886,6 +1970,9 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
       primarySession.unhold();
       lines[idx].state = 'active';
       activeLineIndex = idx;
+      // Liberar o foco da consulta antes de restaurar os receivers originais.
+      consultSession = null;
+      lines[idx].refreshAudio?.();
       el('activePeer').textContent = lines[idx].peer;
       el('activeState').textContent = 'Em chamada';
       showView('activeView');

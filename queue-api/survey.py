@@ -43,9 +43,12 @@ def parse_survey_event(event: dict):
     if score < 1 or score > 5:
         return None
 
+    operator = extract_operator_from_channel(event.get("Operator", ""))
+    from monitoring_access import extension_tenant
     return {
         "score": score,
-        "operator": extract_operator_from_channel(event.get("Operator", "")),
+        "operator": operator,
+        "tenant": extension_tenant(operator),
         "caller_id_num": event.get("CallerIDNum", ""),
         "date": time.strftime("%Y-%m-%d"),
     }
@@ -74,8 +77,10 @@ class SurveyStore:
                 continue
         return records
 
-    def query(self, operator=None):
+    def query(self, operator=None, tenant=None):
         records = self.load_all()
+        if tenant is not None:
+            records = [r for r in records if r.get("tenant") == tenant]
         if operator:
             records = [r for r in records if r.get("operator") == operator]
         return records
