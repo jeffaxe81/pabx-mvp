@@ -171,7 +171,8 @@ def test_callback_connect_context_dials_tenant_specific_receptionist():
     blocks = blocks_as_dict(load_ext_blocks())
     text = blocks["callback-connect"].replace(" ", "")
     assert "Dial(PJSIP/${TENANT}-recepcao" in text
-    assert 'Set(TENANT=${IF($["${TENANT}"=""]?t1:${TENANT})})' in text
+    assert 'ExecIf($["${TENANT}"=""]?Hangup())' in text
+    assert '?t1:' not in text  # sem fallback para outra empresa
 
 
 def test_customer_stays_on_line_after_agent_hangs_up():
