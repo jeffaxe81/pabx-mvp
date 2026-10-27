@@ -284,6 +284,8 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 
 <div class="panel">
   <h2>Nova campanha</h2>
+  <label for="queueToken">Credencial temporária da empresa (Bearer)</label>
+  <input id="queueToken" type="password" autocomplete="off" spellcheck="false" placeholder="Token da empresa">
   <label for="campaignApiKey">Chave de API (X-Click-To-Call-Key)</label>
   <input id="campaignApiKey" type="password" placeholder="mesma chave do click-to-call">
   <label for="campaignName">Nome</label>
@@ -332,14 +334,31 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   }
 
   function apiFetch(path, options = {}) {
+    const token = el('queueToken').value.trim();
+    const url = new URL(apiUrl);
+    const secure = !url.username && !url.password &&
+      (url.protocol === 'https:' ||
+       (url.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(url.hostname)));
+    if (!secure || !token || !apiKey()) {
+      return Promise.reject(new Error('Credencial, chave de API e HTTPS são obrigatórios.'));
+    }
     return fetch(`${apiUrl}${path}`, {
-      ...options,
-      headers: { 'Content-Type': 'application/json', 'X-Click-To-Call-Key': apiKey(), ...(options.headers || {}) },
+      ...options, cache: 'no-store',
+      headers: { 'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+        'X-Click-To-Call-Key': apiKey(), ...(options.headers || {}) },
     }).then(async (res) => {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || `erro ${res.status}`);
       return data;
     });
+  }
+
+  // Escapa strings vindas de AMI, campanha ou cliente antes do innerHTML.
+  function safe(value) {
+    return String(value == null ? '' : value).replace(/[&<>"']/g,
+      (ch) => ({'&': '&amp;', '<': '&lt;', '>': '&gt;',
+                '"': '&quot;', "'": '&#39;'}[ch]));
   }
 
   const statusLabel = {
@@ -351,7 +370,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   function loadCampaigns() {
     apiFetch('/api/campaigns')
       .then((data) => renderCampaigns(data.campaigns || []))
-      .catch((err) => { el('campaignsList').innerHTML = `<div class="error-msg">${err.message}</div>`; });
+      .catch((err) => { el('campaignsList').innerHTML = `<div class="error-msg">${safe(err.message)}</div>`; });
   }
 
   function renderCampaigns(campaigns) {
@@ -361,12 +380,12 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     }
     el('campaignsList').innerHTML = campaigns.map((c) => {
       const chips = Object.entries(c.summary || {})
-        .map(([status, count]) => `<span class="status-chip">${statusLabel[status] || status}: ${count}</span>`)
+        .map(([status, count]) => `<span class="status-chip">${safe(statusLabel[status] || status)}: ${safe(count)}</span>`)
         .join('');
       return `<div class="campaign-card">
-        <div class="campaign-name">${c.name} <span class="mono" style="color:var(--text-muted); font-size:12px;">(${c.agent_extension})</span></div>
+        <div class="campaign-name">${safe(c.name)} <span class="mono" style="color:var(--text-muted); font-size:12px;">(${safe(c.agent_extension)})</span></div>
         <div class="status-row">${chips}</div>
-        <button class="btn-ghost" data-dial="${c.id}">Discar próximo contato</button>
+        <button class="btn-ghost" data-dial="${safe(c.id)}">Discar próximo contato</button>
       </div>`;
     }).join('');
 
@@ -418,7 +437,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   function loadCallbacks() {
     apiFetch('/api/callbacks')
       .then((data) => renderCallbacks(data.callbacks || []))
-      .catch((err) => { el('callbacksList').innerHTML = `<div class="error-msg">${err.message}</div>`; });
+      .catch((err) => { el('callbacksList').innerHTML = `<div class="error-msg">${safe(err.message)}</div>`; });
   }
 
   function renderCallbacks(callbacks) {
@@ -429,8 +448,8 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     }
     el('callbacksList').innerHTML = pending.map((c) => `
       <div class="campaign-card">
-        <div class="campaign-name">${c.caller_id_name || c.caller_id_num} <span class="mono" style="color:var(--text-muted); font-size:12px;">(${c.caller_id_num})</span></div>
-        <div class="status-row"><span class="status-chip">${callbackStatusLabel[c.status] || c.status}</span><span class="status-chip">tentativas: ${c.attempts}</span></div>
+        <div class="campaign-name">${safe(c.caller_id_name || c.caller_id_num)} <span class="mono" style="color:var(--text-muted); font-size:12px;">(${safe(c.caller_id_num)})</span></div>
+        <div class="status-row"><span class="status-chip">${safe(callbackStatusLabel[c.status] || c.status)}</span><span class="status-chip">tentativas: ${safe(c.attempts)}</span></div>
       </div>`).join('') + `<button class="btn-ghost" id="dialNextCallbackBtn" style="margin-top:10px;">Discar próximo retorno</button>`;
 
     const btn = el('dialNextCallbackBtn');
