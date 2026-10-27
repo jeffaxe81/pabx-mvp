@@ -39,5 +39,11 @@ def test_auto_block_checks_feature_flag_before_calling_ami():
 
 def test_fraud_alerts_endpoint_registered():
     source = load_source()
-    assert "/api/fraud-alerts" in source
-    assert "fraud_alerts_log.list()" in source
+    start = source.index('elif urlparse(self.path).path == "/api/fraud-alerts":')
+    end = source.index("elif", start + 5)
+    route = source[start:end]
+    assert "self._require_queue_identity()" in route
+    assert "scoped_monitoring_entries(" in route
+    assert "fraud_alerts_log.list(limit=100)" in route
+    assert 'identity["tenant"]' in route
+    assert "self._send_queue_json(200," in route
