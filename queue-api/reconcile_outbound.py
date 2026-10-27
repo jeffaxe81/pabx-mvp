@@ -8,6 +8,7 @@ import argparse
 import hashlib
 import json
 import math
+import re
 import time
 from pathlib import Path
 
@@ -17,6 +18,10 @@ from outbound_safety import outbound_lock, atomic_write_json, audit_event
 def _valid_tenant(tenant):
     from monitoring_access import extension_tenant
     return isinstance(tenant, str) and extension_tenant(tenant + "-recepcao") == tenant
+
+
+def _safe_attempt_id(value):
+    return value if isinstance(value, str) and re.fullmatch(r"[a-f0-9]{32}", value) else None
 
 
 def _candidate_records(records, kind, tenant, now, min_age):
@@ -50,6 +55,7 @@ def inspect_claims(path, kind, tenant, min_age=600, now=None):
             raise ValueError("invalid outbound snapshot")
         return [{
             "id": entity["id"],
+            "attempt_id": _safe_attempt_id(item.get("attempt_id")),
             "number_sha256": hashlib.sha256(str(number).encode()).hexdigest(),
             "age_seconds": int(now - item["last_attempt_at"]),
             "state": "discando",
@@ -85,6 +91,7 @@ def quarantine_claim(path, kind, tenant, item_id, evidence, operator,
         entry = {
             "action": "quarantine", "phase": "requested",
             "kind": kind, "tenant": tenant, "id": item_id,
+            "attempt_id": _safe_attempt_id(item.get("attempt_id")),
             "number_sha256": hashlib.sha256(str(dialed).encode()).hexdigest(),
             "actor": operator.strip(), "evidence": evidence.strip(),
             "timestamp": now,

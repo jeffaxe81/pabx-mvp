@@ -90,15 +90,22 @@ def next_pending_callback(callbacks: list):
     return min(pending, key=lambda c: c["requested_at"])
 
 
-def mark_callback_calling(path, callback_id: str):
+def mark_callback_calling(path, callback_id: str, attempt_id=None):
     callbacks = load_callbacks(path)
     callback = find_callback(callbacks, callback_id)
     if not callback:
         return False, f"callback '{callback_id}' não encontrado"
 
+    if callback.get("status") != "pendente":
+        return False, "callback ja reservado"
+    attempt_id = attempt_id or secrets.token_hex(16)
+    if not isinstance(attempt_id, str) or not re.fullmatch(r"[a-f0-9]{32}", attempt_id):
+        return False, "id de tentativa invalido"
     callback["status"] = "discando"
     callback["attempts"] += 1
     callback["last_attempt_at"] = time.time()
+    callback["attempt_id"] = attempt_id
+    callback["channel_id"] = "axe-" + attempt_id
     save_callbacks(path, callbacks)
     return True, None
 
