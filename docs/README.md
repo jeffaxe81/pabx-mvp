@@ -172,3 +172,6 @@ registrado como regra permanente no prompt master
 120. [Tentativas AMI, correlação e diagnóstico WebRTC](manual-120-tentativas-ami-webrtc.md)
 121. [Canal AMI com leitor único e ActionID](manual-121-ami-leitor-unico.md)
 122. [Correlação AMI por ChannelId e DialEnd](manual-122-ami-channelid-dialend.md)
+
+123. [Correio de voz por identidade SIP autenticada](manual-123-voicemail-endpoint-autenticado.md)
+124. [Laboratório real voicemail *97 por tenant](manual-124-voicemail-runtime.md)

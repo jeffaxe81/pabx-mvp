@@ -922,3 +922,6 @@ Plano de aceleração: [100 dias do AXE PABX](docs/roadmap-100-dias-antecipacao-
 120. [Identificação de tentativas e estabilidade do laboratório WebRTC](docs/manual-120-tentativas-ami-webrtc.md)
 121. [AMI seguro: correlação de respostas e eventos](docs/manual-121-ami-leitor-unico.md)
 122. [Correlação de chamadas por ChannelId](docs/manual-122-ami-channelid-dialend.md)
+
+123. [Correio de voz autenticado por endpoint SIP](docs/manual-123-voicemail-endpoint-autenticado.md)
+124. [Prova SIP real de voicemail *97 por tenant](docs/manual-124-voicemail-runtime.md)
