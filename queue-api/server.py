@@ -14,6 +14,7 @@ exigem Bearer com tenant e Origin explicitamente permitido. Nunca colocar
 tokens de fila em URLs ou em código estático publicado pelo Nginx.
 """
 import json
+import secrets
 import os
 import threading
 import time
@@ -53,6 +54,8 @@ from fraud_detection import CallRateTracker, FraudAlertsLog, is_external_call, i
 from quality_monitoring import parse_quality_event, is_poor_quality, QualityLog
 from monitoring_access import extension_tenant, channel_tenant
 from monitoring_access import monitoring_event_tenant, scoped_monitoring_entries
+from outbound_safety import outbound_lock, atomic_write_json
+from outbound_correlation import matches_dial_event, matches_originate_response
 
 AMI_HOST = os.environ.get("AMI_HOST", "127.0.0.1")
 AMI_PORT = int(os.environ.get("AMI_PORT", "5038"))
@@ -209,6 +212,7 @@ def handle_ami_event(event: dict):
     if screen_pop_error:
         print(f"[AVISO] falha no screen-pop: {screen_pop_error}")
 
+    apply_originate_response(event)
     apply_campaign_dial_result(event)
     apply_callback_dial_result(event)
 
@@ -219,7 +223,7 @@ def handle_ami_event(event: dict):
                 and extension_tenant(tenant + "-recepcao") == tenant
                 and all(event.get(key) == tenant for key in ("AccountCode", "Accountcode")
                         if key in event)):
-            with OUTBOUND_LOCK:
+            with outbound_lock(CALLBACKS_PATH):
                 add_callback_request(CALLBACKS_PATH, callback_request["caller_id_num"],
                                      callback_request["caller_id_name"], tenant=tenant)
 
@@ -248,6 +252,35 @@ def outbound_event_tenant(event):
     return source
 
 
+def apply_originate_response(event: dict):
+    """Persist only an AMI OriginateResponse with exact ActionID + Uniqueid.
+
+    An AMI response is an acknowledgement, never proof of call completion.
+    Failures remain in 'discando' for a human to review; no auto-redial.
+    """
+    if event.get("Event") != "OriginateResponse":
+        return
+    with outbound_lock(CALLBACKS_PATH), outbound_lock(CAMPAIGNS_PATH):
+        callbacks = load_callbacks(CALLBACKS_PATH)
+        campaigns = load_campaigns(CAMPAIGNS_PATH)
+        found = [(CALLBACKS_PATH, callback) for callback in callbacks
+                 if callback.get("status") == "discando"
+                 and matches_originate_response(event, callback)]
+        found.extend((CAMPAIGNS_PATH, contact)
+                     for campaign in campaigns for contact in campaign.get("contacts", [])
+                     if contact.get("status") == "discando"
+                     and matches_originate_response(
+                         event, {**contact, "tenant": campaign.get("tenant")}))
+        if len(found) != 1:
+            return
+        path, target = found[0]
+        if target.get("originate_response") is not None:
+            return  # late, duplicated, or contradictory event
+        target["originate_response"] = event["Response"]
+        target["originate_response_at"] = time.time()
+        atomic_write_json(path, callbacks if path == CALLBACKS_PATH else campaigns)
+
+
 def apply_callback_dial_result(event: dict):
     """Retorno de callback só é atualizado com tenant confiável no AMI."""
     if event.get("Event") != "DialEnd":
@@ -258,13 +291,21 @@ def apply_callback_dial_result(event: dict):
     if not tenant or not disposition or not number:
         return
 
-    with OUTBOUND_LOCK:
-        for callback in load_callbacks(CALLBACKS_PATH):
-            if (callback.get("tenant") == tenant
-                    and callback["caller_id_num"] == number
-                    and callback["status"] == "discando"):
-                mark_callback_result(CALLBACKS_PATH, callback["id"], disposition)
-                break
+    # Always acquire shared locks in the same order, even when AMI
+    # events arrive during an Originate request in another process.
+    with outbound_lock(CALLBACKS_PATH), outbound_lock(CAMPAIGNS_PATH):
+        matches = [c for c in load_callbacks(CALLBACKS_PATH)
+                   if c.get("tenant") == tenant and c.get("caller_id_num") == number
+                   and c.get("status") == "discando" and matches_dial_event(event, c)
+                   and c.get("originate_response") != "Failure"]
+        other = [item for campaign in load_campaigns(CAMPAIGNS_PATH)
+                 if campaign.get("tenant") == tenant
+                 for item in campaign.get("contacts", [])
+                 if item.get("number") == number and item.get("status") == "discando"]
+        if any(matches_dial_event(event, item) for item in other):
+            return  # conflicting claim across categories
+        if len(matches) == 1:
+            mark_callback_result(CALLBACKS_PATH, matches[0]["id"], disposition)
 
 
 def apply_campaign_dial_result(event: dict):
@@ -277,18 +318,23 @@ def apply_campaign_dial_result(event: dict):
     if not tenant or not disposition or not number:
         return
 
-    with OUTBOUND_LOCK:
-        for campaign in load_campaigns(CAMPAIGNS_PATH):
-            if campaign.get("tenant") != tenant:
-                continue
-            contact = next(
-                (c for c in campaign["contacts"] if c["number"] == number
-                 and c["status"] == "discando"),
-                None,
-            )
-            if contact:
-                mark_contact_result(CAMPAIGNS_PATH, campaign["id"], number, disposition)
-                break
+    with outbound_lock(CALLBACKS_PATH), outbound_lock(CAMPAIGNS_PATH):
+        matches = [(campaign, contact)
+                   for campaign in load_campaigns(CAMPAIGNS_PATH)
+                   if campaign.get("tenant") == tenant
+                   for contact in campaign.get("contacts", [])
+                   if contact.get("number") == number
+                   and contact.get("status") == "discando"
+                   and matches_dial_event(event, contact)
+                   and contact.get("originate_response") != "Failure"]
+        other = [c for c in load_callbacks(CALLBACKS_PATH)
+                 if c.get("tenant") == tenant and c.get("caller_id_num") == number
+                 and c.get("status") == "discando"]
+        if any(matches_dial_event(event, item) for item in other):
+            return  # conflicting claim across categories
+        if len(matches) == 1:
+            campaign, contact = matches[0]
+            mark_contact_result(CAMPAIGNS_PATH, campaign["id"], contact["number"], disposition)
 
 
 def check_call_volume(event: dict):
@@ -950,7 +996,7 @@ class Handler(BaseHTTPRequestHandler):
             self._send_queue_json(403, {"error": "ramal de outra empresa"})
             return
         data["tenant"] = identity["tenant"]
-        with OUTBOUND_LOCK:
+        with outbound_lock(CAMPAIGNS_PATH):
             ok, error, campaign = create_campaign(CAMPAIGNS_PATH, data)
         if not ok:
             self._send_queue_json(400, {"error": error})
@@ -982,7 +1028,7 @@ class Handler(BaseHTTPRequestHandler):
 
         # Claim precisa incluir a leitura do pendente: duas requisições
         # HTTP simultâneas não podem originar o mesmo contato.
-        with OUTBOUND_LOCK:
+        with outbound_lock(CAMPAIGNS_PATH):
             campaign = find_campaign(load_campaigns(CAMPAIGNS_PATH), campaign_id)
             if not campaign or campaign.get("tenant") != identity["tenant"] or not may_pickup(
                     identity, campaign.get("agent_extension")):
@@ -992,7 +1038,10 @@ class Handler(BaseHTTPRequestHandler):
             if not contact:
                 self._send_queue_json(200, {"done": True, "message": "nenhum contato pendente"})
                 return
-            ok, error = mark_contact_calling(CAMPAIGNS_PATH, campaign_id, contact["number"])
+            attempt_id = secrets.token_hex(16)
+            ok, error = mark_contact_calling(
+                CAMPAIGNS_PATH, campaign_id, contact["number"], attempt_id=attempt_id,
+            )
             if not ok:
                 self._send_queue_json(409, {"error": "contato nao reservado"})
                 return
@@ -1000,6 +1049,8 @@ class Handler(BaseHTTPRequestHandler):
                                             contact["number"], CLICK_TO_CALL_CONTEXT)
             action["Account"] = identity["tenant"]
             action["Variable"] = "TENANT=" + identity["tenant"]
+            action["ActionID"] = attempt_id
+            action["ChannelId"] = "axe-" + attempt_id
             try:
                 response = ami.send_action(action)
             except (OSError, TimeoutError, ConnectionError):
@@ -1041,7 +1092,7 @@ class Handler(BaseHTTPRequestHandler):
             self._send_queue_json(503, {"error": "AMI nao conectado"})
             return
 
-        with OUTBOUND_LOCK:
+        with outbound_lock(CALLBACKS_PATH):
             callback = next_pending_callback([
                 c for c in load_callbacks(CALLBACKS_PATH)
                 if c.get("tenant") == identity["tenant"]
@@ -1053,7 +1104,10 @@ class Handler(BaseHTTPRequestHandler):
             if not isinstance(number, str) or sanitize_phone_number(number) != number:
                 self._send_queue_json(400, {"error": "numero de callback invalido"})
                 return
-            ok, error = mark_callback_calling(CALLBACKS_PATH, callback["id"])
+            attempt_id = secrets.token_hex(16)
+            ok, error = mark_callback_calling(
+                CALLBACKS_PATH, callback["id"], attempt_id=attempt_id,
+            )
             if not ok:
                 self._send_queue_json(409, {"error": "callback nao reservado"})
                 return
@@ -1068,6 +1122,8 @@ class Handler(BaseHTTPRequestHandler):
                 "CallerID": f'"Retorno de chamada" <{number}>',
                 "Variable": "TENANT=" + identity["tenant"],
                 "Account": identity["tenant"],
+                "ActionID": attempt_id,
+                "ChannelId": "axe-" + attempt_id,
             }
             try:
                 response = ami.send_action(action)
