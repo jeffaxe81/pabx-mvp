@@ -105,6 +105,7 @@ def mark_callback_calling(path, callback_id: str, attempt_id=None):
     callback["attempts"] += 1
     callback["last_attempt_at"] = time.time()
     callback["attempt_id"] = attempt_id
+    callback["channel_id"] = "axe-" + attempt_id
     save_callbacks(path, callbacks)
     return True, None
 

@@ -920,3 +920,5 @@ Plano de aceleração: [100 dias do AXE PABX](docs/roadmap-100-dias-antecipacao-
 118. [Click-to-call isolado por empresa e antidisparo duplicado](docs/manual-118-click-to-call-tenant-concorrencia.md)
 119. [Proteção multi-instância de discagens e revisão auditável](docs/manual-119-reservas-outbound-auditoria.md)
 120. [Identificação de tentativas e estabilidade do laboratório WebRTC](docs/manual-120-tentativas-ami-webrtc.md)
+121. [AMI seguro: correlação de respostas e eventos](docs/manual-121-ami-leitor-unico.md)
+122. [Correlação de chamadas por ChannelId](docs/manual-122-ami-channelid-dialend.md)

@@ -154,6 +154,7 @@ def mark_contact_calling(path, campaign_id: str, number: str, attempt_id=None):
     contact["attempts"] += 1
     contact["last_attempt_at"] = time.time()
     contact["attempt_id"] = attempt_id
+    contact["channel_id"] = "axe-" + attempt_id
     save_campaigns(path, campaigns)
     return True, None
 

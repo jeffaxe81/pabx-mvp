@@ -54,7 +54,8 @@ from fraud_detection import CallRateTracker, FraudAlertsLog, is_external_call, i
 from quality_monitoring import parse_quality_event, is_poor_quality, QualityLog
 from monitoring_access import extension_tenant, channel_tenant
 from monitoring_access import monitoring_event_tenant, scoped_monitoring_entries
-from outbound_safety import outbound_lock
+from outbound_safety import outbound_lock, atomic_write_json
+from outbound_correlation import matches_dial_event, matches_originate_response
 
 AMI_HOST = os.environ.get("AMI_HOST", "127.0.0.1")
 AMI_PORT = int(os.environ.get("AMI_PORT", "5038"))
@@ -211,6 +212,7 @@ def handle_ami_event(event: dict):
     if screen_pop_error:
         print(f"[AVISO] falha no screen-pop: {screen_pop_error}")
 
+    apply_originate_response(event)
     apply_campaign_dial_result(event)
     apply_callback_dial_result(event)
 
@@ -250,6 +252,35 @@ def outbound_event_tenant(event):
     return source
 
 
+def apply_originate_response(event: dict):
+    """Persist only an AMI OriginateResponse with exact ActionID + Uniqueid.
+
+    An AMI response is an acknowledgement, never proof of call completion.
+    Failures remain in 'discando' for a human to review; no auto-redial.
+    """
+    if event.get("Event") != "OriginateResponse":
+        return
+    with outbound_lock(CALLBACKS_PATH), outbound_lock(CAMPAIGNS_PATH):
+        callbacks = load_callbacks(CALLBACKS_PATH)
+        campaigns = load_campaigns(CAMPAIGNS_PATH)
+        found = [(CALLBACKS_PATH, callback) for callback in callbacks
+                 if callback.get("status") == "discando"
+                 and matches_originate_response(event, callback)]
+        found.extend((CAMPAIGNS_PATH, contact)
+                     for campaign in campaigns for contact in campaign.get("contacts", [])
+                     if contact.get("status") == "discando"
+                     and matches_originate_response(
+                         event, {**contact, "tenant": campaign.get("tenant")}))
+        if len(found) != 1:
+            return
+        path, target = found[0]
+        if target.get("originate_response") is not None:
+            return  # late, duplicated, or contradictory event
+        target["originate_response"] = event["Response"]
+        target["originate_response_at"] = time.time()
+        atomic_write_json(path, callbacks if path == CALLBACKS_PATH else campaigns)
+
+
 def apply_callback_dial_result(event: dict):
     """Retorno de callback só é atualizado com tenant confiável no AMI."""
     if event.get("Event") != "DialEnd":
@@ -265,16 +296,14 @@ def apply_callback_dial_result(event: dict):
     with outbound_lock(CALLBACKS_PATH), outbound_lock(CAMPAIGNS_PATH):
         matches = [c for c in load_callbacks(CALLBACKS_PATH)
                    if c.get("tenant") == tenant and c.get("caller_id_num") == number
-                   and c.get("status") == "discando"]
+                   and c.get("status") == "discando" and matches_dial_event(event, c)
+                   and c.get("originate_response") != "Failure"]
         other = [item for campaign in load_campaigns(CAMPAIGNS_PATH)
                  if campaign.get("tenant") == tenant
                  for item in campaign.get("contacts", [])
                  if item.get("number") == number and item.get("status") == "discando"]
-        attempt_id = event.get("AttemptID")
-        if attempt_id is not None:
-            matches = [c for c in matches if c.get("attempt_id") == attempt_id]
-        elif other:
-            return  # cross-kind ambiguity: same number in a campaign
+        if any(matches_dial_event(event, item) for item in other):
+            return  # conflicting claim across categories
         if len(matches) == 1:
             mark_callback_result(CALLBACKS_PATH, matches[0]["id"], disposition)
 
@@ -295,16 +324,14 @@ def apply_campaign_dial_result(event: dict):
                    if campaign.get("tenant") == tenant
                    for contact in campaign.get("contacts", [])
                    if contact.get("number") == number
-                   and contact.get("status") == "discando"]
+                   and contact.get("status") == "discando"
+                   and matches_dial_event(event, contact)
+                   and contact.get("originate_response") != "Failure"]
         other = [c for c in load_callbacks(CALLBACKS_PATH)
                  if c.get("tenant") == tenant and c.get("caller_id_num") == number
                  and c.get("status") == "discando"]
-        attempt_id = event.get("AttemptID")
-        if attempt_id is not None:
-            matches = [(campaign, contact) for campaign, contact in matches
-                       if contact.get("attempt_id") == attempt_id]
-        elif other:
-            return  # cross-kind ambiguity: same number in a callback
+        if any(matches_dial_event(event, item) for item in other):
+            return  # conflicting claim across categories
         if len(matches) == 1:
             campaign, contact = matches[0]
             mark_contact_result(CAMPAIGNS_PATH, campaign["id"], contact["number"], disposition)
@@ -1023,6 +1050,7 @@ class Handler(BaseHTTPRequestHandler):
             action["Account"] = identity["tenant"]
             action["Variable"] = "TENANT=" + identity["tenant"]
             action["ActionID"] = attempt_id
+            action["ChannelId"] = "axe-" + attempt_id
             try:
                 response = ami.send_action(action)
             except (OSError, TimeoutError, ConnectionError):
@@ -1095,6 +1123,7 @@ class Handler(BaseHTTPRequestHandler):
                 "Variable": "TENANT=" + identity["tenant"],
                 "Account": identity["tenant"],
                 "ActionID": attempt_id,
+                "ChannelId": "axe-" + attempt_id,
             }
             try:
                 response = ami.send_action(action)
