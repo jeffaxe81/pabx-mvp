@@ -1,4 +1,4 @@
-# Manual 112 — Acesso ao correio de voz por identidade SIP autenticada
+# Manual 123 — Acesso ao correio de voz por identidade SIP autenticada
 
 ## Risco que motivou o ajuste
 O atalho telefônico *97 escolhia a caixa postal usando o

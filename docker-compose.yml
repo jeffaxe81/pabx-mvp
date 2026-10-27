@@ -86,6 +86,13 @@ services:
       # Separar por vírgula as origens exatas do Webphone HTTPS,
       # ex: "https://pabx.exemplo.com" (vazio = CORS negado).
       RECORDINGS_CORS_ORIGINS: ""
+      # Filas/atendimento: credenciais independentes das de gravação.
+      # Catálogo privado modo 0600, criado com queue_credentials.py.
+      # Sem catálogo, GET /api/queue e POST /api/queue/pickup retornam 401.
+      QUEUE_ACCESS_POLICY_PATH: "/app/data/queue_access.json"
+      # Apenas origens exatas HTTPS do Webphone/painel (localhost em testes).
+      # Vazio impede acesso a partir de browsers cross-origin.
+      QUEUE_CORS_ORIGINS: ""
       # Retenção de gravações (backlog #15) - 0 = desabilitado (nunca
       # apaga nada sozinho). Defina em dias (ex: "90") pra ativar o
       # expurgo automático diário.
@@ -116,6 +123,10 @@ services:
       # Notificação de chamada perdida - vazio = desabilitado.
       # Preencha com "email", "whatsapp" ou "email,whatsapp" pra ativar.
       NOTIFY_CHANNELS: ""
+      # Destinatários SMTP/WhatsApp são globais nesta versão. Sem
+      # NOTIFY_TENANT explícito, envio externo é bloqueado mesmo com
+      # NOTIFY_CHANNELS ativo. Configure um tenant por destinatário.
+      NOTIFY_TENANT: ""
       SMTP_HOST: ""
       SMTP_PORT: "587"
       SMTP_USERNAME: ""

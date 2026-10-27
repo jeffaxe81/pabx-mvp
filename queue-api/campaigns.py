@@ -15,6 +15,8 @@ import secrets
 import time
 from pathlib import Path
 
+from outbound_safety import atomic_write_json
+
 NUMBER_RE = re.compile(r"^[0-9]{8,20}$")
 MAX_ATTEMPTS = 3
 
@@ -60,7 +62,7 @@ def load_campaigns(path) -> list:
 
 
 def save_campaigns(path, campaigns: list):
-    Path(path).write_text(json.dumps(campaigns, indent=2, ensure_ascii=False), encoding="utf-8")
+    atomic_write_json(path, campaigns)
 
 
 def find_campaign(campaigns: list, campaign_id: str):
@@ -82,9 +84,11 @@ def validate_campaign_input(data: dict):
         return False, "lista de contatos não pode ser vazia", None
 
     contacts = []
+    numbers_seen = set()
     for raw_number in raw_contacts:
         number = sanitize_phone_number(raw_number)
-        if number:
+        if number and number not in numbers_seen:
+            numbers_seen.add(number)
             contacts.append({
                 "number": number,
                 "status": "pendente",
@@ -95,13 +99,21 @@ def validate_campaign_input(data: dict):
     if not contacts:
         return False, "nenhum número válido na lista de contatos", None
 
-    return True, None, {
+    result = {
         "id": secrets.token_hex(6),
         "name": name,
         "agent_extension": agent_extension,
         "created_at": time.time(),
         "contacts": contacts,
     }
+    # A identidade só é inserida pelo serviço HTTP autenticado.
+    if data.get("tenant") is not None:
+        from monitoring_access import extension_tenant
+        tenant = data["tenant"]
+        if not isinstance(tenant, str) or extension_tenant(agent_extension) != tenant:
+            return False, "ramal ou tenant nao autorizado", None
+        result["tenant"] = tenant
+    return True, None, result
 
 
 def create_campaign(path, data: dict):
@@ -123,7 +135,7 @@ def next_pending_contact(campaign: dict):
     return None
 
 
-def mark_contact_calling(path, campaign_id: str, number: str):
+def mark_contact_calling(path, campaign_id: str, number: str, attempt_id=None):
     campaigns = load_campaigns(path)
     campaign = find_campaign(campaigns, campaign_id)
     if not campaign:
@@ -133,9 +145,16 @@ def mark_contact_calling(path, campaign_id: str, number: str):
     if not contact:
         return False, f"contato '{number}' não encontrado na campanha"
 
+    if contact.get("status") != "pendente":
+        return False, "contato ja reservado"
+    attempt_id = attempt_id or secrets.token_hex(16)
+    if not isinstance(attempt_id, str) or not re.fullmatch(r"[a-f0-9]{32}", attempt_id):
+        return False, "id de tentativa invalido"
     contact["status"] = "discando"
     contact["attempts"] += 1
     contact["last_attempt_at"] = time.time()
+    contact["attempt_id"] = attempt_id
+    contact["channel_id"] = "axe-" + attempt_id
     save_campaigns(path, campaigns)
     return True, None
 
@@ -151,9 +170,13 @@ def mark_contact_result(path, campaign_id: str, number: str, disposition: str):
     if not campaign:
         return False, f"campanha '{campaign_id}' não encontrada"
 
-    contact = next((c for c in campaign["contacts"] if c["number"] == number), None)
+    contact = next((c for c in campaign["contacts"]
+                    if c["number"] == number and c["status"] == "discando"), None)
     if not contact:
-        return False, f"contato '{number}' não encontrado na campanha"
+        return False, "contato nao esta discando"
+
+    if contact["status"] != "discando":
+        return False, "contato nao esta discando"
 
     status = DISPOSITION_TO_STATUS.get(disposition, "falha")
     if status != "atendida" and contact["attempts"] < MAX_ATTEMPTS:
