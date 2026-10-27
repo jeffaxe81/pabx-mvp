@@ -22,7 +22,12 @@ def validate_pause_request(data: dict):
     só quando pausando (paused=True) - despausar não precisa de
     motivo nenhum.
     """
-    extension = (data.get("extension") or "").strip()
+    if not isinstance(data, dict):
+        return False, "pausa deve ser objeto JSON", None
+    extension = data.get("extension", "")
+    if not isinstance(extension, str):
+        return False, "ramal invalido", None
+    extension = extension.strip()
     if not extension:
         return False, "ramal obrigatório", None
 
@@ -30,7 +35,10 @@ def validate_pause_request(data: dict):
     if not isinstance(paused, bool):
         return False, "campo 'paused' deve ser true ou false", None
 
-    reason = (data.get("reason") or "").strip()
+    reason = data.get("reason", "")
+    if not isinstance(reason, str) or len(reason) > 256:
+        return False, "motivo invalido ou longo demais", None
+    reason = reason.strip()
     if paused and not reason:
         return False, "motivo da pausa é obrigatório", None
 
