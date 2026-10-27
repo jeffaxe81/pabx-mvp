@@ -110,3 +110,36 @@ def test_revocation_and_invalid_policy_take_effect_without_restart(recording_ser
     assert request(url + "/api/recordings", auth=TOKEN_T1)[0] == 200
     path.write_text("{}")
     assert request(url + "/api/recordings", auth=TOKEN_T1)[0] == 401
+
+
+def test_matching_catalog_entry_cannot_serve_symlinked_audio(recording_server, tmp_path):
+    url, _ = recording_server
+    recordings = tmp_path / "recordings"
+    secret = tmp_path / "outside.wav"
+    secret.write_bytes(b"private fixture outside recordings")
+    (recordings / "t1.wav").unlink()
+    (recordings / "t1.wav").symlink_to(secret)
+
+    status, _, body = request(url + "/recordings/t1.wav", auth=TOKEN_T1)
+    assert status == 404
+    assert b"private fixture" not in body
+    status, _, body = request(url + "/api/recordings", auth=TOKEN_T1)
+    assert status == 200
+    assert json.loads(body)["recordings"] == []
+
+
+def test_t2_bearer_never_leaks_t1_recording_or_metadata(recording_server):
+    url, path = recording_server
+    t2_token = "R" * 48
+    policy = json.loads(path.read_text(encoding="utf-8"))
+    policy["credentials"].append({
+        "token_sha256": hashlib.sha256(t2_token.encode()).hexdigest(),
+        "tenant": "t2", "role": "supervisor", "expires_at": 4102444800,
+    })
+    path.write_text(json.dumps(policy), encoding="utf-8")
+
+    status, _, body = request(url + "/api/recordings", auth=t2_token)
+    assert status == 200
+    assert [entry["filename"] for entry in json.loads(body)["recordings"]] == ["t2.wav"]
+    assert request(url + "/recordings/t1.wav", auth=t2_token)[0] == 404
+    assert request(url + "/recordings/t2.wav", auth=t2_token)[2] == b"RIFF tenant two"

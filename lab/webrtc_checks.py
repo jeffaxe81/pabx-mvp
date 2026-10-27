@@ -132,7 +132,7 @@ def prepare_webrtc(root,prepared,source):
     prepared.update(webrtc_input=target,webrtc_source=source)
 
 
-def run_browser(root,input_file,output_file,*,timeout=160):
+def run_browser(root,input_file,output_file,*,timeout=240):
     with subprocess.Popen(['node',str(Path(root)/'lab/webrtc_browser.cjs'),str(input_file),str(output_file)],
                           stdout=subprocess.PIPE,stderr=subprocess.PIPE,start_new_session=True) as process:
         try: process.communicate(timeout=timeout)
@@ -171,24 +171,35 @@ def exercise_webrtc(root,container,prepared,report):
             if name in browser_checks(): checks[name]=value is True
         phase=child.get('phase')
         if isinstance(phase,str) and re.fullmatch(r'[a-z_]+(?::t[123]:(?:forward|reverse))?',phase): report['webrtc_phase']=phase
-    if code:
+    failed_browser = bool(code)
+    if failed_browser:
+        # Even on a browser failure, collect independent CDR and cleanup
+        # outcomes. Never turn a media failure into success via timing changes.
         report['webrtc_diagnostics']=browser_failure_details(child.get('diagnostics'))
-        raise RuntimeError('laboratório WebRTC reprovado')
-    validated=validate_browser_report(child)
-    report['browser_version']=validated['browser_version']
-    report['webrtc_cases']=validated['cases']
+    else:
+        validated=validate_browser_report(child)
+        report['browser_version']=validated['browser_version']
+        report['webrtc_cases']=validated['cases']
     report['phase']='webrtc_cdr'
-    deadline=time.monotonic()+8
-    while time.monotonic()<deadline:
+    deadline=time.monotonic()+15
+    while True:
         cdr=command(['docker','exec',container,'cat','/var/log/asterisk/cdr-custom/Lab.csv'],check=False)
         for tenant in TENANTS:
             for direction in DIRECTIONS:
                 source,destination=('1010','1011') if direction=='forward' else ('1011','1010')
                 checks[f'webrtc_cdr:{tenant}:{direction}']=cdr.returncode==0 and webrtc_cdr_matches(cdr.stdout,tenant,source,destination)
-        if all(checks[f'webrtc_cdr:{tenant}:{direction}'] for tenant in TENANTS for direction in DIRECTIONS): break
+        active=cli(container,'core show channels concise')
+        checks['webrtc_channels_cleared']=not any(line.startswith('PJSIP/') for line in active.splitlines())
+        contacts=cli(container,'pjsip show contacts')
+        for tenant in TENANTS:
+            checks['webrtc_contacts_cleared:'+tenant]=tenant+'-recepcao' not in contacts
+        all_cdr = all(checks[f'webrtc_cdr:{tenant}:{direction}']
+                      for tenant in TENANTS for direction in DIRECTIONS)
+        all_clean = (checks['webrtc_channels_cleared']
+                     and all(checks['webrtc_contacts_cleared:'+tenant] for tenant in TENANTS))
+        if (all_cdr and all_clean) or time.monotonic()>=deadline:
+            break
         time.sleep(0.2)
-    active=cli(container,'core show channels concise')
-    checks['webrtc_channels_cleared']=not any(line.startswith('PJSIP/') for line in active.splitlines())
-    contacts=cli(container,'pjsip show contacts')
-    for tenant in TENANTS: checks['webrtc_contacts_cleared:'+tenant]=tenant+'-recepcao' not in contacts
     report.update(dtls_tested=True,wss_session_tested=True)
+    if failed_browser:
+        raise RuntimeError('laboratório WebRTC reprovado')

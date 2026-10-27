@@ -77,6 +77,92 @@ def render_voicemail_dynamic(extensions: list) -> str:
     return "\n".join(lines) + ("\n" if extensions else "")
 
 
+
+# Ultima barreira antes de publicar configuracoes geradas a partir de
+# extensions_store.json. A validacao de HTTP nao protege o arquivo em disco
+# contra corrupcao, restauracao antiga nem edicao fora do painel.
+_NAME = re.compile(r"[a-z0-9-]{3,40}\Z")
+_ENDPOINT_OWNER = re.compile(r"(t[1-9][0-9]*)-.+\Z")
+_PASSWORD = re.compile(r"[A-Za-z0-9._~!@#$%^&*()+\-=]{1,128}\Z")
+_EMAIL = re.compile(r"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,63}\Z")
+_VOICEMAIL_PIN = re.compile(r"(?:1234|[1-9][0-9]{7})\Z")
+_STATIC_ENDPOINTS = frozenset({
+    "t1-1001", "t1-1002", "t1-recepcao", "t1-recepcao-2",
+    "t2-1001", "t2-recepcao", "t2-recepcao-2",
+})
+
+
+def validate_persisted_extensions(extensions: list, tenant_ids: set) -> None:
+    """Rejeita estado adulterado antes de qualquer arquivo/AMI ser atualizado.
+
+    Compatibilidade: nome sem prefixo de tenant, PIN 1234 legado e
+    passwords legados continuam legiveis, sem criacao automatica de segredo.
+    """
+    if not isinstance(extensions, list):
+        raise ValueError("cadastro de ramais invalido")
+    names, extensions_by_tenant = set(), set()
+    for ext in extensions:
+        if not isinstance(ext, dict):
+            raise ValueError("registro de ramal invalido")
+        tenant = ext.get("tenant", "t1")
+        if not isinstance(tenant, str) or tenant not in tenant_ids:
+            raise ValueError("ramal pertence a tenant não provisionado")
+        name = ext.get("name")
+        if not isinstance(name, str) or not _NAME.fullmatch(name):
+            raise ValueError("identificador de ramal invalido")
+        owner = _ENDPOINT_OWNER.fullmatch(name)
+        if owner and owner.group(1) != tenant:
+            raise ValueError("identificador de endpoint pertence a outro tenant")
+        if name in _STATIC_ENDPOINTS or name in {
+            tenant + "-recepcao", tenant + "-recepcao-2"
+        }:
+            raise ValueError("identificador de endpoint reservado")
+        if name in names:
+            raise ValueError("identificador de endpoint duplicado")
+        names.add(name)
+
+        number = ext.get("number")
+        if type(number) is int:
+            number_ok = 1100 <= number <= 1199
+            parsed_number = number
+        elif (isinstance(number, str) and number.isascii()
+              and number.isdecimal() and len(number) == 4):
+            parsed_number = int(number)
+            number_ok = 1100 <= parsed_number <= 1199
+        else:
+            number_ok, parsed_number = False, -1
+        # O painel só cria 1100-1199. O laboratório usa números 1001
+        # e 1002 em t2/t3 para provar as chamadas reais, sem usurpar
+        # endpoints numéricos já existentes nos contextos estáticos.
+        if (not number_ok and parsed_number in (1001, 1002)):
+            number_ok = (
+                tenant not in ("t1", "t2")
+                or (tenant == "t2" and parsed_number == 1002)
+            )
+        if not number_ok:
+            raise ValueError("numero de ramal invalido")
+        if (tenant, parsed_number) in extensions_by_tenant:
+            raise ValueError("numero repetido dentro do tenant")
+        extensions_by_tenant.add((tenant, parsed_number))
+
+        display = ext.get("display_name")
+        if not isinstance(display, str) or not (
+            1 <= len(display) <= 60 and display.isprintable()
+        ) or any(ch in ";=,<>[]" for ch in display):
+            raise ValueError("nome de exibicao do ramal invalido")
+        password = ext.get("password")
+        if not isinstance(password, str) or not _PASSWORD.fullmatch(password):
+            raise ValueError("credencial SIP do ramal invalida")
+        email = ext.get("email", "")
+        if (not isinstance(email, str) or len(email) > 254
+                or (email and not _EMAIL.fullmatch(email))):
+            raise ValueError("email do voicemail invalido")
+        pin = ext.get("voicemail_pin")
+        if pin is not None and (
+            not isinstance(pin, str) or not _VOICEMAIL_PIN.fullmatch(pin)
+        ):
+            raise ValueError("PIN de voicemail persistido invalido")
+
 def render_all(extensions: list, tenant_ids=None) -> dict:
     """Gera um conjunto separado de dial/hints/voicemail por tenant.
 
@@ -93,14 +179,19 @@ def render_all(extensions: list, tenant_ids=None) -> dict:
     ):
         raise ValueError("lista de tenants provisionados inválida")
 
+    validate_persisted_extensions(extensions, allowed)
+
     by_tenant = {tid: [] for tid in allowed}
+    normalized = []
     for extension in extensions:
         tenant = extension.get("tenant", "t1")
-        if tenant not in by_tenant:
-            raise ValueError(f"ramal pertence a tenant não provisionado: {tenant}")
-        by_tenant[tenant].append(extension)
+        # O legado sem chave 'tenant' pertence a t1. Cópia evita
+        # alterar snapshot do cadastro durante publicação de arquivos.
+        ready = {**extension, "tenant": tenant}
+        by_tenant[tenant].append(ready)
+        normalized.append(ready)
 
-    files = {"pjsip_dynamic.conf": render_pjsip_dynamic(extensions)}
+    files = {"pjsip_dynamic.conf": render_pjsip_dynamic(normalized)}
     for tenant in sorted(allowed):
         tenant_extensions = by_tenant[tenant]
         files[f"extensions_dynamic_dial-{tenant}.conf"] = render_extensions_dynamic_dial(tenant_extensions)

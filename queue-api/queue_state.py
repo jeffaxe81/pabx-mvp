@@ -63,3 +63,10 @@ class QueueStateTracker:
     def remove(self, channel: str):
         """Remoção manual (ex: logo após um pickup bem-sucedido)."""
         self._waiting.pop(channel, None)
+
+    def queue_for_channel(self, channel):
+        """Consulta apenas a fila registrada no evento AMI deste canal."""
+        if not isinstance(channel, str):
+            return None
+        entry = self._waiting.get(channel)
+        return entry.get("queue") if isinstance(entry, dict) else None

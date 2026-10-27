@@ -1,0 +1,144 @@
+{
+  "schema_version": 1,
+  "project": "AXE PABX",
+  "kind": "12_month_pull_forward_execution_map",
+  "created_at": "2026-10-23",
+  "horizon_start": "2026-10-23",
+  "horizon_end": "2027-10-23",
+  "basis": "docs/plano-16-semanas-pabx.json (branch da PR #59)",
+  "accepted_milestones_baseline": 7,
+  "total_milestones": 16,
+  "completion_rule": "status=done somente com evidencias e testes aprovados no mesmo SHA; nenhuma antecipacao de calendario altera o progresso real",
+  "operational_go_authorized": false,
+  "waves": [
+    {
+      "id": "W1",
+      "window": "2026-10-23 a 2027-01-23",
+      "priority": "P0",
+      "milestones": [
+        8,
+        9
+      ],
+      "status": "in_progress",
+      "deliverables": [
+        "isolamento negativo em SIP, filas, voicemail, gravações, AstDB e HTTP multiempresa",
+        "relatórios de evidências por tenant e casos de adulteração de cadastros",
+        "teste integrado de URA, callback, espera e transbordo com SLA"
+      ],
+      "acceptance": [
+        "Zero acesso e zero toque cruzado t1/t2/t3/t10",
+        "CI real + regressão de API no mesmo SHA",
+        "Relatório de fila/URA/callback sem pendências bloqueadoras"
+      ],
+      "dependencies": [
+        "ambiente descartável e dados sintéticos",
+        "API/credenciais por tenant"
+      ]
+    },
+    {
+      "id": "W2",
+      "window": "2027-01-24 a 2027-04-23",
+      "priority": "P0",
+      "milestones": [
+        10,
+        11,
+        12
+      ],
+      "status": "planned",
+      "deliverables": [
+        "transferência assistida e autorização de reprodução de gravações",
+        "backup íntegro de configuração, volumes, AstDB e metadados",
+        "restauração automática ensaiada, rollback, corrupção e falha de site simulada"
+      ],
+      "acceptance": [
+        "Transferência e gravação autorizadas somente ao tenant correto",
+        "RPO/RTO de restauração medidos e registrados, sem valores inventados",
+        "Backup-restauração auditável em ambiente isolado"
+      ],
+      "dependencies": [
+        "W1 aprovada",
+        "destino de backup/retencao e infraestrutura definida"
+      ]
+    },
+    {
+      "id": "W3",
+      "window": "2027-04-24 a 2027-07-23",
+      "priority": "P1",
+      "milestones": [
+        13,
+        14
+      ],
+      "status": "planned",
+      "deliverables": [
+        "penteste defensivo automatizado, segredos e permissões mínimas",
+        "TLS/SRTP e certificados renováveis, portas/ACLs auditadas",
+        "carga concorrente e estabilidade com recursos observáveis"
+      ],
+      "acceptance": [
+        "CVE/segredos/ACLs sem vulnerabilidades bloqueadoras conhecidas",
+        "Teste TLS/certificado em runtime e registro de resultado negativo",
+        "Metas de carga pactuadas e métricas de CPU/memória/áudio"
+      ],
+      "dependencies": [
+        "W2 aprovada",
+        "metas de carga e ambiente representativo aprovados"
+      ]
+    },
+    {
+      "id": "W4",
+      "window": "2027-07-24 a 2027-10-23",
+      "priority": "P0",
+      "milestones": [
+        15,
+        16
+      ],
+      "status": "planned",
+      "deliverables": [
+        "release candidate com manifesto SHA, versões e matriz de evidências",
+        "runbook de instalação, operação, disaster recovery e rollback",
+        "decisão GO/NO-GO formal, homologação em ambiente real e observabilidade inicial"
+      ],
+      "acceptance": [
+        "Pipelines aprovadas no commit de release e evidências arquivadas",
+        "Aceite responsável de cada item e recuperação testada",
+        "GO somente depois de aprovação humana e testes reais"
+      ],
+      "dependencies": [
+        "W1, W2, W3 aprovadas",
+        "janela de implantação e responsável pelo GO identificados"
+      ]
+    }
+  ],
+  "cross_cutting_gates": [
+    {
+      "id": "security",
+      "title": "isolamento multiempresa",
+      "status": "open",
+      "blocking": true
+    },
+    {
+      "id": "functional",
+      "title": "fluxos e mídias ponta-a-ponta",
+      "status": "open",
+      "blocking": true
+    },
+    {
+      "id": "resilience",
+      "title": "backup e restauração com RPO/RTO",
+      "status": "open",
+      "blocking": true
+    },
+    {
+      "id": "load",
+      "title": "carga e estabilidade",
+      "status": "open",
+      "blocking": true
+    },
+    {
+      "id": "operations",
+      "title": "GO em ambiente de destino",
+      "status": "open",
+      "blocking": true
+    }
+  ]
+}

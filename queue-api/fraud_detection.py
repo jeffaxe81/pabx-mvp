@@ -11,6 +11,7 @@ Lógica pura, sem rede - 100% testável.
 import time
 
 from reports import extract_operator
+from monitoring_access import extension_tenant
 
 
 class CallRateTracker:
@@ -65,6 +66,7 @@ class FraudAlertsLog:
         entry = {
             "type": alert_type,
             "extension": extension,
+            "tenant": extension_tenant(extension),
             "detail": detail,
             "timestamp": time.time(),
         }
