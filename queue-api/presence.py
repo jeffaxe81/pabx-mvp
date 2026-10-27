@@ -21,11 +21,19 @@ PRESENCE_STATES = {"disponivel", "ausente", "reuniao", "ferias"}
 
 def validate_presence_input(data: dict):
     """Retorna (ok, error_message, cleaned_data)."""
-    status = (data.get("status") or "").strip()
+    if not isinstance(data, dict):
+        return False, "presenca deve ser objeto JSON", None
+    status = data.get("status", "")
+    if not isinstance(status, str):
+        return False, "status invalido", None
+    status = status.strip()
     if status not in PRESENCE_STATES:
         return False, f"status inválido - use um de: {', '.join(sorted(PRESENCE_STATES))}", None
 
-    note = (data.get("note") or "").strip()
+    note = data.get("note", "")
+    if not isinstance(note, str) or len(note) > 256:
+        return False, "nota invalida ou longa demais", None
+    note = note.strip()
     return True, None, {"status": status, "note": note}
 
 

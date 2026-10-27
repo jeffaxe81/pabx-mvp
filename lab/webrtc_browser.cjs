@@ -247,12 +247,19 @@ async function run(inputFile, outputFile) {
         let left, right;
         // Confirmação SIP precede ICE/DTLS. O runner pode atrasar os callbacks;
         // aguardar o estado real de mídia, sempre com prazo máximo explícito.
-        const mediaDeadline = performance.now()+20000;
+        const mediaDeadline = performance.now()+30000;
+        let stableMediaSamples = 0;
         do {
           [left,right] = await Promise.all(pages.map(mediaProof));
-          if ([left,right].every(p => p.rtp && p.audio_attached && p.rms > 0.015)
-              && Math.abs(left.peak_hz-880)<70 && Math.abs(right.peak_hz-440)<70) break;
-          await new Promise(resolve => setTimeout(resolve,100));
+          // Two consecutive complete proofs: DTLS/SRTP, ICE, bidirectional
+          // RTP and the expected remote tone. Never lower security assertions
+          // simply because the Chromium runner is slow to establish media.
+          const ready = [left,right].every(p => p.dtls && p.srtp && p.rtp
+              && p.local_ice && p.audio_attached && p.rms > 0.015)
+              && Math.abs(left.peak_hz-880)<70 && Math.abs(right.peak_hz-440)<70;
+          stableMediaSamples = ready ? stableMediaSamples + 1 : 0;
+          if (stableMediaSamples >= 2) break;
+          await new Promise(resolve => setTimeout(resolve,200));
         } while (performance.now()<mediaDeadline);
         diagnostics[tenant+':'+direction] = {left:left.diagnostics,right:right.diagnostics};
         delete left.diagnostics; delete right.diagnostics;

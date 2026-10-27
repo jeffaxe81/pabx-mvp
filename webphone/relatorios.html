@@ -285,6 +285,10 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 
 <div class="filters">
   <div>
+    <label for="reportToken">Credencial temporária da empresa</label>
+    <input id="reportToken" type="password" autocomplete="off" spellcheck="false" placeholder="Bearer da empresa">
+  </div>
+  <div>
     <label for="startDate">De</label>
     <input type="date" id="startDate">
   </div>
@@ -347,7 +351,28 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
       </div>`).join('')}</div>`;
   }
 
+  function secureReportUrl(url) {
+    try {
+      const p = new URL(url);
+      return !p.username && !p.password &&
+        (p.protocol === 'https:' ||
+         (p.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(p.hostname)));
+    } catch (_) { return false; }
+  }
+
+  function safeGroupLabel(value) {
+    return String(value).replace(/[&<>"']/g, (c) => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+    })[c]);
+  }
+
   function generate() {
+    const token = el('reportToken').value.trim();
+    if (!token || !secureReportUrl(apiUrl)) {
+      el('summaryContainer').textContent = 'Informe a credencial e use HTTPS para consultar relatórios.';
+      el('tableContainer').replaceChildren();
+      return;
+    }
     const start = el('startDate').value;
     const end = el('endDate').value;
     const groupBy = el('groupBySelect').value;
@@ -355,8 +380,13 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     const query = new URLSearchParams({ start, end });
     if (groupBy) query.set('group_by', groupBy);
 
-    fetch(`${apiUrl}/api/reports?${query.toString()}`)
-      .then((res) => res.json())
+    fetch(`${apiUrl}/api/reports?${query.toString()}`, {
+      headers: { Authorization: `Bearer ${token}` }, cache: 'no-store',
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error('Acesso negado');
+        return res.json();
+      })
       .then((data) => {
         if (data.groups) {
           renderGrouped(data.groups, groupBy);
@@ -395,7 +425,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
             const avgSec = Math.round((g.average_talk_seconds || 0) % 60);
             const avgLabel = `${String(avgMin).padStart(2, '0')}:${String(avgSec).padStart(2, '0')}`;
             return `<tr>
-              <td>${key}</td><td class="mono">${g.total_calls}</td><td class="mono">${g.answered_calls}</td>
+              <td>${safeGroupLabel(key)}</td><td class="mono">${g.total_calls}</td><td class="mono">${g.answered_calls}</td>
               <td class="mono">${g.missed_calls}</td><td class="mono">${avgLabel}</td><td class="mono">${g.missed_rate_percent}%</td>
             </tr>`;
           }).join('')}

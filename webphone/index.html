@@ -1344,8 +1344,18 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   }
 
   function fetchMissedCalls(apiUrl) {
-    fetch(`${apiUrl}/api/missed-calls`)
-      .then((res) => res.json())
+    const token = el('queueToken').value.trim();
+    if (!token || !recordingApiIsSecure(apiUrl)) {
+      el('missedCallsList').textContent = 'Informe credencial da empresa e HTTPS.';
+      return;
+    }
+    fetch(`${apiUrl}/api/missed-calls`, {
+      headers: { Authorization: `Bearer ${token}` }, cache: 'no-store',
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error('Chamadas perdidas não autorizadas');
+        return res.json();
+      })
       .then((data) => renderMissedCalls(data.missed_calls || []))
       .catch(() => {
         el('missedCallsList').innerHTML = '<div class="log-empty">API indisponível.</div>';
@@ -1353,27 +1363,35 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   }
 
   function renderMissedCalls(missedCalls) {
-    if (missedCalls.length === 0) {
-      el('missedCallsList').innerHTML = '<div class="log-empty">Nenhuma chamada perdida registrada.</div>';
+    const container = el('missedCallsList');
+    container.replaceChildren();
+    if (!Array.isArray(missedCalls) || missedCalls.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'log-empty';
+      empty.textContent = 'Nenhuma chamada perdida registrada.';
+      container.appendChild(empty);
       return;
     }
-
     const reasonLabel = {
-      NOANSWER: 'não atendida',
-      BUSY: 'ocupado',
-      CANCEL: 'cancelada pelo cliente',
-      CONGESTION: 'congestionamento',
+      NOANSWER: 'não atendida', BUSY: 'ocupado',
+      CANCEL: 'cancelada pelo cliente', CONGESTION: 'congestionamento',
       ABANDONED: 'desistiu na fila',
     };
-
-    el('missedCallsList').innerHTML = missedCalls.map((m) => {
-      const label = m.caller_id_name || m.caller_id_num;
-      const when = new Date(m.timestamp * 1000).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-      return `<div class="log-item">
-        <div class="peer">${label}</div>
-        <div class="meta missed">${reasonLabel[m.reason] || m.reason} · ${when}</div>
-      </div>`;
-    }).join('');
+    for (const missed of missedCalls) {
+      const item = document.createElement('div');
+      item.className = 'log-item';
+      const peer = document.createElement('div');
+      peer.className = 'peer';
+      peer.textContent = String(missed.caller_id_name || missed.caller_id_num || 'desconhecido');
+      const meta = document.createElement('div');
+      meta.className = 'meta missed';
+      const time = new Date(Number(missed.timestamp) * 1000);
+      const when = Number.isFinite(time.getTime())
+        ? time.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '—';
+      meta.textContent = `${reasonLabel[missed.reason] || String(missed.reason || '')} · ${when}`;
+      item.append(peer, meta);
+      container.appendChild(item);
+    }
   }
 
   // ---------- Métricas do dia ----------
@@ -1396,8 +1414,18 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   }
 
   function fetchMetrics(apiUrl) {
-    fetch(`${apiUrl}/api/metrics/today`)
-      .then((res) => res.json())
+    const token = el('queueToken').value.trim();
+    if (!token || !recordingApiIsSecure(apiUrl)) {
+      el('metricsGrid').textContent = 'Informe credencial da empresa e HTTPS.';
+      return;
+    }
+    fetch(`${apiUrl}/api/metrics/today`, {
+      headers: { Authorization: `Bearer ${token}` }, cache: 'no-store',
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error('Métricas não autorizadas');
+        return res.json();
+      })
       .then(renderMetrics)
       .catch(() => {
         el('metricsGrid').innerHTML = '<div class="log-empty">API indisponível.</div>';
@@ -1545,17 +1573,24 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   // ---------- Minha presença (ausente/reunião/férias) ----------
   el('setPresenceBtn').addEventListener('click', () => {
     const apiUrl = el('queueApiUrl').value.trim();
-    if (!apiUrl || !myExtension) return;
+    const token = el('queueToken').value.trim();
+    if (!apiUrl || !myExtension || !token || !recordingApiIsSecure(apiUrl)) {
+      alert('Configure HTTPS e credencial da empresa antes de alterar a presença.');
+      return;
+    }
 
-    fetch(`${apiUrl}/api/presence/${myExtension}`, {
+    fetch(`${apiUrl}/api/presence/${encodeURIComponent(myExtension)}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({
         status: el('presenceStatusSelect').value,
         note: el('presenceNoteInput').value,
       }),
     })
-      .then((res) => res.json())
+      .then((res) => {
+        if (!res.ok) throw new Error('Acesso não autorizado');
+        return res.json();
+      })
       .then(() => alert('Presença atualizada.'))
       .catch(() => alert('Não foi possível atualizar a presença (API indisponível).'));
   });
@@ -1563,14 +1598,21 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   // ---------- Pausa da fila (backlog #44) ----------
   function sendPauseRequest(paused, reason) {
     const apiUrl = el('queueApiUrl').value.trim();
-    if (!apiUrl || !myExtension) return;
+    const token = el('queueToken').value.trim();
+    if (!apiUrl || !myExtension || !token || !recordingApiIsSecure(apiUrl)) {
+      alert('Configure HTTPS e credencial da empresa antes de alterar a pausa.');
+      return;
+    }
 
     fetch(`${apiUrl}/api/queue/pause`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({ extension: myExtension, paused, reason }),
     })
-      .then((res) => res.json())
+      .then((res) => {
+        if (!res.ok) throw new Error('Acesso não autorizado');
+        return res.json();
+      })
       .then(() => {
         el('pauseBtn').style.display = paused ? 'none' : 'block';
         el('unpauseBtn').style.display = paused ? 'block' : 'none';
