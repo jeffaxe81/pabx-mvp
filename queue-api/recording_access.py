@@ -9,7 +9,9 @@ import hashlib
 import hmac
 import json
 import math
+import os
 import re
+import stat
 import time
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -20,6 +22,7 @@ TENANT_EXTENSION = re.compile(r"^t[1-9][0-9]*-[a-z0-9][a-z0-9_-]{0,79}$")
 ROLES = {"admin", "supervisor", "agent"}
 EXTENSIONS = {".wav", ".gsm", ".mp3"}
 MAX_POLICY_BYTES = 1024 * 1024
+_OPEN_SUPPORTS_DIR_FD = hasattr(os, "supports_dir_fd") and os.open in os.supports_dir_fd
 
 
 def _valid_filename(filename):
@@ -42,15 +45,66 @@ def _extension_belongs_to_tenant(extension, tenant):
     )
 
 
+
+def _open_policy_file(path):
+    """Abre o catálogo ancorando CADA ancestral em FD de diretório.
+
+    O_NOFOLLOW no arquivo isolado não protege componentes parent
+    intermediários. Atravessar com openat(dir_fd=...) impede que um
+    symlink inserido em qualquer nível redirecione a leitura.
+    """
+    required = ("O_NOFOLLOW", "O_NONBLOCK", "O_DIRECTORY")
+    if (not all(hasattr(os, name) for name in required)
+            or not _OPEN_SUPPORTS_DIR_FD):
+        return None
+    directory_fd = None
+    try:
+        candidate = Path(path)
+        parts = candidate.parts
+        if candidate.is_absolute():
+            if not parts or parts[0] != "/":
+                return None
+            anchor, components = "/", parts[1:]
+        else:
+            anchor, components = ".", parts
+        if not components or any(part in {"", ".", ".."} for part in components):
+            return None
+        directory_fd = os.open(anchor, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        for component in components[:-1]:
+            next_fd = os.open(component, os.O_RDONLY | os.O_DIRECTORY |
+                              os.O_NOFOLLOW, dir_fd=directory_fd)
+            os.close(directory_fd)
+            directory_fd = next_fd
+        return os.open(components[-1], os.O_RDONLY | os.O_NOFOLLOW |
+                       os.O_NONBLOCK, dir_fd=directory_fd)
+    except (OSError, TypeError, ValueError, NotImplementedError):
+        return None
+    finally:
+        if directory_fd is not None:
+            os.close(directory_fd)
+
 def load_recording_policy(path):
     """Devolve None para ausente, JSON inválido ou esquema inseguro."""
+    # Abertura relativa a diretórios ancorados evita a troca do arquivo
+    # ou de QUALQUER pasta ancestral por symlink durante a leitura.
+    fd = _open_policy_file(path)
+    if fd is None:
+        return None
     try:
-        policy_path = Path(path)
-        if policy_path.is_symlink() or not policy_path.is_file() or policy_path.stat().st_size > MAX_POLICY_BYTES:
+        metadata = os.fstat(fd)
+        if not stat.S_ISREG(metadata.st_mode) or metadata.st_size > MAX_POLICY_BYTES:
             return None
-        policy = json.loads(policy_path.read_text(encoding="utf-8"))
+        with os.fdopen(fd, "rb") as opened:
+            fd = None
+            raw = opened.read(MAX_POLICY_BYTES + 1)
+        if len(raw) > MAX_POLICY_BYTES:
+            return None
+        policy = json.loads(raw)
     except (OSError, ValueError, TypeError, UnicodeError):
         return None
+    finally:
+        if fd is not None:
+            os.close(fd)
     if not isinstance(policy, dict) or not isinstance(policy.get("credentials"), list):
         return None
     if not isinstance(policy.get("recordings"), dict):

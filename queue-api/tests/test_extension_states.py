@@ -56,3 +56,21 @@ def test_multiple_extensions_tracked_independently():
 
     snapshot = {s["exten"]: s["status_label"] for s in tracker.snapshot()}
     assert snapshot == {"1010": "livre", "1011": "tocando"}
+
+
+def test_same_extension_number_in_two_tenant_hint_contexts_is_not_overwritten():
+    tracker = ExtensionStateTracker()
+    tracker.apply_event({"Event": "ExtensionStatus", "Exten": "1010",
+                         "Context": "t1-hints", "Status": "0"})
+    tracker.apply_event({"Event": "ExtensionStatus", "Exten": "1010",
+                         "Context": "t2-hints", "Status": "8"})
+    snapshot = tracker.snapshot()
+    assert len(snapshot) == 2
+    assert {row["context"]: row["status_label"] for row in snapshot} == {
+        "t1-hints": "livre", "t2-hints": "tocando",
+    }
+    tracker.apply_event({"Event": "ExtensionStatus", "Exten": "1010",
+                         "Context": "t1-hints", "Status": "1"})
+    assert {row["context"]: row["status_label"] for row in tracker.snapshot()} == {
+        "t1-hints": "em uso", "t2-hints": "tocando",
+    }
