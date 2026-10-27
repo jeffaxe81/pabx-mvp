@@ -157,6 +157,10 @@ def test_campaign_dial_next_rejects_foreign_id_before_ami(api):
     assert result[0] == 200
     assert len(ami.actions) == 1
     assert ami.actions[0]["Account"] == "t1"
+    assert ami.actions[0]["ActionID"] == next(
+        c for c in load_campaigns(campaigns) if c["id"] == allowed["id"]
+    )["contacts"][0]["attempt_id"]
+    assert ami.actions[0]["ChannelId"] == "axe-" + ami.actions[0]["ActionID"]
 
 
 def test_callback_list_and_originate_never_mix_tenants(api):
@@ -169,6 +173,10 @@ def test_callback_list_and_originate_never_mix_tenants(api):
     assert out[0] == 200
     assert ami.actions[-1]["Variable"] == "TENANT=t1"
     assert ami.actions[-1]["Account"] == "t1"
+    assert ami.actions[-1]["ActionID"] == next(
+        c for c in load_callbacks(callbacks) if c.get("tenant") == "t1"
+    )["attempt_id"]
+    assert ami.actions[-1]["ChannelId"] == "axe-" + ami.actions[-1]["ActionID"]
     assert ami.actions[-1]["Context"] == server.CALLBACK_CONNECT_CONTEXT
     assert load_callbacks(callbacks)[0]["status"] == "discando"
     assert own(api, "/api/callbacks/dial-next", method="POST")[2]["done"] is True
@@ -228,12 +236,120 @@ def test_outbound_results_require_known_tenant_even_if_numbers_equal(api, monkey
     server.apply_callback_dial_result(event)
     assert next(c for c in load_campaigns(campaigns) if c["id"] == t1["id"])["contacts"][0]["status"] == "discando"
     event["AccountCode"] = "t2"
+    # Mesmo tenant e número existem simultaneamente em campanha e
+    # callback: um DialEnd sem AttemptID nao pode marcar os dois.
+    server.apply_campaign_dial_result(event)
+    server.apply_callback_dial_result(event)
+    assert next(c for c in load_campaigns(campaigns) if c["id"] == t2["id"])["contacts"][0]["status"] == "discando"
+    assert next(c for c in load_callbacks(callbacks) if c["id"] == t2callback["id"])["status"] == "discando"
+    event["AttemptID"] = next(c for c in load_campaigns(campaigns)
+                              if c["id"] == t2["id"])["contacts"][0]["attempt_id"]
     server.apply_campaign_dial_result(event)
     server.apply_callback_dial_result(event)
     assert next(c for c in load_campaigns(campaigns) if c["id"] == t2["id"])["contacts"][0]["status"] == "atendida"
-    assert next(c for c in load_campaigns(campaigns) if c["id"] == t1["id"])["contacts"][0]["status"] == "discando"
+    assert next(c for c in load_callbacks(callbacks) if c["id"] == t2callback["id"])["status"] == "discando"
+    event["AttemptID"] = next(c for c in load_callbacks(callbacks)
+                              if c["id"] == t2callback["id"])["attempt_id"]
+    server.apply_callback_dial_result(event)
     assert next(c for c in load_callbacks(callbacks) if c["id"] == t2callback["id"])["status"] == "concluido"
+    assert next(c for c in load_campaigns(campaigns) if c["id"] == t1["id"])["contacts"][0]["status"] == "discando"
     assert next(c for c in load_callbacks(callbacks) if c["id"] == t1callback["id"])["status"] == "discando"
     event["AccountCode"] = "t1"
     event["Channel"] = "PJSIP/t2-recepcao-00000001"
     assert server.outbound_event_tenant(event) is None
+
+
+def test_click_to_call_requires_bearer_and_exact_tenant(api):
+    base, campaigns, callbacks, ami, _ = api
+    call = {"extension": "t1-recepcao", "number": "11999998888"}
+    path = "/api/click-to-call"
+    assert request(base, path, key=KEY, method="POST", payload=call)[0] == 401
+    assert request(base, path, TOKENS["t1"], method="POST", payload=call)[0] == 403
+    assert request(base, path, TOKENS["t2"], KEY, "POST", call)[0] == 403
+    assert request(base, path, TOKENS["agent"], KEY, "POST",
+                   {"extension": "t2-recepcao", "number": "11999998888"})[0] == 403
+    assert ami.actions == []
+    allowed = request(base, path, TOKENS["t1"], KEY, "POST", call)
+    assert allowed[0] == 200 and len(ami.actions) == 1
+    assert ami.actions[0]["Channel"] == "PJSIP/t1-recepcao"
+    assert ami.actions[0]["Account"] == "t1"
+    assert ami.actions[0]["Variable"] == "TENANT=t1"
+    assert request(base, path, TOKENS["agent"], KEY, "POST", call)[0] == 200
+    assert len(ami.actions) == 2
+
+
+def test_click_to_call_malformed_bodies_and_no_ami_side_effects(api):
+    base, _, _, ami, _ = api
+    for payload in ([], None, "test", 3):
+        if payload is None:
+            status = request(base, "/api/click-to-call", TOKENS["t1"], KEY, method="POST")[0]
+        else:
+            status = request(base, "/api/click-to-call", TOKENS["t1"], KEY,
+                             method="POST", payload=payload)[0]
+        assert status == 400
+    assert request(base, "/api/click-to-call", TOKENS["t1"], KEY, "POST",
+                   {"extension": "t1-recepcao", "number": "123"})[0] == 400
+    assert ami.actions == []
+
+
+def test_click_to_call_preflight_and_cors_restrict_origin(api):
+    base, _, _, ami, policy = api
+    url = "/api/click-to-call"
+    bad = request(base, url, TOKENS["t1"], KEY, method="POST",
+                  payload={"extension": "t1-recepcao", "number": "11999998888"},
+                  origin="https://evil.invalid")
+    assert bad[0] == 403
+    ok = request(base, url, method="OPTIONS", origin="http://localhost:8082")
+    assert ok[0] == 204
+    assert "X-Click-To-Call-Key" in ok[1]["Access-Control-Allow-Headers"]
+    assert request(base, url, method="OPTIONS",
+                   origin="https://evil.invalid")[0] == 403
+    assert request(base, url+"xxx", TOKENS["t1"], KEY)[0] == 404
+    creds = json.loads(policy.read_text())
+    creds["credentials"] = [r for r in creds["credentials"] if r["tenant"] != "t1"]
+    policy.write_text(json.dumps(creds))
+    assert request(base, url, TOKENS["t1"], KEY, "POST",
+                   {"extension": "t1-recepcao", "number": "11999998888"})[0] == 401
+    assert ami.actions == []
+
+
+def test_same_campaign_contact_only_claimed_once_under_concurrent_http(api, monkeypatch):
+    import concurrent.futures
+    import time
+    _, campaigns, _, ami, _ = api
+    campaign = next(c for c in load_campaigns(campaigns) if c.get("tenant") == "t1")
+    actual_send = ami.send_action
+
+    def slow_send(action):
+        time.sleep(0.06)
+        return actual_send(action)
+
+    monkeypatch.setattr(ami, "send_action", slow_send)
+    path = "/api/campaigns/" + campaign["id"] + "/dial-next"
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(lambda _: own(api, path, method="POST"), range(2)))
+    assert sorted(r[2].get("done", False) for r in results) == [False, True]
+    assert len(ami.actions) == 1
+    updated = next(c for c in load_campaigns(campaigns) if c["id"] == campaign["id"])
+    assert updated["contacts"][0]["attempts"] == 1
+
+
+def test_same_callback_only_claimed_once_under_concurrent_http(api, monkeypatch):
+    import concurrent.futures
+    import time
+    _, _, callbacks, ami, _ = api
+    actual_send = ami.send_action
+
+    def slow_send(action):
+        time.sleep(0.06)
+        return actual_send(action)
+
+    monkeypatch.setattr(ami, "send_action", slow_send)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(lambda _: own(api, "/api/callbacks/dial-next",
+                                             method="POST"), range(2)))
+    assert sorted(r[2].get("done", False) for r in results) == [False, True]
+    assert len(ami.actions) == 1
+    scoped = [c for c in load_callbacks(callbacks) if c.get("tenant") == "t1"]
+    assert len(scoped) == 1
+    assert scoped[0]["attempts"] == 1
