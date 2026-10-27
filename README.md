@@ -910,3 +910,5 @@ Veja o [Manual 100](docs/manual-100-release-evidence.md).
 109. [Negativas SIP reais entre empresas](docs/manual-109-negativas-sip-entre-empresas.md)
 110. [Catálogo ACL de gravações com leitura atômica](docs/manual-110-catalogo-acl-atomico.md)
 111. [Listagem segura de gravações com diretórios ancorados](docs/manual-111-listagem-gravacoes-fd.md)
+112. [Correio de voz autenticado por endpoint SIP](docs/manual-112-voicemail-endpoint-autenticado.md)
+113. [Prova real de voicemail *97 por empresa](docs/manual-113-voicemail-runtime.md)
