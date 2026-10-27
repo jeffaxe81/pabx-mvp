@@ -164,7 +164,7 @@ def cleanup_owned(name, ownership):
     return result
 
 
-def summarize(checks, *, calls=False):
+def summarize(checks, *, calls=False, webrtc=False, dids=False, isolation=False, voicemail=False):
     required = {'real_runtime', 'tls_transport', 'wss_transport', 'container_removed',
                 'checkout_clean', 'runtime_mounts', 'source_label'}
     required.update(name+':'+tid for tid in ('t1', 't2', 't3')
@@ -172,12 +172,32 @@ def summarize(checks, *, calls=False):
     if calls:
         from .call_checks import required_call_checks
         required.update(required_call_checks())
+    if webrtc:
+        from .webrtc_checks import required_webrtc_checks
+        required.update(required_webrtc_checks())
+    if dids:
+        from .did_checks import required_did_checks
+        required.update(required_did_checks())
+    if isolation:
+        from .tenant_isolation_checks import required_isolation_checks
+        required.update(required_isolation_checks())
+    if voicemail:
+        from .voicemail_checks import required_voicemail_checks
+        required.update(required_voicemail_checks())
     passed = sum(value is True for value in checks.values())
     return {'passed': passed, 'total': len(checks),
             'success': set(checks) == required and passed == len(required)}
 
 
-def run(root, report, *, calls=False):
+def run(root, report, *, calls=False, webrtc=False, dids=False, isolation=False, voicemail=False):
+    if webrtc and not calls:
+        raise ValueError('WebRTC requer o modo de chamadas')
+    if dids and not calls:
+        raise ValueError('DIDs requerem o modo de chamadas')
+    if isolation and not calls:
+        raise ValueError('isolamento SIP requer o modo de chamadas')
+    if voicemail and not calls:
+        raise ValueError('voicemail real requer modo de chamadas')
     source = command(['git', '-C', str(root), 'rev-parse', 'HEAD']).stdout.strip()
     if not re.fullmatch(r'[0-9a-f]{40}', source):
         raise ValueError('SHA do checkout inválido')
@@ -189,9 +209,21 @@ def run(root, report, *, calls=False):
     if calls:
         report.update(schema_version=2, kind='real_asterisk_secure_calls_lab', dtls_tested=False,
                       wss_session_tested=False)
+    if webrtc:
+        report.update(schema_version=3,kind='real_asterisk_browser_webrtc_lab')
+    if dids:
+        report.update(schema_version=4,kind='real_asterisk_incoming_did_lab',
+                      live_did_routing_tested=False)
+    if isolation:
+        report.update(schema_version=5, kind='real_asterisk_sip_extension_isolation_lab',
+                      live_sip_extension_isolation_tested=False)
+    if voicemail:
+        report.update(schema_version=6, kind='real_asterisk_voicemail_route_lab',
+                      live_voicemail_route_tested=False)
     clean = command(['git', '-C', str(root), 'diff', '--quiet', 'HEAD', '--',
                      'asterisk', 'admin-api/tenants.py', 'admin-api/conf_generator.py',
-                     'scripts/secrets_generator.py', 'lab'], check=False)
+                     'scripts/secrets_generator.py', 'lab','webphone','package.json','package-lock.json',
+                     'scripts/build_webphone_sip.cjs'], check=False)
     report['checks']['checkout_clean'] = clean.returncode == 0
     if clean.returncode != 0:
         raise RuntimeError('checkout do laboratório contém alterações não commitadas')
@@ -205,6 +237,12 @@ def run(root, report, *, calls=False):
         if calls:
             from .call_checks import prepare_calls
             prepare_calls(root, prepared, source)
+        if webrtc:
+            from .webrtc_checks import prepare_webrtc
+            prepare_webrtc(root,prepared,source)
+        if dids:
+            from .did_checks import prepare_dids
+            prepare_dids(root,prepared,source)
         command(['docker', 'pull', IMAGE], timeout=180)
         image_data = json.loads(command(['docker', 'image', 'inspect', IMAGE]).stdout)[0]
         report['image_id'] = image_data['Id']
@@ -217,6 +255,7 @@ def run(root, report, *, calls=False):
                          'io.axe.pabx.source-commit='+source, '--label',
                          'io.axe.pabx.lab-owner='+ownership,
                          '--mount', f'type=bind,src={prepared["conf"]},dst=/etc/asterisk,readonly',
+                         *(['--mount',f'type=bind,src={prepared["conf"]}/sounds/custom,dst=/var/lib/asterisk/sounds/custom,readonly'] if webrtc else []),
                          '--entrypoint', 'asterisk', IMAGE, '-f', '-n',
                          '-C', '/etc/asterisk/asterisk.conf'], check=False)
         if result.returncode:
@@ -274,9 +313,23 @@ def run(root, report, *, calls=False):
                 report['checks']['wrong_password:'+tenant] = peer.register() in (401,403)
             finally:
                 peer.close()
+        if dids:
+            command(['docker','exec',container_id,'mkdir','-p','/var/log/asterisk/cel-custom'])
         if calls:
             from .call_checks import exercise_calls
             exercise_calls(container_id, prepared, report)
+        if webrtc:
+            from .webrtc_checks import exercise_webrtc
+            exercise_webrtc(root,container_id,prepared,report)
+        if dids:
+            from .did_checks import exercise_dids
+            exercise_dids(container_id,prepared,report)
+        if isolation:
+            from .tenant_isolation_checks import exercise_isolation
+            exercise_isolation(container_id,prepared,report)
+        if voicemail:
+            from .voicemail_checks import exercise_voicemail
+            exercise_voicemail(container_id,prepared,report)
     finally:
         if attempted_create:
             cleaned = cleanup_owned(name, ownership)
@@ -286,7 +339,7 @@ def run(root, report, *, calls=False):
         report['private_staging_retained'] = retain_staging
         if not retain_staging:
             shutil.rmtree(folder)
-    report.update(summarize(report['checks'], calls=calls))
+    report.update(summarize(report['checks'], calls=calls,webrtc=webrtc,dids=dids,isolation=isolation,voicemail=voicemail))
     return report['success']
 
 
@@ -294,10 +347,27 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--report', required=True, type=Path)
     parser.add_argument('--calls', action='store_true', help='testar chamadas, CDR e SRTP real')
+    parser.add_argument('--webrtc', action='store_true', help='testar também a UI real com WSS e DTLS-SRTP')
+    parser.add_argument('--dids', action='store_true', help='testar DIDs estáticos, dinâmicos e rejeições SIP')
+    parser.add_argument('--isolation', action='store_true', help='negativas SIP reais entre empresas')
+    parser.add_argument('--voicemail', action='store_true', help='validar a rota *97 SIP real por tenant')
     args = parser.parse_args(argv)
+    if args.webrtc and not args.calls:
+        parser.error('--webrtc requer --calls')
+    if args.dids and not args.calls:
+        parser.error('--dids requer --calls')
+    if args.isolation and not args.calls:
+        parser.error('--isolation requer --calls')
+    if args.voicemail and not args.calls:
+        parser.error('--voicemail requer --calls')
     report = {}
     try:
-        success = run(Path(__file__).resolve().parents[1], report, calls=args.calls)
+        kwargs = {'calls':args.calls, 'webrtc':args.webrtc, 'dids':args.dids}
+        if args.isolation:
+            kwargs['isolation'] = True
+        if args.voicemail:
+            kwargs['voicemail'] = True
+        success = run(Path(__file__).resolve().parents[1], report, **kwargs)
     except Exception as exc:
         success = False
         report['success'] = False
@@ -332,6 +402,18 @@ def main(argv=None):
         print('Backend CDR: '+json.dumps(report['cdr_backend'],sort_keys=True))
     for call, fields in report.get('cdr_checks',{}).items():
         print('Campos CDR '+call+': '+json.dumps(fields,sort_keys=True))
+    if report.get('webrtc_phase'):
+        print('Etapa WebRTC: '+report['webrtc_phase'])
+    if report.get('webrtc_diagnostics'):
+        print('Diagnóstico WebRTC: '+json.dumps(report['webrtc_diagnostics'],sort_keys=True))
+    if report.get('did_cel_backend'):
+        print('Backend CEL: '+json.dumps(report['did_cel_backend'],sort_keys=True))
+    if report.get('sip_isolation_cases'):
+        print('Negativas SIP entre empresas: '+json.dumps(report['sip_isolation_cases'],sort_keys=True))
+    if report.get('voicemail_route_cases'):
+        print('Rotas voicemail por empresa: '+json.dumps(report['voicemail_route_cases'],sort_keys=True))
+    for case, evidence in report.get('did_cel_results',{}).items():
+        print('Trilha DID '+case+': '+json.dumps(evidence,sort_keys=True))
     return 0 if success else 1
 
 

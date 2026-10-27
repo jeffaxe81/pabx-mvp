@@ -1,0 +1,205 @@
+"""Aceite de WebRTC real: contrato fechado, ativos Git e evidência sanitizada."""
+import base64
+import hashlib
+import io
+import json
+import math
+import os
+from pathlib import Path, PurePosixPath
+import re
+import signal
+import subprocess
+import tarfile
+import time
+
+from .call_checks import cdr_rows,cdr_fields
+from .wss_probe import probe_wss,untrusted_wss_rejected
+
+TENANTS=('t1','t2','t3')
+DIRECTIONS=('forward','reverse')
+METRICS=('register','established','dtls','srtp','rtp','tone','audio_attached','ended')
+CIPHERS={'SRTP_AES128_CM_HMAC_SHA1_80','SRTP_AEAD_AES_128_GCM','SRTP_AEAD_AES_256_GCM'}
+
+
+def browser_checks():
+    names={f'webrtc_{metric}:{tenant}:{direction}' for metric in METRICS for tenant in TENANTS for direction in DIRECTIONS}
+    names.update('webrtc_unregistered:'+tenant for tenant in TENANTS)
+    names.update('webrtc_'+name for name in ('bundle','browser_closed','https_closed','no_page_errors'))
+    return names
+
+
+def required_webrtc_checks():
+    return browser_checks() | {'webrtc_wss_ca','webrtc_untrusted_ca_rejected','webrtc_assets_from_git','webrtc_channels_cleared'} | {
+        f'webrtc_cdr:{tenant}:{direction}' for tenant in TENANTS for direction in DIRECTIONS} | {
+        'webrtc_contacts_cleared:'+tenant for tenant in TENANTS}
+
+
+def validate_browser_report(report):
+    allowed={'schema_version','success','checks','cases','browser_version','phase'}
+    if (not isinstance(report,dict) or set(report)-allowed or report.get('schema_version')!=1
+            or report.get('success') is not True or not isinstance(report.get('checks'),dict)
+            or set(report['checks'])!=browser_checks() or not all(value is True for value in report['checks'].values())
+            or not isinstance(report.get('browser_version'),str)
+            or not re.fullmatch(r'(?:Chrome|Chromium)/[0-9.]{3,50}',report['browser_version'])):
+        raise ValueError('relatório WebRTC inválido')
+    if 'phase' in report and not re.fullmatch(r'[a-z_]+(?::t[123]:(?:forward|reverse))?',str(report['phase'])):
+        raise ValueError('fase WebRTC inválida')
+    cases=report.get('cases')
+    if not isinstance(cases,list) or len(cases)!=6: raise ValueError('cenários WebRTC incompletos')
+    seen=set()
+    proof_keys={'dtls','srtp','rtp','cipher','packets_sent','packets_received','peak_hz','rms','audio_attached','local_ice'}
+    for case in cases:
+        if not isinstance(case,dict) or set(case)!={'tenant','direction','left','right'}: raise ValueError('cenário WebRTC inválido')
+        identity=(case['tenant'],case['direction'])
+        if identity in seen or identity[0] not in TENANTS or identity[1] not in DIRECTIONS: raise ValueError('cenário WebRTC duplicado')
+        seen.add(identity)
+        for side,expected_tone in (('left',880),('right',440)):
+            proof=case[side]
+            if not isinstance(proof,dict) or set(proof)!=proof_keys: raise ValueError('prova de mídia inválida')
+            if any(proof[key] is not True for key in ('dtls','srtp','rtp','audio_attached','local_ice')) or proof['cipher'] not in CIPHERS:
+                raise ValueError('mídia WebRTC não comprovada')
+            if any(type(proof[key]) is not int or not 25<=proof[key]<=10**9 for key in ('packets_sent','packets_received')):
+                raise ValueError('contadores RTP inválidos')
+            if any(type(proof[key]) not in (int,float) or not math.isfinite(proof[key]) for key in ('peak_hz','rms')):
+                raise ValueError('tom recebido inválido')
+            if abs(proof['peak_hz']-expected_tone)>=70 or not 0.015<proof['rms']<=1:
+                raise ValueError('tom remoto não comprovado')
+    return report
+
+
+def browser_failure_details(details):
+    """Whitelist de estados sem copiar strings/objetos do processo filho."""
+    if not isinstance(details,dict): return {}
+    result={}
+    states={'dtls':{'unknown','new','connecting','connected','closed','failed'},
+            'pair':{'unknown','frozen','waiting','in-progress','failed','succeeded'},
+            'local_algorithm':{'missing','unknown','sha-1','sha-256','sha-384','sha-512'},
+            'remote_algorithm':{'missing','unknown','sha-1','sha-256','sha-384','sha-512'}}
+    flags={'outbound','inbound','nominated','local_sha256','remote_sha256','cipher_supported','remote_certificate_verified'}
+    for tenant in TENANTS:
+        for direction in DIRECTIONS:
+            identity=tenant+':'+direction
+            case=details.get(identity)
+            if not isinstance(case,dict): continue
+            result[identity]={}
+            for side in ('left','right'):
+                proof=case.get(side)
+                if not isinstance(proof,dict): continue
+                clean={key:proof[key] for key in flags if type(proof.get(key)) is bool}
+                clean.update({key:proof[key] for key,allowed in states.items()
+                              if isinstance(proof.get(key),str) and proof[key] in allowed})
+                result[identity][side]=clean
+    return result
+
+
+def webrtc_cdr_matches(raw,tenant,source,destination):
+    operators={'1010':'recepcao','1011':'recepcao-2'}
+    if tenant not in TENANTS or source not in operators or destination not in operators: return False
+    rows=cdr_rows(raw)
+    if rows is None: return False
+    for row in rows:
+        fields=cdr_fields(row,tenant,source,destination)
+        fields['origin_channel']=bool(re.fullmatch(r'PJSIP/'+tenant+'-'+operators[source]+r'-[0-9a-f]+',row[4]))
+        fields['destination_channel']=bool(re.fullmatch(r'PJSIP/'+tenant+'-'+operators[destination]+r'-[0-9a-f]+',row[5]))
+        if all(fields.values()): return True
+    return False
+
+
+def prepare_webrtc(root,prepared,source):
+    from .asterisk_lab import command
+    stage=prepared['conf'].parent
+    archive=subprocess.run(['git','-C',str(root),'archive','--format=tar',source,'webphone'],capture_output=True,timeout=30)
+    if archive.returncode: raise RuntimeError('ativos WebRTC indisponíveis')
+    with tarfile.open(fileobj=io.BytesIO(archive.stdout)) as exported:
+        members=exported.getmembers()
+        for member in members:
+            parts=PurePosixPath(member.name).parts
+            if not parts or parts[0]!='webphone' or '..' in parts or not (member.isdir() or member.isfile()):
+                raise ValueError('ativo WebRTC inseguro')
+        exported.extractall(stage,members=members,filter='data')
+    for item in (stage/'webphone').rglob('*'): item.chmod(0o700 if item.is_dir() else 0o600)
+    public=subprocess.run(['openssl','x509','-in',str(prepared['ca']),'-pubkey','-noout'],capture_output=True,timeout=10)
+    if public.returncode: raise RuntimeError('chave pública TLS indisponível')
+    der=subprocess.run(['openssl','pkey','-pubin','-outform','DER'],input=public.stdout,capture_output=True,timeout=10)
+    if der.returncode: raise RuntimeError('chave pública TLS inválida')
+    config={'web_root':str(stage/'webphone'),'cert':str(prepared['ca']),
+            'key':str(prepared['conf']/'certs/asterisk.key'),'wss_url':'wss://127.0.0.1:8089/ws',
+            'spki':base64.b64encode(hashlib.sha256(der.stdout).digest()).decode(),
+            'credentials':{tenant+operator:prepared['credentials'][tenant+operator]
+                           for tenant in TENANTS for operator in ('-recepcao','-recepcao-2')}}
+    target=stage/'browser-input.json'
+    with os.fdopen(os.open(target,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600),'w') as handle: json.dump(config,handle)
+    prepared.update(webrtc_input=target,webrtc_source=source)
+
+
+def run_browser(root,input_file,output_file,*,timeout=240):
+    with subprocess.Popen(['node',str(Path(root)/'lab/webrtc_browser.cjs'),str(input_file),str(output_file)],
+                          stdout=subprocess.PIPE,stderr=subprocess.PIPE,start_new_session=True) as process:
+        try: process.communicate(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            # Playwright cria um grupo próprio para o Chromium. SIGTERM
+            # permite que seu handler encerre esse grupo antes de sair.
+            try: os.killpg(process.pid,signal.SIGTERM)
+            except ProcessLookupError: pass
+            try: process.communicate(timeout=35)
+            except subprocess.TimeoutExpired:
+                try: os.killpg(process.pid,signal.SIGKILL)
+                except ProcessLookupError: pass
+                process.communicate(timeout=5)
+            raise RuntimeError('prazo WebRTC excedido') from None
+        return process.returncode
+
+
+def exercise_webrtc(root,container,prepared,report):
+    from .asterisk_lab import cli,command
+    checks=report['checks']
+    checks.update({name:False for name in required_webrtc_checks()})
+    checks['webrtc_assets_from_git']=prepared.get('webrtc_source')==report['source_commit']
+    report['phase']='webrtc_certificate'
+    report['wss_tls_version']=probe_wss(prepared['ca'])
+    checks['webrtc_wss_ca']=True
+    checks['webrtc_untrusted_ca_rejected']=untrusted_wss_rejected()
+    command(['docker','exec',container,'mkdir','-p','/var/spool/asterisk/monitor'])
+    report['phase']='webrtc_browser'
+    output=prepared['conf'].parent/'browser-output.json'
+    code=run_browser(root,prepared['webrtc_input'],output)
+    if output.is_symlink() or not output.is_file() or output.stat().st_size>65536:
+        raise RuntimeError('relatório WebRTC ausente')
+    child=json.loads(output.read_text())
+    if isinstance(child,dict):
+        for name,value in child.get('checks',{}).items():
+            if name in browser_checks(): checks[name]=value is True
+        phase=child.get('phase')
+        if isinstance(phase,str) and re.fullmatch(r'[a-z_]+(?::t[123]:(?:forward|reverse))?',phase): report['webrtc_phase']=phase
+    failed_browser = bool(code)
+    if failed_browser:
+        # Even on a browser failure, collect independent CDR and cleanup
+        # outcomes. Never turn a media failure into success via timing changes.
+        report['webrtc_diagnostics']=browser_failure_details(child.get('diagnostics'))
+    else:
+        validated=validate_browser_report(child)
+        report['browser_version']=validated['browser_version']
+        report['webrtc_cases']=validated['cases']
+    report['phase']='webrtc_cdr'
+    deadline=time.monotonic()+15
+    while True:
+        cdr=command(['docker','exec',container,'cat','/var/log/asterisk/cdr-custom/Lab.csv'],check=False)
+        for tenant in TENANTS:
+            for direction in DIRECTIONS:
+                source,destination=('1010','1011') if direction=='forward' else ('1011','1010')
+                checks[f'webrtc_cdr:{tenant}:{direction}']=cdr.returncode==0 and webrtc_cdr_matches(cdr.stdout,tenant,source,destination)
+        active=cli(container,'core show channels concise')
+        checks['webrtc_channels_cleared']=not any(line.startswith('PJSIP/') for line in active.splitlines())
+        contacts=cli(container,'pjsip show contacts')
+        for tenant in TENANTS:
+            checks['webrtc_contacts_cleared:'+tenant]=tenant+'-recepcao' not in contacts
+        all_cdr = all(checks[f'webrtc_cdr:{tenant}:{direction}']
+                      for tenant in TENANTS for direction in DIRECTIONS)
+        all_clean = (checks['webrtc_channels_cleared']
+                     and all(checks['webrtc_contacts_cleared:'+tenant] for tenant in TENANTS))
+        if (all_cdr and all_clean) or time.monotonic()>=deadline:
+            break
+        time.sleep(0.2)
+    report.update(dtls_tested=True,wss_session_tested=True)
+    if failed_browser:
+        raise RuntimeError('laboratório WebRTC reprovado')
