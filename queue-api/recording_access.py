@@ -160,6 +160,8 @@ def authenticate_recordings(authorization, policy, now=None):
     if type(current) not in (int, float) or not math.isfinite(current):
         return None
     digest = hashlib.sha256(token.encode("ascii")).hexdigest()
+    seen = set()
+    matching = None
     for cred in credentials:
         if not isinstance(cred, dict):
             return None
@@ -168,6 +170,7 @@ def authenticate_recordings(authorization, policy, now=None):
         expiry = cred.get("expires_at")
         if (
             not isinstance(stored, str) or not HEX_SHA256.fullmatch(stored)
+            or stored in seen
             or not isinstance(tenant, str) or not TENANT.fullmatch(tenant)
             or not isinstance(role, str) or role not in ROLES
         ):
@@ -179,9 +182,10 @@ def authenticate_recordings(authorization, policy, now=None):
                 return None
         elif cred.get("extension") is not None:
             return None
+        seen.add(stored)
         if hmac.compare_digest(digest, stored) and current < expiry:
-            return cred
-    return None
+            matching = cred
+    return matching
 
 
 def can_read_recording(policy, principal, filename):
