@@ -1250,8 +1250,10 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 
   function fetchQueue(apiUrl) {
     const token = el('queueToken').value.trim();
-    if (!token) {
-      el('queueList').textContent = 'Credencial da fila ausente.';
+    // O usuário pode alterar a URL enquanto o polling segue ativo.
+    // Revalidar a cada requisição para nunca transmitir Bearer por HTTP remoto.
+    if (!token || !recordingApiIsSecure(apiUrl)) {
+      el('queueList').textContent = 'Informe credencial da fila e HTTPS (exceto localhost).';
       return;
     }
     fetch(`${apiUrl}/api/queue`, {

@@ -44,3 +44,10 @@ def test_queue_ui_denies_remote_http_bearer_requests():
         src = (WEB / page).read_text(encoding="utf-8")
         assert "parsed.protocol === 'https:'" in src or "url.protocol === 'https:'" in src
         assert "'localhost', '127.0.0.1'" in src
+
+def test_queue_poll_rechecks_https_when_api_url_changes_live():
+    body = section("index.html", "function fetchQueue(apiUrl) {",
+                   "function renderQueue(apiUrl, waiting) {")
+    assert "recordingApiIsSecure(apiUrl)" in body
+    assert body.index("recordingApiIsSecure(apiUrl)") < body.index("fetch(`${apiUrl}/api/queue`")
+    assert "Authorization: `Bearer ${token}`" in body
