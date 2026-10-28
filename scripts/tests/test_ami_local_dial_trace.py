@@ -57,5 +57,6 @@ def test_same_number_or_unrelated_channel_cannot_reconcile():
               DialStatus="ANSWER"),
     ], CHANNEL)
     assert not outcome["origin_channel_in_dial_trace"]
-    assert outcome["dial_pair_identity_consistent"]
+    assert not outcome["dial_pair_identity_consistent"]
+    assert not outcome["dial_answer_observed"]
     assert outcome["local_probe_only"]
