@@ -6,6 +6,7 @@ atomicamente em volume privado modo 0600, com SHA-256 em vez do token.
 import argparse
 import hashlib
 import json
+import math
 import os
 import secrets
 import stat
@@ -52,7 +53,7 @@ def init_policy(path):
 def issue_credential(path, tenant, role, extension=None, ttl=3600, now=None):
     if not isinstance(tenant, str) or not TENANT.fullmatch(tenant):
         raise ValueError("empresa inválida")
-    if role not in ROLES:
+    if not isinstance(role, str) or role not in ROLES:
         raise ValueError("papel inválido")
     if type(ttl) is not int or not MIN_TTL <= ttl <= MAX_TTL:
         raise ValueError("TTL deve ser 300..86400 segundos")
@@ -61,9 +62,10 @@ def issue_credential(path, tenant, role, extension=None, ttl=3600, now=None):
             raise ValueError("agente precisa de ramal da mesma empresa")
     elif extension is not None:
         raise ValueError("extensão só é permitida para agente")
-    timestamp = int(time.time() if now is None else now)
-    if timestamp < 0:
+    current = time.time() if now is None else now
+    if type(current) not in (int, float) or not math.isfinite(current) or current < 0:
         raise ValueError("relógio inválido")
+    timestamp = int(current)
     token = secrets.token_urlsafe(48)
     digest = hashlib.sha256(token.encode("ascii")).hexdigest()
     row = {
