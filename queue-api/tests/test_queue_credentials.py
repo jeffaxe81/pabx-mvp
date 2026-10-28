@@ -81,3 +81,17 @@ def test_revoke_never_silently_accepts_unknown_hash(tmp_path):
         revoke_credential(path, "0"*64)
     with pytest.raises(ValueError):
         revoke_credential(path, "bad")
+
+
+def test_issuance_rejects_invalid_clock_and_role_without_creating_token(tmp_path):
+    path = tmp_path / "queue.json"
+    init_policy(path)
+    original = path.read_bytes()
+    for now in (True, False, "1000", None if False else [], float("nan"), float("inf"), -1):
+        with pytest.raises(ValueError):
+            issue_credential(path, "t1", "supervisor", now=now)
+    for role in ([], {}, ["agent"], 2, None):
+        with pytest.raises(ValueError):
+            issue_credential(path, "t1", role, now=1000)
+    assert path.read_bytes() == original
+    assert issue_credential(path, "t1", "supervisor", now=1000)["expires_at"] == 4600
