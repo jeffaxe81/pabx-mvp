@@ -68,10 +68,18 @@ def test_reused_pin_in_one_file_or_across_files_is_rejected(tmp_path):
     same_pin = "93847261"
     a = tmp_path / "t1.conf"
     b = tmp_path / "t10.conf"
-    a.write_text("[t1]\\nt1-1001 => " + same_pin + ",Um\\n".replace("\\n", "\n"))
-    b.write_text("[t10]\\nt10-1001 => " + same_pin + ",Dez\\n".replace("\\n", "\n"))
+    a.write_text(f"""[t1]
+t1-1001 => {same_pin},Um
+""")
+    b.write_text(f"""[t10]
+t10-1001 => {same_pin},Dez
+""")
     report = audit_voicemail_files([a, b])
     assert not report["ok"]
     assert report["reused_pins"] == 1
     assert same_pin not in json.dumps(report)
-    assert audit_voicemail_text("[t1]\\nt1-1001 => 93847261,Um\\nt1-1002 => 93847261,Dois\\n".replace("\\n", "\n"))["reused_pins"] == 1
+    both = """[t1]
+t1-1001 => 93847261,Um
+t1-1002 => 93847261,Dois
+"""
+    assert audit_voicemail_text(both)["reused_pins"] == 1
