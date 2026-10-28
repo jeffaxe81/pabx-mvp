@@ -27,6 +27,7 @@ SCENARIOS = (
 )
 VALID_STATES = {"pending", "passed", "failed", "blocked"}
 SHA_RE = re.compile(r"^[0-9a-fA-F]{40}$")
+MAX_HOMOLOGATION_BYTES = 1024 * 1024
 
 
 def summarize(payload):
@@ -107,6 +108,8 @@ def main(argv=None):
         source = Path(args.file)
         if source.is_symlink() or not source.is_file():
             raise ValueError("arquivo de evidências ausente ou link simbólico")
+        if source.stat().st_size > MAX_HOMOLOGATION_BYTES:
+            raise ValueError("arquivo de evidências excede limite seguro")
         payload = json.loads(source.read_text(encoding="utf-8"))
         report = summarize(payload)
     except (OSError, UnicodeError, json.JSONDecodeError, ValueError) as exc:
