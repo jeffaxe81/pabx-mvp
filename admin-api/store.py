@@ -181,8 +181,8 @@ def validate_extension_input(data: dict, existing: list, editing_name: str = Non
             return False, "e-mail inválido para configuração de voicemail", None
 
     # O PIN de voicemail não pode ser escolhido por JSON externo.
-    # Para ramais já existentes sem campo persistido, preservamos
-    # temporariamente o PIN legado 1234 até rotação administrada.
+    # Cadastro legado sem PIN forte exige rotação administrada explícita;
+    # nunca atribuir uma senha previsível ao atualizar o ramal.
     if editing_name is None:
         if "voicemail_pin" in data:
             return False, "PIN de voicemail gerado somente pelo servidor", None
@@ -200,7 +200,9 @@ def validate_extension_input(data: dict, existing: list, editing_name: str = Non
             return False, "não foi possível gerar PIN de voicemail", None
     else:
         previous = next((e for e in existing if e["name"] == editing_name), None)
-        voicemail_pin = previous.get("voicemail_pin", "1234") if previous else "1234"
+        voicemail_pin = previous.get("voicemail_pin") if previous else None
+        if not isinstance(voicemail_pin, str) or not re.fullmatch(r"[1-9][0-9]{7}", voicemail_pin):
+            return False, "ramal legado requer migração autorizada do PIN de voicemail", None
 
     return True, None, {
         "name": name,
