@@ -169,7 +169,7 @@ def authenticate_recordings(authorization, policy, now=None):
         if (
             not isinstance(stored, str) or not HEX_SHA256.fullmatch(stored)
             or not isinstance(tenant, str) or not TENANT.fullmatch(tenant)
-            or role not in ROLES if isinstance(role, str) else True
+            or not isinstance(role, str) or role not in ROLES
         ):
             return None
         if type(expiry) not in (int, float) or not math.isfinite(expiry) or expiry <= 0:
