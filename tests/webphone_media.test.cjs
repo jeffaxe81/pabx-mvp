@@ -52,3 +52,33 @@ test('registration does not throw when the pinned JsSIP lacks the optional Subsc
   vm.runInNewContext(source.slice(start,end)+';startPresenceMonitoring("localhost");',context);
   assert.match(node.innerHTML,/indisponível/i);
 });
+
+test('a late track from an old peer cannot replace the current call audio', () => {
+  const { bindSessionAudio } = require('../webphone/remote-audio.js');
+  const session = new EventEmitter(), oldPc = new EventEmitter(), nextPc = new EventEmitter();
+  const first = { id:'first',kind:'audio',readyState:'live' };
+  const next = { id:'next',kind:'audio',readyState:'live' };
+  for (const pc of [oldPc,nextPc]) {
+    pc.addEventListener = pc.on.bind(pc);
+    pc.getReceivers = () => [];
+  }
+  const audio = { srcObject:new Stream([next]), play:() => Promise.resolve() };
+  session.connection = oldPc;
+  bindSessionAudio(session,audio,()=>true,Stream);
+  session.connection = nextPc;
+  session.emit('peerconnection',{ peerconnection:nextPc });
+  oldPc.emit('track',{track:first});
+  assert.equal(audio.srcObject.getAudioTracks()[0], next);
+});
+
+test('a synchronous autoplay failure never crashes the SIP track handler', () => {
+  const { bindSessionAudio } = require('../webphone/remote-audio.js');
+  const session = new EventEmitter(), pc = new EventEmitter();
+  const track = { kind:'audio',readyState:'live' };
+  pc.addEventListener = pc.on.bind(pc);
+  pc.getReceivers = () => [{ track }];
+  session.connection = pc;
+  const audio = {play:() => { throw new Error('autoplay blocked'); }};
+  assert.doesNotThrow(() => bindSessionAudio(session,audio,()=>true,Stream));
+  assert.equal(audio.srcObject.getAudioTracks()[0],track);
+});
