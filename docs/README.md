@@ -175,3 +175,4 @@ registrado como regra permanente no prompt master
 
 123. [Correio de voz por identidade SIP autenticada](manual-123-voicemail-endpoint-autenticado.md)
 124. [Laboratório real voicemail *97 por tenant](manual-124-voicemail-runtime.md)
+125. [Fallback HTTP seguro: rotas desconhecidas sem CORS amplo](manual-125-fallback-http-cors.md)
