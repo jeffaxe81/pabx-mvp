@@ -18,9 +18,8 @@ BASE = {
 
 
 def test_valid_legacy_and_modern_records_continue_separated():
-    legacy = {**BASE, "name": "legado-01", "number": "1113"}
+    legacy = {**BASE, "name": "legado-01", "number": "1113", "voicemail_pin": "93847261"}
     legacy.pop("tenant")
-    legacy.pop("voicemail_pin")
     newer = {**BASE, "name": "t3-1001", "tenant": "t3", "number": 1112}
     allowed = {"t1", "t2", "t3"}
     files = render_all([legacy, newer], tenant_ids=allowed)
@@ -29,7 +28,7 @@ def test_valid_legacy_and_modern_records_continue_separated():
     assert "t3-1001" in files["extensions_dynamic_dial-t3.conf"]
     assert "t3-1001" not in files["extensions_dynamic_dial-t1.conf"]
     assert "mailboxes=t3-1001@t3" in files["pjsip_dynamic.conf"]
-    assert "legado-01 => 1234" in files["voicemail_dynamic_t1.conf"]
+    assert "legado-01 => 93847261" in files["voicemail_dynamic_t1.conf"]
 
 
 @pytest.mark.parametrize("change", [
