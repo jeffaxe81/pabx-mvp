@@ -177,3 +177,4 @@ registrado como regra permanente no prompt master
 124. [Laboratório real voicemail *97 por tenant](manual-124-voicemail-runtime.md)
 125. [Fallback HTTP seguro: rotas desconhecidas sem CORS amplo](manual-125-fallback-http-cors.md)
 126. [DialStatus AMI conservador para campanhas e callbacks](manual-126-ami-dialstatus-conservador.md)
+127. [OriginateResponse real no laboratório AMI](manual-127-ami-live-originate.md)
