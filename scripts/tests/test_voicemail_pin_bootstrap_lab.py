@@ -61,3 +61,9 @@ def test_lab_prepare_uses_randomized_mailbox_pins_without_exposing_them(tmp_path
     assert verified == {"ok": True, "mailboxes": 9, "invalid": 0}
     assert "troque_esta_senha_vm_" not in static
     assert " => 1234," not in static
+
+def test_preflight_refuses_obvious_eight_digit_sequences():
+    static, dynamic = sample()
+    for weak in ("12345678", "87654321", "11223344", "12121212"):
+        changed = static.replace("12345679", weak)
+        assert not validate_prepared_voicemail(changed, dynamic)["ok"]
