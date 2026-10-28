@@ -28,7 +28,7 @@ DISPOSITION_TO_STATUS = {
 DIAL_STRING_RE = re.compile(r"PJSIP/(\d+)@gateway-tdm")
 
 
-_CALLBACK_PHONE = re.compile(r"\\+?[0-9]{8,20}\\Z")
+_CALLBACK_PHONE = re.compile(r"[+]?[0-9]{8,20}$")
 
 
 def _callback_contact(number, name=""):
