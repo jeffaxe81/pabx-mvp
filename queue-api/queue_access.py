@@ -88,6 +88,8 @@ def may_pickup(principal, extension):
     if not _extension_belongs_to_tenant(extension, tenant):
         return False
     role = principal.get("role")
+    if not isinstance(role, str):
+        return False
     return (
         role in {"supervisor", "admin"}
         or (role == "agent" and principal.get("extension") == extension)
