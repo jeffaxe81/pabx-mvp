@@ -110,3 +110,10 @@ def test_cli_rejects_symlink_and_malformed_json(tmp_path, capsys):
     link.symlink_to(target)
     assert main(["--file", str(link)]) == 2
     assert "inválido" in capsys.readouterr().err
+
+def test_cli_rejects_oversized_homologation_without_parsing(tmp_path, capsys):
+    from homologation_gate import MAX_HOMOLOGATION_BYTES
+    large = tmp_path / "large.json"
+    large.write_bytes(b"x" * (MAX_HOMOLOGATION_BYTES + 1))
+    assert main(["--file", str(large)]) == 2
+    assert "limite" in capsys.readouterr().err
