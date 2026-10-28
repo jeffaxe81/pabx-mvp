@@ -26,26 +26,39 @@ def _day_key(timestamp: float) -> str:
     return time.strftime("%Y-%m-%d", time.localtime(timestamp))
 
 
+def _hold_time_seconds(value):
+    """Segundos completos de espera; sem dado confiável, None (nunca zero).
+
+    Não usar int() em float: ele trunca -0.5 e 20.9, criando resultados
+    falsos. Asterisk AMI fornece segundos inteiros como texto.
+    """
+    if type(value) is int:
+        return value if value >= 0 else None
+    if isinstance(value, str) and value.isascii() and value.isdecimal() and len(value) <= 9:
+        return int(value)
+    return None
+
+
 def parse_agent_connect_event(event: dict):
-    """AgentConnect = chamada atendida por um agente. HoldTime = segundos que esperou na fila."""
-    if event.get("Event") != "AgentConnect":
+    """Não recompensar atendimento com HoldTime ausente/malformado."""
+    if not isinstance(event, dict) or event.get("Event") != "AgentConnect":
         return None
-    try:
-        hold_time = int(event.get("HoldTime", 0))
-    except (TypeError, ValueError):
-        hold_time = 0
-    return {"queue": event.get("Queue", ""), "hold_time": hold_time, "outcome": "answered"}
+    return {
+        "queue": event.get("Queue", ""),
+        "hold_time": _hold_time_seconds(event.get("HoldTime")),
+        "outcome": "answered",
+    }
 
 
 def parse_queue_caller_abandon_event(event: dict):
-    """QueueCallerAbandon = cliente desistiu antes de qualquer agente atender."""
-    if event.get("Event") != "QueueCallerAbandon":
+    """Abandono conta contra o SLA, independentemente do HoldTime."""
+    if not isinstance(event, dict) or event.get("Event") != "QueueCallerAbandon":
         return None
-    try:
-        hold_time = int(event.get("HoldTime", 0))
-    except (TypeError, ValueError):
-        hold_time = 0
-    return {"queue": event.get("Queue", ""), "hold_time": hold_time, "outcome": "abandoned"}
+    return {
+        "queue": event.get("Queue", ""),
+        "hold_time": _hold_time_seconds(event.get("HoldTime")),
+        "outcome": "abandoned",
+    }
 
 
 class QueueSLATracker:
@@ -92,7 +105,8 @@ class QueueSLATracker:
         # Abandono NUNCA conta dentro do SLA, mesmo com espera curta -
         # a chamada nunca foi atendida de fato, independente de quanto
         # tempo o cliente esperou antes de desistir.
-        if outcome == "answered" and hold_time <= self.threshold_seconds:
+        if (outcome == "answered" and type(hold_time) is int
+                and 0 <= hold_time <= self.threshold_seconds):
             stats["within_sla"] += 1
 
     def apply_event(self, event: dict):
