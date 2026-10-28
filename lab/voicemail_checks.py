@@ -29,21 +29,30 @@ def inspected_voicemail_channel(raw, endpoint, tenant):
     Não combinar app de um canal com mailbox de outro. Nunca publicar
     os detalhes do CLI nem PINs na evidência.
     """
-    if not isinstance(raw, str) or len(raw) > 1024 * 1024:
-        return {"exact": False, "no_foreign": False}
-    rows = [row.split("!") for row in raw.splitlines() if row.startswith("PJSIP/")]
-    matching = [row for row in rows if row[0].startswith("PJSIP/" + endpoint + "-")]
-    exact = any(
-        len(row) >= 7 and row[5] == "VoiceMailMain"
-        and row[6] == endpoint + "@" + tenant
-        for row in matching
-    )
-    foreign = any(
-        len(row) >= 7 and row[5] == "VoiceMailMain"
-        and row[6] != endpoint + "@" + tenant
-        for row in matching
-    )
-    return {"exact": exact, "no_foreign": bool(matching) and not foreign}
+    negative = {"exact": False, "no_foreign": False}
+    if (not isinstance(raw, str) or len(raw) > 1024 * 1024
+            or not isinstance(endpoint, str) or not isinstance(tenant, str)
+            or re.fullmatch(r"t[1-9][0-9]*-[a-z0-9_-]+", endpoint) is None
+            or re.fullmatch(r"t[1-9][0-9]*", tenant) is None
+            or not endpoint.startswith(tenant + "-")):
+        return negative
+    # A prova precisa vir de UM canal PJSIP identificável, incluindo
+    # contexto e extensão *97. Não juntar evidências de dois canais.
+    rows = [line.split("!") for line in raw.splitlines()
+            if line.startswith("PJSIP/")]
+    matching = [
+        row for row in rows
+        if row and re.fullmatch(
+            r"PJSIP/" + re.escape(endpoint) + r"-[0-9a-f]+", row[0]
+        )
+    ]
+    if len(matching) != 1 or len(matching[0]) < 7:
+        return negative
+    row = matching[0]
+    exact = (row[1] == tenant + "-internal" and row[2] == "*97"
+             and row[5] == "VoiceMailMain"
+             and row[6] == endpoint + "@" + tenant)
+    return {"exact": exact, "no_foreign": exact}
 
 
 def exercise_voicemail(container, prepared, report):

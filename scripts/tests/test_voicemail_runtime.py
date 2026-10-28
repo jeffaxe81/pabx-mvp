@@ -33,7 +33,7 @@ def test_mixed_good_and_foreign_rows_cannot_be_accepted():
     correct = "PJSIP/t1-1001-a!t1-internal!*97!5!Up!VoiceMailMain!t1-1001@t1!"
     foreign = "PJSIP/t1-1001-b!t1-internal!*97!5!Up!VoiceMailMain!t2-1001@t2!"
     result = inspected_voicemail_channel(correct + "\n" + foreign, "t1-1001", "t1")
-    assert result == {"exact": True, "no_foreign": False}
+    assert result == {"exact": False, "no_foreign": False}
 
 
 def test_rejects_oversized_cli_output():
@@ -64,3 +64,35 @@ def test_cli_voicemail_mode_requires_call_mode(tmp_path):
     with pytest.raises(SystemExit) as error:
         main(["--voicemail", "--report", str(tmp_path / "report.json")])
     assert error.value.code != 0
+
+
+@pytest.mark.parametrize("bad", [
+    "PJSIP/t1-1001-00000001!t2-internal!*97!5!Up!VoiceMailMain!t1-1001@t1!",
+    "PJSIP/t1-1001-00000001!t1-internal!1000!5!Up!VoiceMailMain!t1-1001@t1!",
+    "PJSIP/t1-1001-nothex!t1-internal!*97!5!Up!VoiceMailMain!t1-1001@t1!",
+    "PJSIP/t1-10010-00000001!t1-internal!*97!5!Up!VoiceMailMain!t1-1001@t1!",
+])
+def test_mailbox_context_extension_and_exact_channel_must_match(bad):
+    assert inspected_voicemail_channel(bad, "t1-1001", "t1") == {
+        "exact": False, "no_foreign": False,
+    }
+
+
+def test_duplicate_channel_evidence_cannot_pass_by_combination():
+    valid = "PJSIP/t1-1001-00000001!t1-internal!*97!5!Up!VoiceMailMain!t1-1001@t1!"
+    duplicated = valid.replace("00000001", "00000002")
+    assert inspected_voicemail_channel(valid + "\n" + duplicated,
+                                       "t1-1001", "t1") == {
+        "exact": False, "no_foreign": False,
+    }
+
+
+@pytest.mark.parametrize("endpoint,tenant", [
+    ("t1-1001", "t10"), ("t10-1001", "t1"), ("bad-name", "t1"),
+    (None, "t1"), ("t1-1001", None),
+])
+def test_mismatched_identity_fails_closed(endpoint, tenant):
+    good = "PJSIP/t1-1001-00000001!t1-internal!*97!5!Up!VoiceMailMain!t1-1001@t1!"
+    assert inspected_voicemail_channel(good, endpoint, tenant) == {
+        "exact": False, "no_foreign": False,
+    }
