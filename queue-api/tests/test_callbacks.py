@@ -110,7 +110,7 @@ import pytest
 
 @pytest.mark.parametrize("bad", [
     None, 42, [], {}, "", "1234", "1234567", "1"*21,
-    "12345678;Dial(PJSIP/1)", "12345678\\r\\nAction: Originate",
+    "12345678;Dial(PJSIP/1)", "12345678" + chr(13) + chr(10) + "Action: Originate",
     " 5511999998888", "5511-9999-8888", "anonymous",
     "+", "++5511999998888", "5511999998888a",
 ])
@@ -132,7 +132,7 @@ def test_callback_accepts_international_plus_and_canonicalizes_digits():
         "caller_id_num": "5511999998888", "caller_id_name": "Contato"}
 
 
-@pytest.mark.parametrize("bad_name", [None, {"x": 1}, "A"*81, "nome\\r\\nHeader: x"])
+@pytest.mark.parametrize("bad_name", [None, {"x": 1}, "A"*81, "nome" + chr(13) + chr(10) + "Header: x"])
 def test_callback_event_strips_unsafe_caller_name(bad_name):
     event = {"Event": "UserEvent", "UserEvent": "CallbackRequest",
              "CallerIDNum": "5511999998888", "CallerIDName": bad_name}
