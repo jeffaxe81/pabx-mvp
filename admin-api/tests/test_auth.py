@@ -77,3 +77,21 @@ def test_tokens_are_unique_and_unpredictable():
     tokens = {store.create("admin") for _ in range(20)}
     assert len(tokens) == 20
     assert all(len(t) >= 32 for t in tokens)
+
+def test_session_token_shape_fails_closed_in_every_entrypoint():
+    store = SessionStore()
+    valid = store.create("admin")
+    for malformed in ([], {}, ["token"], None, 7):
+        assert store.validate(malformed) is None
+        assert store.get_role(malformed) is None
+        store.revoke(malformed)
+    assert store.validate(valid) == "admin"
+
+
+def test_session_expires_exactly_at_ttl_boundary():
+    clock_value = [1000.0]
+    store = SessionStore(ttl_seconds=60, clock=lambda: clock_value[0])
+    token = store.create("admin")
+    clock_value[0] = 1060.0
+    assert store.validate(token) is None
+    assert store.get_role(token) is None
