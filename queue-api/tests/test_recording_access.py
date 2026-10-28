@@ -86,3 +86,35 @@ def test_no_filename_path_traversal(tmp_path):
     obj["recordings"]["../secret.wav"] = {"tenant": "t1"}
     p.write_text(json.dumps(obj))
     assert load_recording_policy(p) is None
+
+
+def test_authentication_rejects_in_memory_corruption_without_exception():
+    original = policy()
+    identity = "Bearer " + TOKEN
+    cases = [
+        {},
+        {"credentials": None},
+        {"credentials": "not-a-list"},
+        {"credentials": [None]},
+        {"credentials": [original["credentials"][0], None]},
+        {"credentials": [{**original["credentials"][0], "tenant": "t2"}]},
+        {"credentials": [{**original["credentials"][0], "role": ["admin"]}]},
+        {"credentials": [{**original["credentials"][0], "expires_at": True}]},
+        {"credentials": [{**original["credentials"][0], "expires_at": float("nan")}]},
+        {"credentials": [{**original["credentials"][0], "extension": "t2-1010"}]},
+        {"credentials": original["credentials"] * 2},
+    ]
+    for malformed in cases:
+        assert authenticate_recordings(identity, malformed, now=1000) is None
+    assert authenticate_recordings(identity, original, now="not-a-time") is None
+    assert authenticate_recordings(identity, original, now=float("inf")) is None
+    assert authenticate_recordings(identity, original, now=1000)["tenant"] == "t1"
+
+
+def test_direct_recording_authorization_never_raises_on_invalid_catalog():
+    principal = {"tenant": "t1", "role": "supervisor"}
+    for malformed in ({}, {"recordings": None}, {"recordings": []},
+                      {"recordings": {FILE_T1: None}},
+                      {"recordings": {FILE_T1: {"tenant": "t10"}}}):
+        assert not can_read_recording(malformed, principal, FILE_T1)
+    assert can_read_recording(policy(), principal, FILE_T1)
