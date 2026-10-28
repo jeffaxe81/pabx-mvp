@@ -64,7 +64,10 @@ def corroborate_cdr(event):
         return None
     if event.get("DestinationContext") != tenant + "-internal":
         return None
-    match = CHANNEL_RE.fullmatch(event.get("DestinationChannel") or "")
+    channel = event.get("DestinationChannel")
+    if not isinstance(channel, str):
+        return None
+    match = CHANNEL_RE.fullmatch(channel)
     if not match:
         return None
     operator = match["operator"]
