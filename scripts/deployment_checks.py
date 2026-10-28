@@ -48,15 +48,18 @@ def parse_ami_login_result(response_text: str) -> bool:
     return False
 
 
-def summarize_http_health_checks(results: dict) -> dict:
+def summarize_http_health_checks(results: dict, required_codes=None) -> dict:
     """
-    Recebe {nome_do_serviço: status_code_ou_None} (None = não
-    respondeu/erro de rede), devolve um resumo com quem está saudável
-    e quem não está - 200 é o único código considerado saudável aqui
-    (os serviços deste projeto não usam outros 2xx).
+    Retorna saúde por resposta EXATA esperada em cada rota. O default 200
+    preserva consumidores antigos; o verificador pós-deploy passa
+    explicitamente 401 para a API de filas protegida por Bearer.
+    401 aqui só prova que a barreira HTTP responde, não valida um login.
     """
-    healthy = {name: code for name, code in results.items() if code == 200}
-    unhealthy = {name: code for name, code in results.items() if code != 200}
+    expected = required_codes or {}
+    healthy = {name: code for name, code in results.items()
+               if type(code) is int and code == expected.get(name, 200)}
+    unhealthy = {name: code for name, code in results.items()
+                 if name not in healthy}
     return {
         "all_healthy": not unhealthy,
         "healthy": sorted(healthy),

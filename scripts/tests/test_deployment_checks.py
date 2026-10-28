@@ -87,3 +87,17 @@ def test_reports_unhealthy_services():
 def test_healthy_list_is_sorted():
     result = summarize_http_health_checks({"z-service": 200, "a-service": 200})
     assert result["healthy"] == ["a-service", "z-service"]
+
+
+def test_secured_queue_health_requires_unauthorized_without_bearer():
+    protected = {"queue-api": 401, "webphone": 200}
+    status = summarize_http_health_checks(protected, required_codes={"queue-api": 401})
+    assert status["all_healthy"] is True
+    assert status["healthy"] == ["queue-api", "webphone"]
+    for unsafe_code in (200, 403, 404, 500, None, True):
+        status = summarize_http_health_checks(
+            {"queue-api": unsafe_code, "webphone": 200},
+            required_codes={"queue-api": 401},
+        )
+        assert status["all_healthy"] is False
+        assert status["unhealthy"]["queue-api"] == unsafe_code

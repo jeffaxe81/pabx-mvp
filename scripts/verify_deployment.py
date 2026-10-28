@@ -105,7 +105,8 @@ def check_http_services() -> dict:
             results[name] = exc.code
         except Exception:  # noqa: BLE001
             results[name] = None
-    return summarize_http_health_checks(results)
+    # /api/queue sem Bearer deve recusar com 401; HTTP 200 aqui seria regressão.
+    return summarize_http_health_checks(results, required_codes={"queue-api": 401})
 
 
 def main():
