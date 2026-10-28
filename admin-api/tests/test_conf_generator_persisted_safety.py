@@ -18,9 +18,8 @@ BASE = {
 
 
 def test_valid_legacy_and_modern_records_continue_separated():
-    legacy = {**BASE, "name": "legado-01", "number": "1113"}
+    legacy = {**BASE, "name": "legado-01", "number": "1113", "voicemail_pin": "93847261"}
     legacy.pop("tenant")
-    legacy.pop("voicemail_pin")
     newer = {**BASE, "name": "t3-1001", "tenant": "t3", "number": 1112}
     allowed = {"t1", "t2", "t3"}
     files = render_all([legacy, newer], tenant_ids=allowed)
@@ -29,7 +28,7 @@ def test_valid_legacy_and_modern_records_continue_separated():
     assert "t3-1001" in files["extensions_dynamic_dial-t3.conf"]
     assert "t3-1001" not in files["extensions_dynamic_dial-t1.conf"]
     assert "mailboxes=t3-1001@t3" in files["pjsip_dynamic.conf"]
-    assert "legado-01 => 1234" in files["voicemail_dynamic_t1.conf"]
+    assert "legado-01 => 93847261" in files["voicemail_dynamic_t1.conf"]
 
 
 @pytest.mark.parametrize("change", [
@@ -105,3 +104,20 @@ def test_direct_guard_checks_active_tenant_allowlist():
     assert validate_persisted_extensions(valid, {"t1", "t2", "t3"}) is None
     with pytest.raises(ValueError, match="não provisionado"):
         validate_persisted_extensions(valid, {"t1", "t2"})
+
+
+@pytest.mark.parametrize("pin", [None, "", "1234", "00000000", "8765", 1234])
+def test_persisted_missing_or_shared_voicemail_pin_blocks_all_generated_files(pin):
+    legacy = {**BASE}
+    if pin is None:
+        legacy.pop("voicemail_pin")
+    else:
+        legacy["voicemail_pin"] = pin
+    with pytest.raises(ValueError, match="PIN de voicemail"):
+        render_all([legacy], tenant_ids={"t1", "t2"})
+
+
+def test_existing_records_with_strong_pin_remain_unchanged():
+    files = render_all([BASE], tenant_ids={"t1"})
+    assert "87654321" in files["voicemail_dynamic_t1.conf"]
+    assert "1234" not in files["voicemail_dynamic_t1.conf"]

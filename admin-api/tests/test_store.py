@@ -62,7 +62,7 @@ def test_validate_generates_password_when_not_provided():
 
 def test_validate_editing_same_name_does_not_conflict_with_itself():
     """Editar um ramal e reenviar o mesmo nome/número não deve disparar 'duplicado'."""
-    existing = [{"name": "recepcao-3", "number": 1112}]
+    existing = [{"name": "recepcao-3", "number": 1112, "voicemail_pin": "93847261"}]
     ok, error, cleaned = validate_extension_input(VALID_INPUT, existing, editing_name="recepcao-3")
     assert ok is True
 
@@ -254,7 +254,7 @@ def test_password_short_on_create_rejected_but_legacy_kept_on_edit():
     payload = {**VALID_INPUT, "password": "oldsecret"}
     ok, _, _ = validate_extension_input(payload, [])
     assert not ok
-    legacy = [{**payload}]
+    legacy = [{**payload, "voicemail_pin": "93847261"}]
     ok, _, cleaned = validate_extension_input(payload, legacy, editing_name=payload["name"])
     assert ok and cleaned["password"] == "oldsecret"
     rotated = {**payload, "password": "newsecret"}
@@ -300,12 +300,14 @@ def test_post_and_put_cannot_choose_voicemail_pin(tmp_path):
     assert not ok and "PIN" in error
 
 
-def test_legacy_voicemail_pin_not_rotated_implicitly(tmp_path):
+def test_legacy_voicemail_pin_requires_explicit_migration(tmp_path):
     path = tmp_path / "ramais.json"
     legacy = {**VALID_INPUT, "tenant": "t1"}
     save_store(path, [legacy])
-    edited = update_extension(path, legacy["name"], {"display_name": "Atualizado"})[2]
-    assert edited["voicemail_pin"] == "1234"
+    ok, error, edited = update_extension(path, legacy["name"], {"display_name": "Atualizado"})
+    assert not ok and edited is None
+    assert "migração" in error
+    assert load_store(path) == [legacy]
 
 
 def test_registered_tenant_t3_can_create_and_update_extension(tmp_path):
