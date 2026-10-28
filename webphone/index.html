@@ -1252,6 +1252,17 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     el('queueList').replaceChildren();
   }
 
+  el('queueToken').addEventListener('input', () => {
+    queueRequestEpoch += 1;
+    el('queueList').replaceChildren();
+  });
+  el('queueApiUrl').addEventListener('input', () => {
+    queueRequestEpoch += 1;
+    recordingsRequestEpoch += 1;
+    el('queueList').replaceChildren();
+    clearRecordingPlayers();
+  });
+
   function fetchQueue(apiUrl) {
     const token = el('queueToken').value.trim();
     const epoch = queueRequestEpoch;
@@ -1591,6 +1602,11 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
       });
     }
   }
+
+  el('recordingsToken').addEventListener('input', () => {
+    recordingsRequestEpoch += 1;
+    clearRecordingPlayers();
+  });
 
   el('refreshRecordingsBtn').addEventListener('click', fetchRecordings);
   el('recordingsSearchBtn').addEventListener('click', fetchRecordings);
