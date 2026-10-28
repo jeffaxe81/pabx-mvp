@@ -209,6 +209,8 @@ def can_read_recording(policy, principal, filename):
     if owner is not None and not _extension_belongs_to_tenant(owner, tenant):
         return False
     role = principal.get("role")
+    if not isinstance(role, str):
+        return False
     if role in {"admin", "supervisor"}:
         return True
     return (
@@ -232,5 +234,7 @@ def allowed_browser_origin(origin, origins):
         ):
             return False
     except ValueError:
+        return False
+    if not isinstance(origins, (set, frozenset, list, tuple)):
         return False
     return origin in origins
