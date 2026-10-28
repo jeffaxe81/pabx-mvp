@@ -118,3 +118,15 @@ def test_direct_recording_authorization_never_raises_on_invalid_catalog():
                       {"recordings": {FILE_T1: {"tenant": "t10"}}}):
         assert not can_read_recording(malformed, principal, FILE_T1)
     assert can_read_recording(policy(), principal, FILE_T1)
+
+def test_recording_rejects_unhashable_role_without_exposing_data():
+    p = policy()
+    for role in ([], {}, ["admin"], {"role": "supervisor"}, None, 7):
+        assert can_read_recording(p, {"tenant": "t1", "role": role}, FILE_T1) is False
+    assert can_read_recording(p, {"tenant": "t1", "role": "supervisor"}, FILE_T1)
+
+
+def test_cors_policy_malformed_collection_fails_closed():
+    for origins in (None, "https://voice.example", 7, {"origin": "https://voice.example"}):
+        assert allowed_browser_origin("https://voice.example", origins) is False
+    assert allowed_browser_origin("https://voice.example", {"https://voice.example"})
