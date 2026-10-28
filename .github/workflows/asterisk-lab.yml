@@ -165,3 +165,25 @@ jobs:
           path: lab-results/voicemail.json
           if-no-files-found: error
           retention-days: 14
+
+  ami-originate:
+    name: Asterisk | OriginateResponse AMI real isolado
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Testar ActionID e ChannelId reais sem rede publica
+        run: python3 -m lab.asterisk_lab --ami --report lab-results/ami-originate.json
+      - name: Guardar somente resultado AMI sanitizado
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: asterisk-real-ami-originate-${{ github.sha }}
+          path: lab-results/ami-originate.json
+          if-no-files-found: error
+          retention-days: 14
