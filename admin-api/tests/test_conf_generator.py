@@ -172,3 +172,11 @@ def test_removed_tenant_sip_endpoints_are_not_in_regenerated_shared_pjsip():
     assert "[atendente-t3]" in before
     assert "[atendente-t3]" not in after
     assert "[recepcao-3]" in after
+
+
+def test_direct_dynamic_generator_never_uses_shared_default_pin():
+    import pytest
+    legacy = [{key: value for key, value in SAMPLE[0].items() if key != "voicemail_pin"}]
+    for extension in (legacy, [{**SAMPLE[0], "voicemail_pin": "1234"}]):
+        with pytest.raises(ValueError, match="migração"):
+            render_voicemail_dynamic(extension)
