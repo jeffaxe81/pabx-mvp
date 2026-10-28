@@ -31,6 +31,11 @@ def generate_strong_secret(length: int = 32) -> str:
     return "".join(secrets.choice(alphabet) for _ in range(length))
 
 
+def generate_voicemail_pin() -> str:
+    """PIN de oito dígitos; não aceitar o PIN de exemplo legado 1234."""
+    return str(10_000_000 + secrets.randbelow(90_000_000))
+
+
 def find_placeholders(content: str) -> set:
     """
     Encontra todos os placeholders no padrão 'troque_esta_senha*'
