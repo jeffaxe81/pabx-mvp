@@ -102,3 +102,51 @@ def test_mark_callback_result_retries_then_exhausts(tmp_path):
 def test_extract_dialed_number_from_dialstring():
     event = {"Dialstring": "PJSIP/5511999998888@gateway-tdm"}
     assert extract_dialed_number(event) == "5511999998888"
+
+
+# Marco 9 — Entrada AMI insegura nunca deve gerar callback acionável.
+import pytest
+
+
+@pytest.mark.parametrize("bad", [
+    None, 42, [], {}, "", "1234", "1234567", "1"*21,
+    "12345678;Dial(PJSIP/1)", "12345678" + chr(13) + chr(10) + "Action: Originate",
+    " 5511999998888", "5511-9999-8888", "anonymous",
+    "+", "++5511999998888", "5511999998888a",
+])
+def test_callback_event_rejects_untrusted_phone_number(bad):
+    event = {"Event": "UserEvent", "UserEvent": "CallbackRequest",
+             "CallerIDNum": bad}
+    assert parse_callback_request_event(event) is None
+
+
+@pytest.mark.parametrize("bad", [None, False, [], "UserEvent"])
+def test_callback_parser_ignores_non_dict_events(bad):
+    assert parse_callback_request_event(bad) is None
+
+
+def test_callback_accepts_international_plus_and_canonicalizes_digits():
+    event = {"Event": "UserEvent", "UserEvent": "CallbackRequest",
+             "CallerIDNum": "+5511999998888", "CallerIDName": "Contato"}
+    assert parse_callback_request_event(event) == {
+        "caller_id_num": "5511999998888", "caller_id_name": "Contato"}
+
+
+@pytest.mark.parametrize("bad_name", [None, {"x": 1}, "A"*81, "nome" + chr(13) + chr(10) + "Header: x"])
+def test_callback_event_strips_unsafe_caller_name(bad_name):
+    event = {"Event": "UserEvent", "UserEvent": "CallbackRequest",
+             "CallerIDNum": "5511999998888", "CallerIDName": bad_name}
+    result = parse_callback_request_event(event)
+    assert result["caller_id_num"] == "5511999998888"
+    assert result["caller_id_name"] == ""
+
+
+def test_callback_store_fails_closed_before_writing_invalid_number(tmp_path):
+    path = tmp_path / "callbacks.json"
+    assert add_callback_request(path, " 5511999998888") is None
+    assert not path.exists()
+    assert add_callback_request(path, "5511999998888", tenant="t01") is None
+    assert not path.exists()
+    item = add_callback_request(path, "5511999998888", tenant="t10")
+    assert item is not None and item["tenant"] == "t10"
+    assert load_callbacks(path)[0]["caller_id_num"] == "5511999998888"

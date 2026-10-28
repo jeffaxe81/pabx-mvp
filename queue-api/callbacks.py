@@ -28,19 +28,28 @@ DISPOSITION_TO_STATUS = {
 DIAL_STRING_RE = re.compile(r"PJSIP/(\d+)@gateway-tdm")
 
 
+_CALLBACK_PHONE = re.compile(r"[+]?[0-9]{8,20}$")
+
+
+def _callback_contact(number, name=""):
+    """Aceita somente telefone discável e nome limitado, nunca JSON arbitrário."""
+    if not isinstance(number, str) or not _CALLBACK_PHONE.fullmatch(number):
+        return None
+    digits = number.lstrip("+")
+    if not 8 <= len(digits) <= 20:
+        return None
+    if not isinstance(name, str) or len(name) > 80 or not name.isprintable():
+        name = ""
+    return {"caller_id_num": digits, "caller_id_name": name}
+
+
 def parse_callback_request_event(event: dict):
-    """Extrai os dados de um evento AMI UserEvent/CallbackRequest, ou None se não for esse."""
-    if event.get("Event") != "UserEvent" or event.get("UserEvent") != "CallbackRequest":
+    """Rejeita UserEvent malformado antes de persistir ou discar."""
+    if (not isinstance(event, dict) or event.get("Event") != "UserEvent"
+            or event.get("UserEvent") != "CallbackRequest"):
         return None
-
-    caller_id_num = event.get("CallerIDNum")
-    if not caller_id_num:
-        return None
-
-    return {
-        "caller_id_num": caller_id_num,
-        "caller_id_name": event.get("CallerIDName", ""),
-    }
+    return _callback_contact(event.get("CallerIDNum"),
+                             event.get("CallerIDName", ""))
 
 
 def load_callbacks(path) -> list:
@@ -59,20 +68,23 @@ def find_callback(callbacks: list, callback_id: str):
 
 
 def add_callback_request(path, caller_id_num: str, caller_id_name: str = "", tenant=None):
+    contact = _callback_contact(caller_id_num, caller_id_name)
+    if contact is None:
+        return None
+    if tenant is not None:
+        from monitoring_access import extension_tenant
+        if not isinstance(tenant, str) or extension_tenant(tenant + "-recepcao") != tenant:
+            return None
     callbacks = load_callbacks(path)
     entry = {
         "id": secrets.token_hex(6),
-        "caller_id_num": caller_id_num,
-        "caller_id_name": caller_id_name,
+        **contact,
         "status": "pendente",
         "attempts": 0,
         "requested_at": time.time(),
         "last_attempt_at": None,
     }
     if tenant is not None:
-        from monitoring_access import extension_tenant
-        if not isinstance(tenant, str) or extension_tenant(tenant + "-recepcao") != tenant:
-            return None
         entry["tenant"] = tenant
     callbacks.append(entry)
     save_callbacks(path, callbacks)
