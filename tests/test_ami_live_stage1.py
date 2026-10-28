@@ -52,6 +52,7 @@ def test_ami_profile_has_only_loopback_and_ephemeral_credential(tmp_path):
     assert prepared["ami_secret"] in manager
     assert not (Path(conf / "manager.conf").stat().st_mode & 0o077)
     assert "[axe-ami-lab]" in dialplan
-    assert "Local/" not in dialplan  # a origem é restrita ao cliente de laboratório
+    assert "Dial(Local/target@axe-ami-lab/n,4)" in dialplan
+    assert dialplan.count("Local/") == 1  # somente a perna Local descartável do laboratório
     assert "gateway-tdm" not in dialplan
     assert "PJSIP/" not in dialplan

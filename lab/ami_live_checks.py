@@ -45,10 +45,14 @@ def prepare_ami(prepared):
         output.write(
             "\n; AXE AMI LAB (apenas preparação descartável)\n"
             "[axe-ami-lab]\n"
-            "exten => start,1,Answer()\n"
-            " same => n,Wait(2)\n"
+            "exten => start,1,NoOp(AXE AMI Lab dial probe)\n"
+            " same => n,Dial(Local/target@axe-ami-lab/n,4)\n"
             " same => n,Hangup()\n"
-            "exten => after,1,NoOp(AXE AMI Lab)\n"
+            "exten => target,1,Answer()\n"
+            " same => n,Wait(1)\n"
+            " same => n,Hangup()\n"
+            "exten => after,1,Answer()\n"
+            " same => n,Wait(2)\n"
             " same => n,Hangup()\n"
         )
     prepared["ami_username"] = "axe-lab"
@@ -79,22 +83,59 @@ def required_ami_checks():
             "ami_channel_id_format"}
 
 
+def assess_local_dial_trace(events, channel_id, tenant="t1"):
+    """Sanitized, observational Local/ leg evidence; NOT campaign/callback GO.
+
+    Only a real runtime producing the supplied events can establish their
+    provenance. This parser does not assert delivery, media, CDR or a public
+    trunk; phone numbers and raw AMI frames never leave the caller.
+    """
+    begins = [e for e in events if isinstance(e, dict)
+              and e.get("Event") == "DialBegin"]
+    ends = [e for e in events if isinstance(e, dict)
+            and e.get("Event") == "DialEnd"]
+    def trusted(e):
+        return (e.get("AccountCode", e.get("Accountcode")) == tenant
+                and isinstance(e.get("Uniqueid"), str)
+                and isinstance(e.get("DestUniqueid"), str)
+                and isinstance(e.get("Linkedid"), str)
+                and all(e.get(k) for k in ("Uniqueid", "DestUniqueid", "Linkedid")))
+    pairs = [(b, e) for b in begins for e in ends
+             if trusted(b) and trusted(e)
+             and all(b.get(k) == e.get(k)
+                     for k in ("Uniqueid", "DestUniqueid", "Linkedid"))
+             and channel_id in (b.get("Uniqueid"), b.get("DestUniqueid"),
+                                b.get("Linkedid"))]
+    origin = any(channel_id in (e.get("Uniqueid"), e.get("DestUniqueid"),
+                                e.get("Linkedid")) for e in begins + ends)
+    return {
+        "dial_begin_observed": bool(begins),
+        "dial_end_observed": bool(ends),
+        "dial_pair_identity_consistent": bool(pairs),
+        "origin_channel_in_dial_trace": origin,
+        "dial_answer_observed": any(e.get("DialStatus") == "ANSWER"
+                                    for _, e in pairs),
+        "local_probe_only": True,
+    }
+
+
 def exercise_ami(prepared, report):
-    """Chamar exclusivamente Local/start; sem linha pública, PJSIP ou tronco."""
+    """Real AMI + Local/ observation, without calling trunks or users."""
     AMIClient, channel_id_for, _ = _production_modules()
     checks = report["checks"]
     for check in required_ami_checks():
         checks[check] = False
     report["live_ami_originate_response_tested"] = False
+    # A Local/ leg is not a real campaign/callback or verified two-leg PJSIP call.
     report["live_ami_dialend_correlated"] = False
-    report["phase"] = "ami_local_originate"
+    report["phase"] = "ami_local_dial_observation"
     attempt = secrets.token_hex(16)
     channel = channel_id_for(attempt)
     events = queue.Queue(maxsize=128)
     overflow = [False]
 
     def receive(event):
-        if event.get("Event") == "OriginateResponse":
+        if event.get("Event") in ("OriginateResponse", "DialBegin", "DialEnd"):
             try:
                 events.put_nowait(event)
             except queue.Full:
@@ -121,28 +162,36 @@ def exercise_ami(prepared, report):
             response.get("ActionID") == attempt and response.get("Response") == "Success"
         )
         deadline = time.monotonic() + 10
-        matched = []
+        matched, trace = [], []
         while time.monotonic() < deadline and not overflow[0]:
             try:
                 event = events.get(timeout=min(0.5, max(0.01, deadline - time.monotonic())))
             except queue.Empty:
                 continue
-            if event.get("ActionID") == attempt:
-                matched.append(event)
-                if len(matched) > 1:
-                    break
-                if event.get("Response") in ("Success", "Failure"):
-                    # Esperar brevemente para identificar evento duplicado.
-                    time.sleep(0.2)
-                    while not events.empty():
-                        extra = events.get_nowait()
-                        if extra.get("ActionID") == attempt:
-                            matched.append(extra)
-                    break
+            if event.get("Event") == "OriginateResponse":
+                if event.get("ActionID") == attempt:
+                    matched.append(event)
+            else:
+                trace.append(event)
+            if len(matched) > 1:
+                break
+            if matched and any(e.get("Event") == "DialBegin" for e in trace) and any(
+                    e.get("Event") == "DialEnd" for e in trace):
+                # Small bounded duplicate-event drain; do not publish frames.
+                time.sleep(0.2)
+                while not events.empty():
+                    extra = events.get_nowait()
+                    if extra.get("Event") == "OriginateResponse" and extra.get("ActionID") == attempt:
+                        matched.append(extra)
+                    elif extra.get("Event") in ("DialBegin", "DialEnd"):
+                        trace.append(extra)
+                break
         if len(matched) == 1 and not overflow[0]:
             checks.update(assess_response(matched[0], attempt, channel))
         else:
             report["ami_event_count_valid"] = False
+        report["ami_local_dial_observation"] = assess_local_dial_trace(trace, channel)
+        report["ami_local_dial_observation"]["events_within_limit"] = not overflow[0]
         report["live_ami_originate_response_tested"] = all(
             checks[name] for name in required_ami_checks())
     finally:
