@@ -61,6 +61,21 @@ def prepare(root, destination, source_commit="HEAD"):
     content = content.replace('bind=0.0.0.0:5061', 'bind=127.0.0.1:5061')
     content = content.replace('bind=0.0.0.0', 'bind=127.0.0.1')
     (conf/'pjsip.conf').write_text(content)
+    # PINs estáticos do voicemail também são substituídos somente na
+    # cópia efêmera de laboratório, sem segredos no checkout ou relatório.
+    vm_path = conf/'voicemail.conf'
+    vm_text = vm_path.read_text()
+    vm_placeholders = sorted(p for p in generator.find_placeholders(vm_text)
+                             if p.startswith('troque_esta_senha_vm_'))
+    vm_pin_map = {}
+    used_vm_pins = set()
+    for placeholder in vm_placeholders:
+        pin = generator.generate_voicemail_pin()
+        while pin in used_vm_pins:
+            pin = generator.generate_voicemail_pin()
+        used_vm_pins.add(pin)
+        vm_pin_map[placeholder] = pin
+    vm_path.write_text(generator.replace_all_placeholders(vm_text, vm_pin_map))
     credentials = {}
     for section, text in re.findall(r'(?m)^\[([^\]]+)\][^\n]*\n((?:(?!^\[).|\n)*)', content):
         if re.search(r'(?m)^type=auth$', text):

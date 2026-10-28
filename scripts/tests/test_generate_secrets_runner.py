@@ -53,3 +53,33 @@ def test_runner_skips_missing_files_without_crashing(tmp_path, monkeypatch):
     monkeypatch.setattr(generate_secrets, "TARGET_FILES", [tmp_path / "nao-existe.conf"])
 
     generate_secrets.main()  # não deveria lançar exceção nenhuma
+
+def test_voicemail_static_pin_placeholders_get_distinct_numeric_pins(tmp_path, monkeypatch):
+    voicemail = tmp_path / "voicemail.conf"
+    voicemail.write_text(
+        "[t1]\nt1-1001 => troque_esta_senha_vm_t1_1001,T1\n"
+        "t1-1002 => troque_esta_senha_vm_t1_1002,T1\n"
+        "[t2]\nt2-1001 => troque_esta_senha_vm_t2_1001,T2\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(generate_secrets, "PROJECT_ROOT", tmp_path)
+    monkeypatch.setattr(generate_secrets, "TARGET_FILES", [voicemail])
+    generate_secrets.main()
+    content = voicemail.read_text(encoding="utf-8")
+    assert "troque_esta_senha" not in content
+    pins = [row.split("=>", 1)[1].split(",", 1)[0].strip()
+            for row in content.splitlines() if "=>" in row]
+    assert len(pins) == 3 and len(set(pins)) == 3
+    assert all(len(pin) == 8 and pin.isdigit() for pin in pins)
+
+
+def test_versioned_static_mailboxes_require_secret_bootstrap():
+    root = Path(__file__).resolve().parents[2]
+    content = (root / "asterisk" / "voicemail.conf").read_text(encoding="utf-8")
+    rows = [row for row in content.splitlines() if row.startswith(("t1-", "t2-"))]
+    assert len(rows) == 7
+    placeholders = [row.split("=>", 1)[1].split(",", 1)[0].strip()
+                    for row in rows]
+    assert all(pin.startswith("troque_esta_senha_vm_") for pin in placeholders)
+    assert len(set(placeholders)) == len(placeholders)
+

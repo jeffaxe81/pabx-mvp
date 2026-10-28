@@ -32,6 +32,7 @@ SECRET_FILES = [
     PROJECT_ROOT / "docker-compose.yml",
     PROJECT_ROOT / "asterisk" / "manager.conf",
     PROJECT_ROOT / "asterisk" / "pjsip.conf",
+    PROJECT_ROOT / "asterisk" / "voicemail.conf",
 ]
 
 # host:porta pra cada serviço HTTP - ajuste se você mudou as portas

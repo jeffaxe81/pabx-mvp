@@ -9,7 +9,7 @@ VOICEMAIL_CONF = Path(__file__).parent.parent / "asterisk" / "voicemail.conf"
 def test_tenant_1_mailboxes_present():
     content = VOICEMAIL_CONF.read_text(encoding="utf-8")
     assert "[t1]" in content
-    assert "t1-1001 => 1234" in content
+    assert "t1-1001 => troque_esta_senha_vm_t1_1001" in content
 
 
 def test_voicemail_email_relay_configured():
@@ -43,16 +43,16 @@ def test_tenant2_telephonist_mailboxes_present():
     """
     content = VOICEMAIL_CONF.read_text(encoding="utf-8")
     assert "[t2]" in content
-    assert "t2-recepcao => 1234" in content
-    assert "t2-recepcao-2 => 1234" in content
+    assert "t2-recepcao => troque_esta_senha_vm_t2_recepcao" in content
+    assert "t2-recepcao-2 => troque_esta_senha_vm_t2_recepcao_2" in content
     assert "#include generated/voicemail_dynamic_t2.conf" in content
 
 
 def test_tenant1_telephonist_mailboxes_present():
     """Mesma checagem pro tenant 1 - gap pré-existente fechado junto com o trabalho de multi-tenant."""
     content = VOICEMAIL_CONF.read_text(encoding="utf-8")
-    assert "t1-recepcao => 1234" in content
-    assert "t1-recepcao-2 => 1234" in content
+    assert "t1-recepcao => troque_esta_senha_vm_t1_recepcao" in content
+    assert "t1-recepcao-2 => troque_esta_senha_vm_t1_recepcao_2" in content
 
 
 def test_voicemail_includes_wizard_created_tenants_via_wildcard():

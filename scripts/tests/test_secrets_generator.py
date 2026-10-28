@@ -109,3 +109,11 @@ def test_replace_all_with_multiple_unrelated_placeholders():
         "troque_esta_senha_web": "B",
     })
     assert result == "x=A\ny=B\n"
+
+def test_voicemail_pins_are_eight_numeric_digits_and_unique():
+    from secrets_generator import generate_voicemail_pin
+    pins = [generate_voicemail_pin() for _ in range(32)]
+    assert len(set(pins)) == len(pins)
+    assert all(pin.isascii() and pin.isdigit() and len(pin) == 8 for pin in pins)
+    assert all(pin != "1234" for pin in pins)
+

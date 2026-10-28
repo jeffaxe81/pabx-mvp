@@ -15,7 +15,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from secrets_generator import generate_strong_secret, find_placeholders, replace_all_placeholders  # noqa: E402
+from secrets_generator import generate_strong_secret, generate_voicemail_pin, find_placeholders, replace_all_placeholders  # noqa: E402
 
 PROJECT_ROOT = Path(__file__).parent.parent
 
@@ -27,6 +27,7 @@ TARGET_FILES = [
     PROJECT_ROOT / "docker-compose.yml",
     PROJECT_ROOT / "asterisk" / "manager.conf",
     PROJECT_ROOT / "asterisk" / "pjsip.conf",
+    PROJECT_ROOT / "asterisk" / "voicemail.conf",
 ]
 
 
@@ -50,7 +51,19 @@ def main():
     for p in sorted(all_placeholders):
         print(f"  - {p}")
 
-    secret_map = {placeholder: generate_strong_secret() for placeholder in all_placeholders}
+    # Os PINs de voicemail são numéricos (DTMF) e exclusivos por caixa.
+    # Os demais segredos continuam alfanuméricos fortes.
+    secret_map = {}
+    used_pins = set()
+    for placeholder in sorted(all_placeholders):
+        if placeholder.startswith("troque_esta_senha_vm_"):
+            pin = generate_voicemail_pin()
+            while pin in used_pins:
+                pin = generate_voicemail_pin()
+            used_pins.add(pin)
+            secret_map[placeholder] = pin
+        else:
+            secret_map[placeholder] = generate_strong_secret()
 
     print("\nAplicando novos segredos...")
     for path, text in contents.items():
@@ -64,7 +77,7 @@ def main():
 PRONTO. Leia com atenção antes de continuar:
 
 1. Os arquivos alterados (docker-compose.yml, manager.conf,
-   pjsip.conf) agora contêm segredos REAIS, não mais placeholders.
+   pjsip.conf, voicemail.conf) agora contêm segredos REAIS, não mais placeholders.
 
 2. NAO comite essa alteracao de volta pra um repositorio publico -
    isso publicaria os novos segredos exatamente como os antigos

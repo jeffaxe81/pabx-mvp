@@ -222,3 +222,15 @@ def test_main_reports_missing_config_without_exposing_any_secret(capsys, tmp_pat
     assert missing in output
     assert "segredo-oculto" not in output
     finish.assert_called_once_with(1)
+
+def test_verifier_rejects_static_voicemail_placeholders(tmp_path, monkeypatch):
+    voicemail = tmp_path / "voicemail.conf"
+    voicemail.write_text(
+        "[t1]\nt1-1001 => troque_esta_senha_vm_t1_1001,T1\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(verify_deployment, "SECRET_FILES", [voicemail])
+    result = verify_deployment.check_secrets()
+    assert result["ok"] is False
+    assert str(voicemail) in result["remaining"]
+
