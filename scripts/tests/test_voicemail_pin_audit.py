@@ -62,3 +62,16 @@ def test_cli_reports_only_summary_and_exits_nonzero_on_weak_pin(tmp_path, capsys
     assert json.loads(emitted)["weak_pins"] == 1
     path.write_text("[t1]\nt1-1001 => 93847261,Alguem\n")
     assert main([str(path)]) == 0
+
+
+def test_reused_pin_in_one_file_or_across_files_is_rejected(tmp_path):
+    same_pin = "93847261"
+    a = tmp_path / "t1.conf"
+    b = tmp_path / "t10.conf"
+    a.write_text("[t1]\\nt1-1001 => " + same_pin + ",Um\\n".replace("\\n", "\n"))
+    b.write_text("[t10]\\nt10-1001 => " + same_pin + ",Dez\\n".replace("\\n", "\n"))
+    report = audit_voicemail_files([a, b])
+    assert not report["ok"]
+    assert report["reused_pins"] == 1
+    assert same_pin not in json.dumps(report)
+    assert audit_voicemail_text("[t1]\\nt1-1001 => 93847261,Um\\nt1-1002 => 93847261,Dois\\n".replace("\\n", "\n"))["reused_pins"] == 1
