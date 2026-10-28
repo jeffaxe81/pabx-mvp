@@ -4,7 +4,7 @@ from conf_generator import (
 )
 
 SAMPLE = [
-    {"name": "recepcao-3", "number": 1112, "display_name": "Recepção 3", "password": "senha-forte", "tenant": "t1"},
+    {"name": "recepcao-3", "number": 1112, "display_name": "Recepção 3", "password": "senha-forte", "tenant": "t1", "voicemail_pin": "93847261"},
 ]
 
 
@@ -44,21 +44,21 @@ def test_extensions_hints_reference_correct_endpoint():
     assert "exten => 1112,hint,PJSIP/recepcao-3" in content
 
 
-def test_voicemail_dynamic_uses_display_name_and_default_password():
+def test_voicemail_dynamic_uses_display_name_and_individual_pin():
     content = render_voicemail_dynamic(SAMPLE)
-    assert "recepcao-3 => 1234,Recepção 3" in content
+    assert "recepcao-3 => 93847261,Recepção 3" in content
 
 
 def test_voicemail_dynamic_includes_email_when_present():
     with_email = [{**SAMPLE[0], "email": "recepcao3@exemplo.com"}]
     content = render_voicemail_dynamic(with_email)
-    assert "recepcao-3 => 1234,Recepção 3,recepcao3@exemplo.com" in content
+    assert "recepcao-3 => 93847261,Recepção 3,recepcao3@exemplo.com" in content
 
 
 def test_voicemail_dynamic_works_without_email():
     """E-mail é opcional - sem ele, a caixa de voz continua funcionando normalmente."""
     content = render_voicemail_dynamic(SAMPLE)  # SAMPLE não tem campo 'email'
-    assert "recepcao-3 => 1234,Recepção 3," in content
+    assert "recepcao-3 => 93847261,Recepção 3," in content
 
 
 def test_render_all_returns_files_per_tenant():
