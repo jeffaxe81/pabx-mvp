@@ -893,6 +893,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 
   // Fila de espera (queue-api)
   let queuePollInterval = null;
+  let queueRequestEpoch = 0;
 
   // Ramais colegas a monitorar (BLF). Ajuste esta lista conforme os
   // ramais reais do seu tenant/hints em extensions.conf. O próprio
@@ -1228,6 +1229,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 
   // ---------- Fila de espera (queue-api) ----------
   function startQueuePolling() {
+    stopQueuePolling(); // impede duplicar polling com um token anterior
     const apiUrl = el('queueApiUrl').value.trim();
     if (!apiUrl) return;
     if (!el('queueToken').value.trim()) {
@@ -1244,12 +1246,26 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   }
 
   function stopQueuePolling() {
+    queueRequestEpoch += 1; // invalida toda resposta pendente (inclusive após logout)
     clearInterval(queuePollInterval);
     queuePollInterval = null;
+    el('queueList').replaceChildren();
   }
+
+  el('queueToken').addEventListener('input', () => {
+    queueRequestEpoch += 1;
+    el('queueList').replaceChildren();
+  });
+  el('queueApiUrl').addEventListener('input', () => {
+    queueRequestEpoch += 1;
+    recordingsRequestEpoch += 1;
+    el('queueList').replaceChildren();
+    clearRecordingPlayers();
+  });
 
   function fetchQueue(apiUrl) {
     const token = el('queueToken').value.trim();
+    const epoch = queueRequestEpoch;
     // O usuário pode alterar a URL enquanto o polling segue ativo.
     // Revalidar a cada requisição para nunca transmitir Bearer por HTTP remoto.
     if (!token || !recordingApiIsSecure(apiUrl)) {
@@ -1263,9 +1279,17 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
         if (!res.ok) throw new Error('Fila não autorizada');
         return res.json();
       })
-      .then((data) => renderQueue(apiUrl, data.waiting || []))
+      .then((data) => {
+        if (epoch !== queueRequestEpoch ||
+            token !== el('queueToken').value.trim() ||
+            apiUrl !== el('queueApiUrl').value.trim()) return;
+        renderQueue(apiUrl, data.waiting || []);
+      })
       .catch(() => {
-        el('queueList').innerHTML = '<div class="log-empty">API da fila indisponível.</div>';
+        if (epoch !== queueRequestEpoch ||
+            token !== el('queueToken').value.trim() ||
+            apiUrl !== el('queueApiUrl').value.trim()) return;
+        el('queueList').textContent = 'API da fila indisponível.';
       });
   }
 
@@ -1501,10 +1525,16 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
       });
       if (!res.ok) throw new Error('Não autorizado ou API indisponível');
       const data = await res.json();
-      if (epoch !== recordingsRequestEpoch) return;
+      if (epoch !== recordingsRequestEpoch ||
+          token !== el('recordingsToken').value.trim() ||
+          apiUrl !== el('queueApiUrl').value.trim()) return;
       renderRecordings(apiUrl, data.recordings || []);
     } catch (error) {
-      if (epoch === recordingsRequestEpoch) recordingMessage('Sem acesso às gravações. Verifique a credencial e as permissões.');
+      if (epoch === recordingsRequestEpoch &&
+          token === el('recordingsToken').value.trim() &&
+          apiUrl === el('queueApiUrl').value.trim()) {
+        recordingMessage('Sem acesso às gravações. Verifique a credencial e as permissões.');
+      }
     }
   }
 
@@ -1552,7 +1582,9 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
           });
           if (!response.ok) throw new Error('Acesso negado');
           const blob = await response.blob();
-          if (epoch !== recordingsRequestEpoch || !item.isConnected) return;
+          if (epoch !== recordingsRequestEpoch || !item.isConnected ||
+              token !== el('recordingsToken').value.trim() ||
+              apiUrl !== el('queueApiUrl').value.trim()) return;
           const objectUrl = URL.createObjectURL(blob);
           recordingObjectUrls.add(objectUrl);
           audio.src = objectUrl;
@@ -1560,7 +1592,9 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
           button.textContent = 'Áudio carregado';
           message.textContent = '';
         } catch (error) {
-          if (epoch === recordingsRequestEpoch && item.isConnected) {
+          if (epoch === recordingsRequestEpoch && item.isConnected &&
+              token === el('recordingsToken').value.trim() &&
+              apiUrl === el('queueApiUrl').value.trim()) {
             message.textContent = 'Não foi possível abrir a gravação.';
             button.disabled = false;
           }
@@ -1568,6 +1602,11 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
       });
     }
   }
+
+  el('recordingsToken').addEventListener('input', () => {
+    recordingsRequestEpoch += 1;
+    clearRecordingPlayers();
+  });
 
   el('refreshRecordingsBtn').addEventListener('click', fetchRecordings);
   el('recordingsSearchBtn').addEventListener('click', fetchRecordings);

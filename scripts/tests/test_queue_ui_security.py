@@ -51,3 +51,35 @@ def test_queue_poll_rechecks_https_when_api_url_changes_live():
     assert "recordingApiIsSecure(apiUrl)" in body
     assert body.index("recordingApiIsSecure(apiUrl)") < body.index("fetch(`${apiUrl}/api/queue`")
     assert "Authorization: `Bearer ${token}`" in body
+
+
+def test_tenant_queue_responses_are_rejected_when_identity_changes():
+    page = (WEB / "index.html").read_text(encoding="utf-8")
+    stop = section("index.html", "function stopQueuePolling() {", "function fetchQueue(apiUrl) {")
+    assert "queueRequestEpoch += 1" in stop
+    assert "el('queueList').replaceChildren()" in stop
+    body = section("index.html", "function fetchQueue(apiUrl) {",
+                   "function renderQueue(apiUrl, waiting) {")
+    assert "const epoch = queueRequestEpoch" in body
+    guard = "epoch !== queueRequestEpoch"
+    assert body.count(guard) >= 2
+    assert body.count("token !== el('queueToken').value.trim()") >= 2
+    assert body.count("apiUrl !== el('queueApiUrl').value.trim()") >= 2
+    assert body.index(guard) < body.index("renderQueue(apiUrl, data.waiting || [])")
+    assert "el('queueList').innerHTML" not in body
+    assert "el('queueToken').addEventListener('input'" in page
+    assert "el('queueApiUrl').addEventListener('input'" in page
+
+
+def test_recording_list_and_audio_are_not_rendered_after_token_change():
+    page = (WEB / "index.html").read_text(encoding="utf-8")
+    listing = section("index.html", "async function fetchRecordings() {",
+                      "function renderRecordings(")
+    assert "token !== el('recordingsToken').value.trim()" in listing
+    assert "apiUrl !== el('queueApiUrl').value.trim()" in listing
+    assert listing.index("token !== el('recordingsToken').value.trim()") < listing.index("renderRecordings(")
+    player = section("index.html", "function renderRecordings(", "el('refreshRecordingsBtn').addEventListener(")
+    assert "token !== el('recordingsToken').value.trim()" in player
+    assert "apiUrl !== el('queueApiUrl').value.trim()" in player
+    assert "el('recordingsToken').addEventListener('input'" in page
+    assert "clearRecordingPlayers()" in page
