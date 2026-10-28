@@ -22,6 +22,7 @@ TENANT_EXTENSION = re.compile(r"^t[1-9][0-9]*-[a-z0-9][a-z0-9_-]{0,79}$")
 ROLES = {"admin", "supervisor", "agent"}
 EXTENSIONS = {".wav", ".gsm", ".mp3"}
 MAX_POLICY_BYTES = 1024 * 1024
+SOURCE_REF = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/-]{3,99}$")
 _OPEN_SUPPORTS_DIR_FD = hasattr(os, "supports_dir_fd") and os.open in os.supports_dir_fd
 
 
@@ -134,6 +135,11 @@ def load_recording_policy(path):
             return None
         tenant = metadata.get("tenant")
         if not isinstance(tenant, str) or not TENANT.fullmatch(tenant):
+            return None
+        source_ref = metadata.get("source_ref")
+        if source_ref is not None and (
+            not isinstance(source_ref, str) or not SOURCE_REF.fullmatch(source_ref)
+        ):
             return None
         owner = metadata.get("owner_extension")
         if owner is not None and not _extension_belongs_to_tenant(owner, tenant):
