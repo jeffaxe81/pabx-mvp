@@ -34,11 +34,12 @@ from click_to_call import build_originate_action, validate_click_to_call_request
 from campaigns import (
     create_campaign, load_campaigns, find_campaign, next_pending_contact,
     mark_contact_calling, mark_contact_result, campaign_summary,
-    extract_dialed_number,
+    extract_dialed_number, DISPOSITION_TO_STATUS as CAMPAIGN_DISPOSITIONS,
 )
 from callbacks import (
     parse_callback_request_event, add_callback_request, load_callbacks,
     find_callback, next_pending_callback, mark_callback_calling, mark_callback_result,
+    DISPOSITION_TO_STATUS as CALLBACK_DISPOSITIONS,
 )
 from survey import parse_survey_event, SurveyStore, average_score, score_distribution, summarize_by_operator
 from presence import validate_presence_input, load_presence, set_presence, clear_presence, merge_presence_into_states
@@ -288,7 +289,7 @@ def apply_callback_dial_result(event: dict):
     tenant = outbound_event_tenant(event)
     disposition = event.get("DialStatus")
     number = extract_dialed_number(event)
-    if not tenant or not disposition or not number:
+    if not tenant or disposition not in CALLBACK_DISPOSITIONS or not number:
         return
 
     # Always acquire shared locks in the same order, even when AMI
@@ -315,7 +316,7 @@ def apply_campaign_dial_result(event: dict):
     tenant = outbound_event_tenant(event)
     disposition = event.get("DialStatus")
     number = extract_dialed_number(event)
-    if not tenant or not disposition or not number:
+    if not tenant or disposition not in CAMPAIGN_DISPOSITIONS or not number:
         return
 
     with outbound_lock(CALLBACKS_PATH), outbound_lock(CAMPAIGNS_PATH):
