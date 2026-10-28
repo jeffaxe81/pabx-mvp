@@ -93,6 +93,15 @@ def prepare(root, destination, source_commit="HEAD"):
     ):
         (conf/folder).mkdir(exist_ok=True)
         (conf/folder/'t3.conf').write_text(body)
+    # Falha antes da inicialização se um PIN efêmero for fraco/repetido
+    # ou se houver mailbox de outra empresa. Não publica PINs em logs.
+    from .voicemail_pin_checks import validate_prepared_voicemail
+    vm_check = validate_prepared_voicemail(
+        (conf/'voicemail.conf').read_text(),
+        (conf/'voicemail_tenants'/'t3.conf').read_text(),
+    )
+    if not vm_check['ok']:
+        raise ValueError('configuração de PINs do voicemail no laboratório é insegura')
     # Nenhum AMI fica exposto pelo laboratório de registros.
     (conf/'manager.conf').write_text('[general]\nenabled=no\n')
     http = (conf/'http.conf').read_text().replace('0.0.0.0', '127.0.0.1')
