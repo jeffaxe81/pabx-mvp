@@ -15,7 +15,7 @@ def test_parses_agent_connect_event():
 def test_agent_connect_handles_missing_hold_time():
     event = {"Event": "AgentConnect", "Queue": "fila-t1"}
     result = parse_agent_connect_event(event)
-    assert result["hold_time"] == 0
+    assert result["hold_time"] is None
 
 
 def test_ignores_unrelated_events_for_agent_connect():
@@ -272,3 +272,60 @@ def test_filter_sla_history_only_end():
 
 def test_filter_sla_history_empty_records():
     assert filter_sla_history_by_date_range([], start="2026-01-01") == []
+
+
+# Marco 9 — eventos AMI incompletos não podem inflar o SLA.
+import pytest
+
+
+@pytest.mark.parametrize("bad", [
+    None, "", "abc", "NaN", "-1", "-0.5", "3.5", "9999999999",
+    -1, -0.1, 1.5, float("nan"), float("inf"), True, False, [], {},
+])
+def test_invalid_hold_time_counts_as_offered_but_never_achieves_sla(bad):
+    tracker = QueueSLATracker(threshold_seconds=20)
+    tracker.apply_event({"Event": "AgentConnect", "Queue": "fila-t10",
+                         "HoldTime": bad})
+    result = tracker.snapshot()
+    assert result == {"fila-t10": {
+        "offered": 1, "within_sla": 0, "sla_percent": 0.0,
+    }}
+
+
+def test_missing_hold_time_does_not_improve_real_queue_sla():
+    tracker = QueueSLATracker(threshold_seconds=20)
+    tracker.apply_event({"Event": "AgentConnect", "Queue": "fila-t1",
+                         "HoldTime": "10"})
+    tracker.apply_event({"Event": "AgentConnect", "Queue": "fila-t1"})
+    tracker.apply_event({"Event": "AgentConnect", "Queue": "fila-t1",
+                         "HoldTime": "80"})
+    assert tracker.snapshot()["fila-t1"] == {
+        "offered": 3, "within_sla": 1, "sla_percent": 33.3,
+    }
+
+
+def test_exact_ami_seconds_boundary_and_tenant_isolation():
+    tracker = QueueSLATracker(threshold_seconds=20)
+    for queue, wait in [("fila-t1", "20"), ("fila-t10", "21"),
+                        ("fila-t2", "00020")]:
+        tracker.apply_event({"Event": "AgentConnect", "Queue": queue,
+                             "HoldTime": wait})
+    assert tracker.snapshot()["fila-t1"]["sla_percent"] == 100.0
+    assert tracker.snapshot()["fila-t10"]["sla_percent"] == 0.0
+    assert tracker.snapshot()["fila-t2"]["sla_percent"] == 100.0
+
+
+def test_invalid_abandon_still_counts_against_sla_without_crash():
+    tracker = QueueSLATracker()
+    tracker.apply_event({"Event": "QueueCallerAbandon", "Queue": "fila-t1",
+                         "HoldTime": {}})
+    assert tracker.snapshot()["fila-t1"] == {
+        "offered": 1, "within_sla": 0, "sla_percent": 0.0,
+    }
+
+
+@pytest.mark.parametrize("event", [None, 1, [], "AgentConnect", False])
+def test_non_dict_ami_event_is_ignored(event):
+    tracker = QueueSLATracker()
+    tracker.apply_event(event)
+    assert tracker.snapshot() == {}
