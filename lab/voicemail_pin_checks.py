@@ -11,6 +11,7 @@ EXPECTED = {
     "t3": frozenset(("t3-recepcao", "t3-recepcao-2")),
 }
 PIN = re.compile(r"[1-9][0-9]{7}\Z")
+KNOWN_WEAK = {"12345678", "87654321", "11223344", "12121212", "12341234", "87658765"}
 TENANT = re.compile(r"t[1-9][0-9]*\Z")
 MAILBOX = re.compile(r"t[1-9][0-9]*-[a-z0-9][a-z0-9_-]*\Z")
 
@@ -46,7 +47,7 @@ def validate_prepared_voicemail(*contents):
             if (not MAILBOX.fullmatch(mailbox) or tenant not in EXPECTED
                     or mailbox not in EXPECTED[tenant] or mailbox in found[tenant]
                     or not PIN.fullmatch(pin) or pin in seen_pins
-                    or len(set(pin)) < 3):
+                    or len(set(pin)) < 3 or pin in KNOWN_WEAK):
                 invalid += 1
                 continue
             found[tenant].add(mailbox)
