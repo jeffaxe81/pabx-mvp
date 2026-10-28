@@ -89,7 +89,7 @@
       "title": "Homologar isolamento completo por empresa",
       "area": "tenancy",
       "acceptance": "Sem acesso cruzado a ramais, gravações, voicemail, DID ou filas",
-      "status": "planned",
+      "status": "in_progress",
       "pr_number": null,
       "ci_run_id": null,
       "requires_lab": true
