@@ -300,12 +300,14 @@ def test_post_and_put_cannot_choose_voicemail_pin(tmp_path):
     assert not ok and "PIN" in error
 
 
-def test_legacy_voicemail_pin_not_rotated_implicitly(tmp_path):
+def test_legacy_voicemail_pin_requires_explicit_migration(tmp_path):
     path = tmp_path / "ramais.json"
     legacy = {**VALID_INPUT, "tenant": "t1"}
     save_store(path, [legacy])
-    edited = update_extension(path, legacy["name"], {"display_name": "Atualizado"})[2]
-    assert edited["voicemail_pin"] == "1234"
+    ok, error, edited = update_extension(path, legacy["name"], {"display_name": "Atualizado"})
+    assert not ok and edited is None
+    assert "migração" in error
+    assert load_store(path) == [legacy]
 
 
 def test_registered_tenant_t3_can_create_and_update_extension(tmp_path):
