@@ -100,7 +100,7 @@
       "title": "Ensaiar filas, URA e callbacks",
       "area": "contact-center",
       "acceptance": "Entrada, espera, transbordo, callback e relatório de SLA",
-      "status": "planned",
+      "status": "in_progress",
       "pr_number": null,
       "ci_run_id": null,
       "requires_lab": true
