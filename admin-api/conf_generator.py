@@ -70,9 +70,11 @@ def render_voicemail_dynamic(extensions: list) -> str:
     lines = [AUTO_GENERATED_HEADER]
     for ext in extensions:
         email = ext.get("email", "")
-        # Compatibilidade: ramais anteriores à política de PIN aleatório
-        # podem não ter voicemail_pin; exigem migração/rotação manual.
-        pin = ext.get("voicemail_pin") or "1234"
+        # Um cadastro legado sem PIN próprio nunca deve produzir uma
+        # mailbox com senha compartilhada. Migração exige ação autorizada.
+        pin = ext.get("voicemail_pin")
+        if not isinstance(pin, str) or not re.fullmatch(r"[1-9][0-9]{7}", pin):
+            raise ValueError("PIN de voicemail ausente ou inválido; migração obrigatória")
         lines.append(f"{ext['name']} => {pin},{ext['display_name']},{email}")
     return "\n".join(lines) + ("\n" if extensions else "")
 
@@ -85,7 +87,7 @@ _NAME = re.compile(r"[a-z0-9-]{3,40}\Z")
 _ENDPOINT_OWNER = re.compile(r"(t[1-9][0-9]*)-.+\Z")
 _PASSWORD = re.compile(r"[A-Za-z0-9._~!@#$%^&*()+\-=]{1,128}\Z")
 _EMAIL = re.compile(r"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,63}\Z")
-_VOICEMAIL_PIN = re.compile(r"(?:1234|[1-9][0-9]{7})\Z")
+_VOICEMAIL_PIN = re.compile(r"[1-9][0-9]{7}\Z")
 _STATIC_ENDPOINTS = frozenset({
     "t1-1001", "t1-1002", "t1-recepcao", "t1-recepcao-2",
     "t2-1001", "t2-recepcao", "t2-recepcao-2",
@@ -158,10 +160,8 @@ def validate_persisted_extensions(extensions: list, tenant_ids: set) -> None:
                 or (email and not _EMAIL.fullmatch(email))):
             raise ValueError("email do voicemail invalido")
         pin = ext.get("voicemail_pin")
-        if pin is not None and (
-            not isinstance(pin, str) or not _VOICEMAIL_PIN.fullmatch(pin)
-        ):
-            raise ValueError("PIN de voicemail persistido invalido")
+        if not isinstance(pin, str) or not _VOICEMAIL_PIN.fullmatch(pin):
+            raise ValueError("PIN de voicemail persistido ausente ou invalido")
 
 def render_all(extensions: list, tenant_ids=None) -> dict:
     """Gera um conjunto separado de dial/hints/voicemail por tenant.
