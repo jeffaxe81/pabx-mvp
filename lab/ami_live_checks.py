@@ -103,7 +103,9 @@ def assess_local_dial_trace(events, channel_id, tenant="t1"):
     pairs = [(b, e) for b in begins for e in ends
              if trusted(b) and trusted(e)
              and all(b.get(k) == e.get(k)
-                     for k in ("Uniqueid", "DestUniqueid", "Linkedid"))]
+                     for k in ("Uniqueid", "DestUniqueid", "Linkedid"))
+             and channel_id in (b.get("Uniqueid"), b.get("DestUniqueid"),
+                                b.get("Linkedid"))]
     origin = any(channel_id in (e.get("Uniqueid"), e.get("DestUniqueid"),
                                 e.get("Linkedid")) for e in begins + ends)
     return {
