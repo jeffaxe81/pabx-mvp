@@ -108,6 +108,25 @@ def test_check_ami_login_handles_connection_failure_gracefully():
 # ---------- check_http_services ----------
 
 def test_check_http_services_reports_all_healthy():
+    from urllib.error import HTTPError
+
+    mock_response = MagicMock()
+    mock_response.status = 200
+    mock_response.__enter__.return_value = mock_response
+
+    def fake_urlopen(url, timeout=5):
+        if url.endswith("/api/queue"):
+            raise HTTPError(url, 401, "Unauthorized", {"WWW-Authenticate": "Bearer"}, None)
+        return mock_response
+
+    with patch("verify_deployment.urllib.request.urlopen", side_effect=fake_urlopen):
+        result = verify_deployment.check_http_services()
+
+    assert result["all_healthy"] is True
+    assert set(result["healthy"]) == set(verify_deployment.HTTP_SERVICES)
+
+
+def test_check_http_services_does_not_accept_unprotected_queue_endpoint():
     mock_response = MagicMock()
     mock_response.status = 200
     mock_response.__enter__.return_value = mock_response
@@ -115,8 +134,8 @@ def test_check_http_services_reports_all_healthy():
     with patch("verify_deployment.urllib.request.urlopen", return_value=mock_response):
         result = verify_deployment.check_http_services()
 
-    assert result["all_healthy"] is True
-    assert set(result["healthy"]) == set(verify_deployment.HTTP_SERVICES)
+    assert result["all_healthy"] is False
+    assert result["unhealthy"]["queue-api"] == 200
 
 
 def test_check_http_services_reports_connection_failures_as_unhealthy():
