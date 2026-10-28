@@ -187,3 +187,27 @@ jobs:
           path: lab-results/ami-originate.json
           if-no-files-found: error
           retention-days: 14
+
+  queue-tenants:
+    name: Asterisk | filas por empresa via SIP real
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Instalar cliente SRTP de laboratório
+        run: python3 -m pip install -r lab/requirements.txt
+      - name: Comprovar Queue exata t1 t2 t3 em chamadas SIP
+        run: python3 -m lab.asterisk_lab --calls --queues --report lab-results/queue-tenants.json
+      - name: Preservar prova sanitizada das filas
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: asterisk-real-queue-tenants-${{ github.sha }}
+          path: lab-results/queue-tenants.json
+          if-no-files-found: error
+          retention-days: 14
