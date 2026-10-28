@@ -62,7 +62,7 @@ def test_validate_generates_password_when_not_provided():
 
 def test_validate_editing_same_name_does_not_conflict_with_itself():
     """Editar um ramal e reenviar o mesmo nome/número não deve disparar 'duplicado'."""
-    existing = [{"name": "recepcao-3", "number": 1112}]
+    existing = [{"name": "recepcao-3", "number": 1112, "voicemail_pin": "93847261"}]
     ok, error, cleaned = validate_extension_input(VALID_INPUT, existing, editing_name="recepcao-3")
     assert ok is True
 
@@ -254,7 +254,7 @@ def test_password_short_on_create_rejected_but_legacy_kept_on_edit():
     payload = {**VALID_INPUT, "password": "oldsecret"}
     ok, _, _ = validate_extension_input(payload, [])
     assert not ok
-    legacy = [{**payload}]
+    legacy = [{**payload, "voicemail_pin": "93847261"}]
     ok, _, cleaned = validate_extension_input(payload, legacy, editing_name=payload["name"])
     assert ok and cleaned["password"] == "oldsecret"
     rotated = {**payload, "password": "newsecret"}
