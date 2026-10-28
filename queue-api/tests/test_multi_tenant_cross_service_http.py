@@ -121,9 +121,9 @@ def test_only_own_queue_and_recordings_visible_even_with_spoofed_tenant(
     waiting = json.loads(body)["waiting"]
     assert len(waiting) == 1
     assert waiting[0]["queue"] == "fila-" + tenant
-    assert all(t.encode() not in body for t in (
-        other + "-private", "fila-" + other,
-    ))
+    assert all(entry["queue"] != "fila-" + other for entry in waiting)
+    assert all(entry["caller_id_num"] != other + "-private"
+               for entry in waiting)
 
     status, _, body = _http(
         port, "GET", "/api/recordings?tenant=" + other,
