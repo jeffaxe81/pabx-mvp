@@ -26,6 +26,16 @@ SCENARIOS = (
     ("failover", "Contingência e recuperação testadas"),
 )
 VALID_STATES = {"pending", "passed", "failed", "blocked"}
+
+
+def reject_duplicate_keys(pairs):
+    """Objetos JSON com chaves repetidas não podem contar como evidência."""
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError("JSON de homologação com chave duplicada")
+        result[key] = value
+    return result
 SHA_RE = re.compile(r"^[0-9a-fA-F]{40}$")
 MAX_HOMOLOGATION_BYTES = 1024 * 1024
 
@@ -110,7 +120,8 @@ def main(argv=None):
             raise ValueError("arquivo de evidências ausente ou link simbólico")
         if source.stat().st_size > MAX_HOMOLOGATION_BYTES:
             raise ValueError("arquivo de evidências excede limite seguro")
-        payload = json.loads(source.read_text(encoding="utf-8"))
+        payload = json.loads(source.read_text(encoding="utf-8"),
+                             object_pairs_hook=reject_duplicate_keys)
         report = summarize(payload)
     except (OSError, UnicodeError, json.JSONDecodeError, ValueError) as exc:
         print(f"Registro de homologação inválido: {exc}", file=sys.stderr)
