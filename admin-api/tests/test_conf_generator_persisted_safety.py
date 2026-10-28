@@ -104,3 +104,20 @@ def test_direct_guard_checks_active_tenant_allowlist():
     assert validate_persisted_extensions(valid, {"t1", "t2", "t3"}) is None
     with pytest.raises(ValueError, match="não provisionado"):
         validate_persisted_extensions(valid, {"t1", "t2"})
+
+
+@pytest.mark.parametrize("pin", [None, "", "1234", "00000000", "8765", 1234])
+def test_persisted_missing_or_shared_voicemail_pin_blocks_all_generated_files(pin):
+    legacy = {**BASE}
+    if pin is None:
+        legacy.pop("voicemail_pin")
+    else:
+        legacy["voicemail_pin"] = pin
+    with pytest.raises(ValueError, match="PIN de voicemail"):
+        render_all([legacy], tenant_ids={"t1", "t2"})
+
+
+def test_existing_records_with_strong_pin_remain_unchanged():
+    files = render_all([BASE], tenant_ids={"t1"})
+    assert "87654321" in files["voicemail_dynamic_t1.conf"]
+    assert "1234" not in files["voicemail_dynamic_t1.conf"]
