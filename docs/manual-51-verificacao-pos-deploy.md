@@ -19,8 +19,10 @@ um passo manual sem apoio nenhum.
    sobrou em `docker-compose.yml`, `manager.conf` ou `pjsip.conf`
 2. **AMI** — tenta logar de verdade na porta 5038 com as credenciais
    informadas; só aceita se o Asterisk responder `Response: Success`
-3. **Serviços HTTP** — bate em cada serviço (`queue-api`, `admin-api`,
-   `ai-worker`, `webphone`) e confere se responde `200`
+3. **Serviços HTTP** — verifica a resposta exata de cada endpoint.
+   `queue-api` **deve retornar HTTP 401 sem Bearer**: é a negativa
+   obrigatória de uma API protegida, e não falha do serviço. As
+   demais URLs verificadas continuam exigindo HTTP 200.
 
 ## Como usar
 ```bash
@@ -52,6 +54,9 @@ ligação funciona", precisa ouvir de verdade.
    checagem 2 falha claramente
 4. Pare um dos serviços (`docker compose stop queue-api`) — confirme
    que a checagem 3 aponta ele como não saudável
+5. Faça a mesma verificação com uma versão que devolva 200 em
+   `/api/queue` sem Bearer: o verificador deve reprovar, pois isso
+   indica ausência da barreira de autenticação esperada.
 
 ## Teste automatizado
 - `scripts/tests/test_deployment_checks.py` (11 testes) — lógica pura:
@@ -92,3 +97,12 @@ obrigatórios estiverem ausentes, vazios ou ilegíveis. No fluxo antigo,
 um arquivo que não existia era silenciosamente ignorado. O resultado
 negativo informa o caminho afetado, sem imprimir segredos.
 Veja [Manual 77](manual-77-arquivos-segredos-obrigatorios.md).
+
+
+## Correção de leitura da API protegida (2026-10-28)
+
+O teste pós-deploy de `/api/queue` não fornece Bearer por desenho:
+assim, o resultado seguro da queue-api é **401**, e não 200. A rotina
+agora exige o 401 específico para esse serviço; não aceita 200, 403,
+404 ou erro de rede como equivalente. Esta verificação não substitui
+um login real com token válido nem valida o isolamento entre empresas.
