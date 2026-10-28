@@ -451,15 +451,22 @@ class Handler(BaseHTTPRequestHandler):
         return policy, identity
 
     def _send_json(self, status: int, payload: dict):
-        body = json.dumps(payload).encode("utf-8")
+        """Resposta mínima para rotas desconhecidas, sem CORS permissivo.
+
+        APIs reconhecidas usam _send_queue_json / _send_recordings_json,
+        que aplicam autenticação e CORS por origem. Não publicar wildcard
+        na rota de fallback: uma API adicionada sem classificação explícita
+        não deve herdar permissões de acesso pelo navegador.
+        """
+        body = b"" if status == 204 else json.dumps(payload).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
-        self.wfile.write(body)
+        if body:
+            self.wfile.write(body)
 
     def do_OPTIONS(self):
         if self._is_queue_route():
@@ -489,7 +496,7 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header("Content-Length", "0")
             self.end_headers()
             return
-        self._send_json(204, {})
+        self._send_json(404, {"error": "not found"})
 
     def do_GET(self):
         if urlparse(self.path).path == "/api/queue":
