@@ -178,3 +178,4 @@ registrado como regra permanente no prompt master
 125. [Fallback HTTP seguro: rotas desconhecidas sem CORS amplo](manual-125-fallback-http-cors.md)
 126. [DialStatus AMI conservador para campanhas e callbacks](manual-126-ami-dialstatus-conservador.md)
 127. [OriginateResponse real no laboratório AMI](manual-127-ami-live-originate.md)
+128. [Observação local de DialBegin/DialEnd no Asterisk real](manual-128-ami-local-dial-trace.md)
