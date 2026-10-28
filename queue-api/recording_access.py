@@ -150,10 +150,36 @@ def authenticate_recordings(authorization, policy, now=None):
         return None
     if not (32 <= len(token) <= 256) or not token.isascii() or not token.isprintable() or " " in token:
         return None
-    digest = hashlib.sha256(token.encode("ascii")).hexdigest()
+    # A leitura normal valida o catálogo, mas um chamador pode passar uma
+    # estrutura adulterada diretamente em memória. Não autorizar credenciais
+    # nem lançar exceção quando o estado estiver inconsistente.
+    credentials = policy.get("credentials")
+    if not isinstance(credentials, list):
+        return None
     current = time.time() if now is None else now
-    for cred in policy["credentials"]:
-        if hmac.compare_digest(digest, cred["token_sha256"]) and current < cred["expires_at"]:
+    if type(current) not in (int, float) or not math.isfinite(current):
+        return None
+    digest = hashlib.sha256(token.encode("ascii")).hexdigest()
+    for cred in credentials:
+        if not isinstance(cred, dict):
+            return None
+        stored = cred.get("token_sha256")
+        tenant, role = cred.get("tenant"), cred.get("role")
+        expiry = cred.get("expires_at")
+        if (
+            not isinstance(stored, str) or not HEX_SHA256.fullmatch(stored)
+            or not isinstance(tenant, str) or not TENANT.fullmatch(tenant)
+            or role not in ROLES if isinstance(role, str) else True
+        ):
+            return None
+        if type(expiry) not in (int, float) or not math.isfinite(expiry) or expiry <= 0:
+            return None
+        if role == "agent":
+            if not _extension_belongs_to_tenant(cred.get("extension"), tenant):
+                return None
+        elif cred.get("extension") is not None:
+            return None
+        if hmac.compare_digest(digest, stored) and current < expiry:
             return cred
     return None
 
@@ -163,7 +189,10 @@ def can_read_recording(policy, principal, filename):
         return False
     if not _valid_filename(filename):
         return False
-    metadata = policy["recordings"].get(filename)
+    catalog = policy.get("recordings")
+    if not isinstance(catalog, dict):
+        return False
+    metadata = catalog.get(filename)
     tenant = principal.get("tenant")
     if (
         not isinstance(metadata, dict)
