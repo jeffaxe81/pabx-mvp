@@ -2,7 +2,17 @@
 
 These fixtures never claim Asterisk runtime evidence and never dial a phone.
 """
+import sys
+from pathlib import Path
+
 import pytest
+
+# This suite runs with working-directory=scripts in the static matrix. Add the
+# repository root explicitly so it exercises the same lab parser used by the
+# Asterisk workflow instead of depending on the runner's implicit PYTHONPATH.
+ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 from lab.ami_live_checks import assess_local_dial_trace
 
