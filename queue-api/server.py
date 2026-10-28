@@ -289,7 +289,7 @@ def apply_callback_dial_result(event: dict):
     tenant = outbound_event_tenant(event)
     disposition = event.get("DialStatus")
     number = extract_dialed_number(event)
-    if not tenant or disposition not in CALLBACK_DISPOSITIONS or not number:
+    if not tenant or not isinstance(disposition, str) or disposition not in CALLBACK_DISPOSITIONS or not number:
         return
 
     # Always acquire shared locks in the same order, even when AMI
@@ -316,7 +316,7 @@ def apply_campaign_dial_result(event: dict):
     tenant = outbound_event_tenant(event)
     disposition = event.get("DialStatus")
     number = extract_dialed_number(event)
-    if not tenant or disposition not in CAMPAIGN_DISPOSITIONS or not number:
+    if not tenant or not isinstance(disposition, str) or disposition not in CAMPAIGN_DISPOSITIONS or not number:
         return
 
     with outbound_lock(CALLBACKS_PATH), outbound_lock(CAMPAIGNS_PATH):
