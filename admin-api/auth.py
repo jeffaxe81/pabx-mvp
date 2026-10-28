@@ -53,20 +53,25 @@ class SessionStore:
 
     def validate(self, token: str):
         """Retorna o username se o token for válido e não expirado, senão None."""
+        if not isinstance(token, str):
+            return None
         session = self._sessions.get(token)
         if not session:
             return None
-        if self._clock() > session["expires_at"]:
+        if self._clock() >= session["expires_at"]:
             del self._sessions[token]
             return None
         return session["username"]
 
     def get_role(self, token: str):
         """Retorna o papel (role) da sessão, ou None se o token for inválido/expirado."""
+        if not isinstance(token, str):
+            return None
         session = self._sessions.get(token)
-        if not session or self._clock() > session["expires_at"]:
+        if not session or self._clock() >= session["expires_at"]:
             return None
         return session["role"]
 
     def revoke(self, token: str):
-        self._sessions.pop(token, None)
+        if isinstance(token, str):
+            self._sessions.pop(token, None)
