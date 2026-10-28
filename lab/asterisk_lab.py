@@ -164,7 +164,7 @@ def cleanup_owned(name, ownership):
     return result
 
 
-def summarize(checks, *, calls=False, webrtc=False, dids=False, isolation=False, voicemail=False):
+def summarize(checks, *, calls=False, webrtc=False, dids=False, isolation=False, voicemail=False, ami=False):
     required = {'real_runtime', 'tls_transport', 'wss_transport', 'container_removed',
                 'checkout_clean', 'runtime_mounts', 'source_label'}
     required.update(name+':'+tid for tid in ('t1', 't2', 't3')
@@ -184,12 +184,15 @@ def summarize(checks, *, calls=False, webrtc=False, dids=False, isolation=False,
     if voicemail:
         from .voicemail_checks import required_voicemail_checks
         required.update(required_voicemail_checks())
+    if ami:
+        from .ami_live_checks import required_ami_checks
+        required.update(required_ami_checks())
     passed = sum(value is True for value in checks.values())
     return {'passed': passed, 'total': len(checks),
             'success': set(checks) == required and passed == len(required)}
 
 
-def run(root, report, *, calls=False, webrtc=False, dids=False, isolation=False, voicemail=False):
+def run(root, report, *, calls=False, webrtc=False, dids=False, isolation=False, voicemail=False, ami=False):
     if webrtc and not calls:
         raise ValueError('WebRTC requer o modo de chamadas')
     if dids and not calls:
@@ -220,6 +223,10 @@ def run(root, report, *, calls=False, webrtc=False, dids=False, isolation=False,
     if voicemail:
         report.update(schema_version=6, kind='real_asterisk_voicemail_route_lab',
                       live_voicemail_route_tested=False)
+    if ami:
+        report.update(schema_version=7, kind='real_asterisk_ami_originate_response_lab',
+                      live_ami_originate_response_tested=False,
+                      live_ami_dialend_correlated=False)
     clean = command(['git', '-C', str(root), 'diff', '--quiet', 'HEAD', '--',
                      'asterisk', 'admin-api/tenants.py', 'admin-api/conf_generator.py',
                      'scripts/secrets_generator.py', 'lab','webphone','package.json','package-lock.json',
@@ -243,6 +250,9 @@ def run(root, report, *, calls=False, webrtc=False, dids=False, isolation=False,
         if dids:
             from .did_checks import prepare_dids
             prepare_dids(root,prepared,source)
+        if ami:
+            from .ami_live_checks import prepare_ami
+            prepare_ami(prepared)
         command(['docker', 'pull', IMAGE], timeout=180)
         image_data = json.loads(command(['docker', 'image', 'inspect', IMAGE]).stdout)[0]
         report['image_id'] = image_data['Id']
@@ -330,6 +340,9 @@ def run(root, report, *, calls=False, webrtc=False, dids=False, isolation=False,
         if voicemail:
             from .voicemail_checks import exercise_voicemail
             exercise_voicemail(container_id,prepared,report)
+        if ami:
+            from .ami_live_checks import exercise_ami
+            exercise_ami(prepared,report)
     finally:
         if attempted_create:
             cleaned = cleanup_owned(name, ownership)
@@ -339,7 +352,7 @@ def run(root, report, *, calls=False, webrtc=False, dids=False, isolation=False,
         report['private_staging_retained'] = retain_staging
         if not retain_staging:
             shutil.rmtree(folder)
-    report.update(summarize(report['checks'], calls=calls,webrtc=webrtc,dids=dids,isolation=isolation,voicemail=voicemail))
+    report.update(summarize(report['checks'], calls=calls,webrtc=webrtc,dids=dids,isolation=isolation,voicemail=voicemail,ami=ami))
     return report['success']
 
 
@@ -351,6 +364,7 @@ def main(argv=None):
     parser.add_argument('--dids', action='store_true', help='testar DIDs estáticos, dinâmicos e rejeições SIP')
     parser.add_argument('--isolation', action='store_true', help='negativas SIP reais entre empresas')
     parser.add_argument('--voicemail', action='store_true', help='validar a rota *97 SIP real por tenant')
+    parser.add_argument('--ami', action='store_true', help='verificar OriginateResponse no AMI real isolado')
     args = parser.parse_args(argv)
     if args.webrtc and not args.calls:
         parser.error('--webrtc requer --calls')
@@ -367,6 +381,8 @@ def main(argv=None):
             kwargs['isolation'] = True
         if args.voicemail:
             kwargs['voicemail'] = True
+        if args.ami:
+            kwargs['ami'] = True
         success = run(Path(__file__).resolve().parents[1], report, **kwargs)
     except Exception as exc:
         success = False
