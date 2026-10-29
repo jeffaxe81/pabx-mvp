@@ -13,7 +13,7 @@ from datetime import datetime
 from pathlib import Path
 
 from recording_catalog import SOURCE_REF, EXTENSION
-from recording_access import TENANT, _valid_filename
+from recording_access import TENANT, _valid_filename, _reject_duplicate_json_keys
 
 CDR_LIMIT_BYTES = 4 * 1024 * 1024
 CDR_LIMIT_ROWS = 10000
@@ -44,7 +44,11 @@ def load_raw_cdr(path):
     events = []
     for line_no, line in enumerate(lines, 1):
         try:
-            row = json.loads(line)
+            row = json.loads(
+                line, object_pairs_hook=_reject_duplicate_json_keys,
+                parse_constant=lambda _: (_ for _ in ()).throw(
+                    ValueError("número JSON não finito")),
+            )
         except ValueError as exc:
             raise ValueError(f"linha CDR {line_no} contém JSON inválido") from exc
         if not isinstance(row, dict):
