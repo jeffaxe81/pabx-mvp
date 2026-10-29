@@ -65,9 +65,9 @@
         {
           "id": "queue_overflow",
           "description": "Timeout e transbordo da URA/fila no runtime",
-          "state": "pending",
-          "evidence_file": "asterisk/extensions.conf",
-          "ci_job": null
+          "state": "verified_lab",
+          "evidence_file": "lab/queue_overflow_checks.py",
+          "ci_job": "Asterisk | filas por empresa via SIP real"
         },
         {
           "id": "callback_outcome",
