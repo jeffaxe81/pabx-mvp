@@ -28,7 +28,11 @@ A prova cobre `t1`, `t2` e `t3`.
    de volta ao idioma e rejeita nomes de outros tenants, inclusive
    colisão de prefixos `t1`/`t10`.
 4. Ao desligar, exige liberação de canais e CDR de origem/contexto/
-   tenant válidos. O relatório publica somente resultados booleanos.
+   tenant válidos. A conferência CDR captura os `uniqueid` anteriores à
+   chamada e só aceita um registro novo **do mesmo canal observado**;
+   admite o destino `9987` ou `1000`, pois `Goto(1000,1)` pode atualizar
+   a extensão de destino no CDR. O relatório publica apenas booleanos,
+   sem identificadores ou números de chamada.
 
 São **33 checks obrigatórios**, incluídos na pipeline já existente
 `Asterisk | filas por empresa via SIP real` (`--calls --queues`).
