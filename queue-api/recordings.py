@@ -4,6 +4,7 @@ MixMonitor/queue monitor do Asterisk) num diretório. Lógica pura,
 separada do servidor HTTP, pra dar pra testar com arquivos temporários
 sem precisar subir nada.
 """
+import math
 import os
 import re
 import stat
@@ -168,30 +169,52 @@ def safe_recording_path(directory, filename: str):
 
 
 def delete_expired_recordings(directory, retention_days: int, clock=time.time):
+    """Expurgo opt-in ancorado em diretório FD, sem seguir links simbólicos.
+
+    Usa o MESMO diretório seguro da listagem e download. Um ancestral
+    redirecionado por symlink não pode redirecionar o unlink. Nomes
+    retornados são privados (podem conter identificadores telefônicos).
     """
-    Apaga gravações mais antigas que retention_days. retention_days <= 0
-    desabilita o expurgo (retorna sem apagar nada) - política de
-    retenção é opt-in, nunca ativa "por acidente".
-
-    Retorna a lista de nomes de arquivo apagados (útil pra log/teste).
-    """
-    if retention_days <= 0:
+    if type(retention_days) is not int or retention_days <= 0:
         return []
-
-    path = Path(directory)
-    if not path.exists():
+    if not {os.stat, os.unlink} <= getattr(os, "supports_dir_fd", set()):
         return []
-
-    cutoff = clock() - (retention_days * 86400)
+    directory_fd = _recording_directory_fd(directory)
+    if directory_fd is None:
+        return []
     deleted = []
-
-    for f in path.iterdir():
-        if f.is_symlink() or not f.is_file() or f.suffix.lower() not in ALLOWED_EXTENSIONS:
-            continue
-        if f.stat().st_mtime < cutoff:
-            f.unlink()
-            deleted.append(f.name)
-
+    try:
+        now = clock()
+        if type(now) not in (int, float) or not math.isfinite(now):
+            return []
+        cutoff = now - retention_days * 86400
+        with os.scandir(directory_fd) as entries:
+            for entry in entries:
+                name = entry.name
+                if (not isinstance(name, str) or not 1 <= len(name) <= 240
+                        or name in {".", ".."} or "/" in name or "\\" in name
+                        or any(ord(char) < 32 or ord(char) == 127 for char in name)
+                        or Path(name).suffix.lower() not in ALLOWED_EXTENSIONS):
+                    continue
+                try:
+                    info = os.stat(name, dir_fd=directory_fd, follow_symlinks=False)
+                    if not stat.S_ISREG(info.st_mode) or info.st_mtime >= cutoff:
+                        continue
+                    # A pasta precisa continuar com escrita restrita.
+                    # POSIX não fornece unlink condicionado ao inode; esta
+                    # confirmação reduz trocas acidentais, não substitui ACL.
+                    latest = os.stat(name, dir_fd=directory_fd, follow_symlinks=False)
+                    if (not stat.S_ISREG(latest.st_mode) or latest.st_dev != info.st_dev
+                            or latest.st_ino != info.st_ino or latest.st_mtime >= cutoff):
+                        continue
+                    os.unlink(name, dir_fd=directory_fd)
+                except (OSError, ValueError, TypeError):
+                    continue
+                deleted.append(name)
+    except (OSError, ValueError, TypeError, NotImplementedError):
+        pass  # nunca tenta fallback por Path.iterdir() em rota insegura
+    finally:
+        os.close(directory_fd)
     return deleted
 
 
