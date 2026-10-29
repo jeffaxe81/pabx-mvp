@@ -193,3 +193,40 @@ def test_cross_tenant_reference_reuse_across_separate_imports_is_blocked(tmp_pat
     assert policy.read_bytes() == previous
     assert load_recording_policy(policy)["recordings"][AUDIO]["tenant"] == "t1"
 
+
+def test_manifest_rejects_symlinked_parent_and_special_files(tmp_path):
+    media, policy, manifest = setup_files(tmp_path)
+    alias_dir = tmp_path / "manifest-alias-parent"
+    alias_dir.symlink_to(tmp_path, target_is_directory=True)
+    with pytest.raises(ValueError, match="regular"):
+        load_manifest(alias_dir / manifest.name)
+    fifo = tmp_path / "manifest-pipe.jsonl"
+    os.mkfifo(fifo)
+    with pytest.raises(ValueError, match="regular"):
+        load_manifest(fifo)
+    assert load_manifest(manifest)[0]["tenant"] == "t1"
+
+
+def test_preview_rejects_symlinked_ancestor_of_recording_directory(tmp_path):
+    media, policy, manifest = setup_files(tmp_path)
+    parent = tmp_path / "root-alias"
+    parent.symlink_to(tmp_path, target_is_directory=True)
+    before = policy.read_bytes()
+    with pytest.raises(ValueError, match="diretório"):
+        reconcile_catalog(policy, parent / "media", manifest, True)
+    assert policy.read_bytes() == before
+    assert reconcile_catalog(policy, media, manifest)["new"] == 1
+
+
+def test_preview_requires_regular_recording_fd_not_directory_or_fifo(tmp_path):
+    media, policy, manifest = setup_files(tmp_path)
+    original = media / AUDIO
+    original.unlink()
+    original.mkdir()
+    with pytest.raises(ValueError, match="simbólico"):
+        reconcile_catalog(policy, media, manifest, True)
+    original.rmdir()
+    os.mkfifo(original)
+    with pytest.raises(ValueError, match="simbólico"):
+        reconcile_catalog(policy, media, manifest, True)
+    assert load_recording_policy(policy)["recordings"] == {}
