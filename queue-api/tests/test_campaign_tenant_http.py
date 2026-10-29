@@ -420,3 +420,80 @@ def test_corrupt_pending_callback_is_not_reported_as_empty_queue(api, field, val
         assert dialing[2] == {"error": "catalogo de callbacks indisponivel"}
     assert ami.actions == []
     assert callbacks.read_bytes() == before_write
+
+
+# Marco 9 — cancelar retorno pendente com dupla credencial e serialização.
+def test_supervisor_cancel_callback_is_tenant_scoped(api):
+    base, _, callbacks, ami, _ = api
+    own_record = next(c for c in load_callbacks(callbacks) if c.get("tenant") == "t1")
+    foreign = next(c for c in load_callbacks(callbacks) if c.get("tenant") == "t2")
+    legacy = next(c for c in load_callbacks(callbacks) if not c.get("tenant"))
+    path = "/api/callbacks/" + own_record["id"] + "/cancel"
+    forbidden_paths = ["/api/callbacks/" + c["id"] + "/cancel"
+                       for c in (foreign, legacy)]
+    original = callbacks.read_bytes()
+    assert request(base, path, key=KEY, method="POST")[0] == 401
+    assert request(base, path, TOKENS["t1"], method="POST")[0] == 403
+    assert request(base, path, TOKENS["agent"], KEY, method="POST")[0] == 403
+    assert callbacks.read_bytes() == original
+    for forbidden in forbidden_paths:
+        assert own(api, forbidden, method="POST")[0] == 404
+    assert callbacks.read_bytes() == original
+    allowed = own(api, path, method="POST")
+    assert allowed[0] == 200 and allowed[2] == {"ok": True, "status": "cancelado"}
+    assert own(api, path, method="POST")[0] == 409
+    assert own(api, "/api/callbacks/dial-next", method="POST")[2]["done"] is True
+    assert next(c for c in load_callbacks(callbacks) if c["id"] == foreign["id"])["status"] == "pendente"
+    assert next(c for c in load_callbacks(callbacks) if c["id"] == legacy["id"])["status"] == "pendente"
+    assert ami.actions == []
+
+
+def test_cancel_callback_rejects_already_dialing_and_invalid_urls(api):
+    base, _, callbacks, ami, _ = api
+    rec = next(c for c in load_callbacks(callbacks) if c.get("tenant") == "t1")
+    path = "/api/callbacks/" + rec["id"] + "/cancel"
+    assert own(api, "/api/callbacks/dial-next", method="POST")[0] == 200
+    original = callbacks.read_bytes()
+    assert own(api, path, method="POST")[0] == 409
+    assert callbacks.read_bytes() == original
+    assert len(ami.actions) == 1
+    for bad in ["/api/callbacks/../cancel", "/api/callbacks/t01/cancel",
+                path + "/extra", "/api/callbacks/" + "0"*12 + "/cancel/"]:
+        assert own(api, bad, method="POST")[0] == 404
+
+
+def test_callback_cancel_preflight_and_corruption_fail_closed(api):
+    base, _, callbacks, ami, _ = api
+    rec = next(c for c in load_callbacks(callbacks) if c.get("tenant") == "t1")
+    path = "/api/callbacks/" + rec["id"] + "/cancel"
+    preflight = request(base, path, method="OPTIONS", origin="http://localhost:8082")
+    assert preflight[0] == 204
+    assert "X-Click-To-Call-Key" in preflight[1]["Access-Control-Allow-Headers"]
+    assert request(base, path, method="OPTIONS", origin="https://evil.invalid")[0] == 403
+    callbacks.write_text('[{"id":"bad","id":"duplicate"}]', encoding="utf-8")
+    original = callbacks.read_bytes()
+    result = own(api, path, method="POST")
+    assert result[0] == 503 and result[2] == {"error": "catalogo de callbacks indisponivel"}
+    assert callbacks.read_bytes() == original
+    assert ami.actions == []
+
+
+def test_callback_cancel_and_dial_next_are_serialized(api):
+    import concurrent.futures
+    _, _, callbacks, ami, _ = api
+    rec = next(c for c in load_callbacks(callbacks) if c.get("tenant") == "t1")
+    cancel_path = "/api/callbacks/" + rec["id"] + "/cancel"
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(
+            lambda path: own(api, path, method="POST"),
+            (cancel_path, "/api/callbacks/dial-next"),
+        ))
+    cancel_result, dial_result = results
+    status = next(c for c in load_callbacks(callbacks) if c["id"] == rec["id"])["status"]
+    assert (cancel_result[0], dial_result[0]) in ((200, 200), (409, 200))
+    if cancel_result[0] == 200:
+        assert dial_result[2].get("done") is True
+        assert status == "cancelado" and ami.actions == []
+    else:
+        assert dial_result[2].get("ok") is True
+        assert status == "discando" and len(ami.actions) == 1
