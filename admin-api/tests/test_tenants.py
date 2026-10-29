@@ -218,12 +218,12 @@ def test_voicemail_pins_are_random_unique_and_eight_digits():
 
 
 def test_voicemail_render_uses_pins_generated_for_response():
-    pins = {"t3-1001": "24681357", "t3-recepcao": "12345678",
-            "t3-recepcao-2": "87654321"}
+    pins = {"t3-1001": "24681357", "t3-recepcao": "58269417",
+            "t3-recepcao-2": "73918264"}
     content = render_tenant_voicemail("t3", pins)
     assert "t3-1001 => 24681357," in content
-    assert "t3-recepcao => 12345678," in content
-    assert "t3-recepcao-2 => 87654321," in content
+    assert "t3-recepcao => 58269417," in content
+    assert "t3-recepcao-2 => 73918264," in content
 
 
 def test_voicemail_render_rejects_weak_or_reused_pins():
@@ -409,3 +409,18 @@ def test_dynamic_tenant_voicemail_fallback_exists_in_same_tenant():
         assert f"{tenant}-1001 => " in voicemail
         assert f"t1-1001 => " not in voicemail
 
+
+
+def test_voicemail_pin_rejects_repeated_and_sequential_candidates(monkeypatch):
+    from tenants import _strong_voicemail_pin
+    for weak in ("12345678", "87654321", "12121212", "12341234",
+                 "11111111", "98765432", "12345670"):
+        if weak != "12345670":
+            assert not _strong_voicemail_pin(weak)
+    assert _strong_voicemail_pin("24681357")
+    assert _strong_voicemail_pin("58269417")
+    assert _strong_voicemail_pin("73918264")
+    import tenants
+    monkeypatch.setattr(tenants.secrets, "randbelow", lambda n: 2345678)
+    with __import__("pytest").raises(ValueError, match="gerar PIN"):
+        generate_tenant_voicemail_pins("t3")
