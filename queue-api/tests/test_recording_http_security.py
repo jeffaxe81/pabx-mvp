@@ -143,3 +143,27 @@ def test_t2_bearer_never_leaks_t1_recording_or_metadata(recording_server):
     assert [entry["filename"] for entry in json.loads(body)["recordings"]] == ["t2.wav"]
     assert request(url + "/recordings/t1.wav", auth=t2_token)[0] == 404
     assert request(url + "/recordings/t2.wav", auth=t2_token)[2] == b"RIFF tenant two"
+
+def test_t1_and_t10_remain_isolated_after_policy_hot_reload(recording_server, tmp_path):
+    url, path = recording_server
+    t10_token = "S" * 48
+    media = tmp_path / "recordings"
+    (media / "t10.wav").write_bytes(b"RIFF tenant ten only")
+    policy = json.loads(path.read_text(encoding="utf-8"))
+    policy["credentials"].append({
+        "token_sha256": hashlib.sha256(t10_token.encode()).hexdigest(),
+        "tenant": "t10", "role": "supervisor", "expires_at": 4102444800,
+    })
+    policy["recordings"]["t10.wav"] = {
+        "tenant": "t10", "owner_extension": "t10-recepcao",
+        "source_ref": "CDR:1792670400.110",
+    }
+    path.write_text(json.dumps(policy), encoding="utf-8")
+    assert request(url + "/api/recordings", auth=TOKEN_T1)[0] == 200
+    assert request(url + "/recordings/t10.wav", auth=TOKEN_T1)[0] == 404
+    assert request(url + "/recordings/t1.wav", auth=t10_token)[0] == 404
+    status, _, content = request(url + "/recordings/t10.wav", auth=t10_token)
+    assert status == 200 and content == b"RIFF tenant ten only"
+    status, _, body = request(url + "/api/recordings", auth=t10_token)
+    assert status == 200
+    assert {r["filename"] for r in json.loads(body)["recordings"]} == {"t10.wav"}
