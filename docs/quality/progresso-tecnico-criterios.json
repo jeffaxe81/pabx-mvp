@@ -1,0 +1,89 @@
+{
+  "schema_version": 1,
+  "purpose": "Medida complementar de aceite técnico de laboratório, independente do aceite formal e GO.",
+  "disclaimer": "Critérios parciais ponderados não representam marco totalmente homologado. Evidências são CI/lab descartável ou validação de API em loopback, não produção.",
+  "partial_milestones": [
+    {
+      "week": 8,
+      "title": "Isolamento completo por empresa",
+      "criteria": [
+        {
+          "id": "sip_cross_tenant",
+          "description": "Negação de SIP cruzado e ramais em t1, t2 e t3",
+          "state": "verified_lab",
+          "evidence_file": "lab/tenant_isolation_checks.py",
+          "ci_job": "Asterisk | tentativa SIP cruzada entre empresas"
+        },
+        {
+          "id": "did_routing",
+          "description": "DIDs conhecidos/desconhecidos aceitos ou negados por contexto",
+          "state": "verified_lab",
+          "evidence_file": "lab/did_checks.py",
+          "ci_job": "Asterisk | DIDs conhecidos e rejeição segura"
+        },
+        {
+          "id": "queues_tenant",
+          "description": "Fila exata e negação cruzada por empresa",
+          "state": "verified_lab",
+          "evidence_file": "lab/queue_tenant_checks.py",
+          "ci_job": "Asterisk | filas por empresa via SIP real"
+        },
+        {
+          "id": "voicemail_messages",
+          "description": "PIN válido/inválido, lockout e leitura negada entre empresas no spool",
+          "state": "pending",
+          "evidence_file": "lab/voicemail_checks.py",
+          "ci_job": null
+        },
+        {
+          "id": "recordings_real",
+          "description": "Gravação real com fonte e segregação física, identidade e leitura HTTP",
+          "state": "pending",
+          "evidence_file": "queue-api/recording_access.py",
+          "ci_job": null
+        }
+      ]
+    },
+    {
+      "week": 9,
+      "title": "Filas, URA e callbacks",
+      "criteria": [
+        {
+          "id": "queue_entry",
+          "description": "Entrada real de chamada SIP em Queue(tN) nos três tenants",
+          "state": "verified_lab",
+          "evidence_file": "lab/queue_tenant_checks.py",
+          "ci_job": "Asterisk | filas por empresa via SIP real"
+        },
+        {
+          "id": "queue_wait",
+          "description": "Espera contínua por pelo menos um segundo no mesmo contexto e fila",
+          "state": "verified_lab",
+          "evidence_file": "lab/queue_tenant_checks.py",
+          "ci_job": "Asterisk | filas por empresa via SIP real"
+        },
+        {
+          "id": "queue_overflow",
+          "description": "Timeout e transbordo da URA/fila no runtime",
+          "state": "pending",
+          "evidence_file": "asterisk/extensions.conf",
+          "ci_job": null
+        },
+        {
+          "id": "callback_outcome",
+          "description": "Callback fim a fim com OriginateResponse/DialEnd correlacionados",
+          "state": "pending",
+          "evidence_file": "queue-api/callbacks.py",
+          "ci_job": null
+        },
+        {
+          "id": "sla_report",
+          "description": "Relatório de SLA com eventos reais validados e cálculo consistente",
+          "state": "pending",
+          "evidence_file": "queue-api/queue_sla.py",
+          "ci_job": null
+        }
+      ]
+    }
+  ]
+}
