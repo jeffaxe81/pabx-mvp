@@ -267,7 +267,9 @@ def test_corrupt_pending_attempt_counter_prevents_originate(tmp_path, bad_attemp
     record = add_callback_request(path, "5511999998888", tenant="t1")
     save_callbacks(path, [{**record, "attempts": bad_attempts}])
     before = path.read_bytes()
-    assert mark_callback_calling(path, record["id"])[0] is False
+    # O loader agora rejeita o snapshot antes de qualquer reserva.
+    with pytest.raises(ValueError, match="pendente inconsistente"):
+        mark_callback_calling(path, record["id"])
     assert path.read_bytes() == before
 
 
@@ -326,3 +328,67 @@ def test_callback_loader_accepts_empty_or_valid_catalog(tmp_path):
     entry = add_callback_request(path, "5511999998888", tenant="t1")
     assert entry["tenant"] == "t1"
     assert load_callbacks(path)[0]["id"] == entry["id"]
+
+
+# Marco 9 — um pedido pendente inválido não pode parecer fila vazia.
+@pytest.mark.parametrize("field,value", [
+    ("caller_id_num", None),
+    ("caller_id_num", ""),
+    ("caller_id_num", "+5511999998888"),
+    ("caller_id_num", "5511999998888;CALL"),
+    ("requested_at", None),
+    ("requested_at", True),
+    ("requested_at", "100"),
+    ("requested_at", float("nan")),
+    ("requested_at", float("inf")),
+    ("requested_at", -1),
+    ("attempts", None),
+    ("attempts", False),
+    ("attempts", "0"),
+    ("attempts", -1),
+    ("attempts", 2),
+    ("tenant", "t01"),
+    ("tenant", ["t1"]),
+])
+def test_pending_callback_corruption_fails_closed_before_dispatch(tmp_path, field, value):
+    from callbacks import save_callbacks
+    path = tmp_path / "callbacks.json"
+    good = add_callback_request(path, "5511999998888", tenant="t1")
+    save_callbacks(path, [{**good, field: value}])
+    before = path.read_bytes()
+    # NaN/Infinity são rejeitados ainda no parse JSON; os demais
+    # campos inválidos falham na validação do registro pendente.
+    with pytest.raises(ValueError):
+        load_callbacks(path)
+    with pytest.raises(ValueError):
+        mark_callback_calling(path, good["id"])
+    assert path.read_bytes() == before
+
+
+def test_foreign_tenant_corrupt_pending_record_blocks_global_snapshot(tmp_path):
+    from callbacks import save_callbacks
+    path = tmp_path / "callbacks.json"
+    t1 = add_callback_request(path, "5511999998888", tenant="t1")
+    t10 = add_callback_request(path, "5511988877777", tenant="t10")
+    save_callbacks(path, [t1, {**t10, "requested_at": "bad"}])
+    before = path.read_bytes()
+    with pytest.raises(ValueError, match="pendente inconsistente"):
+        load_callbacks(path)
+    assert path.read_bytes() == before
+
+
+def test_legacy_callback_without_tenant_remains_readable_but_not_authorized(tmp_path):
+    path = tmp_path / "callbacks.json"
+    legacy = add_callback_request(path, "5511999998888")
+    assert load_callbacks(path)[0]["id"] == legacy["id"]
+    assert load_callbacks(path)[0].get("tenant") is None
+
+
+def test_closed_callback_historical_fields_do_not_block_pending_queue(tmp_path):
+    from callbacks import save_callbacks
+    path = tmp_path / "callbacks.json"
+    good = add_callback_request(path, "5511999998888", tenant="t1")
+    closed = {**good, "id": "archived", "status": "concluido",
+              "caller_id_num": None, "attempts": "legacy"}
+    save_callbacks(path, [closed, good])
+    assert next_pending_callback(load_callbacks(path))["id"] == good["id"]

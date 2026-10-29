@@ -391,3 +391,32 @@ def test_callback_http_does_not_follow_catalog_symlink(api, tmp_path):
     assert own(api, "/api/callbacks/dial-next", "t1", method="POST")[0] == 503
     assert ami.actions == []
     assert external.read_bytes() == original
+
+
+
+@pytest.mark.parametrize("field,value", [
+    ("caller_id_num", None),
+    ("caller_id_num", "+5511999998888"),
+    ("requested_at", "yesterday"),
+    ("requested_at", False),
+    ("attempts", "0"),
+    ("attempts", -1),
+    ("attempts", 2),
+    ("tenant", "t01"),
+])
+def test_corrupt_pending_callback_is_not_reported_as_empty_queue(api, field, value):
+    _, _, callbacks, ami, _ = api
+    records = load_callbacks(callbacks)
+    foreign = next(c for c in records if c.get("tenant") == "t2")
+    foreign[field] = value
+    before_write = __import__("json").dumps(records, ensure_ascii=False).encode("utf-8")
+    callbacks.write_bytes(before_write)
+    for tenant in ("t1", "t2"):
+        listing = own(api, "/api/callbacks", tenant)
+        dialing = own(api, "/api/callbacks/dial-next", tenant, method="POST")
+        assert listing[0] == 503
+        assert dialing[0] == 503
+        assert listing[2] == {"error": "catalogo de callbacks indisponivel"}
+        assert dialing[2] == {"error": "catalogo de callbacks indisponivel"}
+    assert ami.actions == []
+    assert callbacks.read_bytes() == before_write
