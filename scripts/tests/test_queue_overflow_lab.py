@@ -75,16 +75,27 @@ def test_same_line_queue_inspector_rejects_cross_tenant_and_ambiguity():
 def test_cdr_cannot_borrow_account_or_channel_from_other_tenant(tenant):
     row = (f"{tenant},1001,9987,{tenant}-internal,"
            f"PJSIP/{tenant}-1001-0000001a,,ANSWERED,4,1792670400.123\n")
-    assert overflow_cdr_matches(row, tenant)
-    assert not overflow_cdr_matches(row, next(t for t in TENANTS if t != tenant))
-    assert not overflow_cdr_matches(row + row, tenant)
+    channel = f"PJSIP/{tenant}-1001-0000001a"
+    prior = {"1792670400.111"}
+    assert overflow_cdr_matches(row, tenant, prior, channel)
+    assert overflow_cdr_matches(row.replace(",9987,", ",1000,"), tenant, prior, channel)
+    assert not overflow_cdr_matches(row, tenant, {"1792670400.123"}, channel)
+    assert not overflow_cdr_matches(row, tenant, prior, "PJSIP/t10-1001-0000001a")
+    assert not overflow_cdr_matches(row, next(t for t in TENANTS if t != tenant),
+                                    prior, channel)
+    assert not overflow_cdr_matches(row + row, tenant, prior, channel)
+    assert not overflow_cdr_matches(row, tenant, prior, None)
+    assert not overflow_cdr_matches(row, tenant, None, channel)
+    assert not overflow_cdr_matches(row.replace(",9987,", ",t10-1000,"),
+                                    tenant, prior, channel)
     for broken in ("ANSWERED", "9987", f"{tenant}-internal",
                    f"PJSIP/{tenant}-1001", ",4,"):
         alternate = ("BUSY" if broken == "ANSWERED" else "1010" if broken == "9987"
                      else "t10-internal" if broken.endswith("-internal")
                      else "PJSIP/t10-1001" if broken.startswith("PJSIP/")
                      else ",0,")
-        assert not overflow_cdr_matches(row.replace(broken, alternate), tenant)
+        assert not overflow_cdr_matches(row.replace(broken, alternate),
+                                        tenant, prior, channel)
 
 
 def test_lab_queue_overflow_cannot_be_skipped_in_real_runtime_checklist():
