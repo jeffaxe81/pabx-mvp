@@ -340,15 +340,19 @@ def generate_tenant_voicemail_pins(tenant_id: str) -> dict:
     """Gera PINs numéricos independentes para caixas de voz de um tenant."""
     if not isinstance(tenant_id, str) or not TENANT_ID_RE.fullmatch(tenant_id):
         raise ValueError("tenant inválido para PIN de caixa postal")
-    # PIN de 8 dígitos, usando o gerador seguro do sistema.
-    first = str(secrets.randbelow(90_000_000) + 10_000_000)
-    second = first
-    while second == first:
-        second = str(secrets.randbelow(90_000_000) + 10_000_000)
-    return {
-        f"{tenant_id}-recepcao": first,
-        f"{tenant_id}-recepcao-2": second,
-    }
+    # A fila/URA pode encaminhar para tN-1001 quando ninguém atende.
+    # Essa caixa deve existir mesmo sem um endpoint PJSIP tN-1001.
+    names = (f"{tenant_id}-1001", f"{tenant_id}-recepcao",
+             f"{tenant_id}-recepcao-2")
+    pins = {}
+    used = set()
+    for name in names:
+        pin = str(secrets.randbelow(90_000_000) + 10_000_000)
+        while pin in used:
+            pin = str(secrets.randbelow(90_000_000) + 10_000_000)
+        pins[name] = pin
+        used.add(pin)
+    return pins
 
 
 def render_tenant_voicemail(tenant_id: str, pins=None) -> str:
@@ -359,13 +363,18 @@ def render_tenant_voicemail(tenant_id: str, pins=None) -> str:
         pins = generate_tenant_voicemail_pins(tenant_id)
     if not isinstance(pins, dict):
         raise ValueError("PINs de caixa postal inválidos")
-    for name in (f"{tenant_id}-recepcao", f"{tenant_id}-recepcao-2"):
-        pin = pins.get(name)
+    names = (f"{tenant_id}-1001", f"{tenant_id}-recepcao",
+             f"{tenant_id}-recepcao-2")
+    if set(pins) != set(names):
+        raise ValueError("conjunto de caixas postais do tenant incompleto")
+    for name in names:
+        pin = pins[name]
         if not isinstance(pin, str) or not re.fullmatch(r"[1-9][0-9]{7}", pin):
             raise ValueError("PIN de caixa postal inseguro")
-    if pins[f"{tenant_id}-recepcao"] == pins[f"{tenant_id}-recepcao-2"]:
+    if len(set(pins.values())) != len(names):
         raise ValueError("caixas postais não podem compartilhar PIN")
     return f"""{AUTO_GENERATED_HEADER}[{tenant_id}]
+{tenant_id}-1001 => {pins[f"{tenant_id}-1001"]},{tenant_id.upper()} Caixa Fallback 1001
 {tenant_id}-recepcao => {pins[f"{tenant_id}-recepcao"]},{tenant_id.upper()} Recepcao Web 1
 {tenant_id}-recepcao-2 => {pins[f"{tenant_id}-recepcao-2"]},{tenant_id.upper()} Recepcao Web 2
 #include generated/voicemail_dynamic_{tenant_id}.conf
