@@ -64,8 +64,24 @@ def save_callbacks(path, callbacks: list):
     atomic_write_json(path, callbacks)
 
 
+def _catalog_has_unique_ids(callbacks):
+    """Impedir referências ambíguas inclusive entre tenants distintos."""
+    if not isinstance(callbacks, list):
+        return False
+    ids = []
+    for item in callbacks:
+        if (not isinstance(item, dict) or not isinstance(item.get("id"), str)
+                or not item["id"]):
+            return False
+        ids.append(item["id"])
+    return len(ids) == len(set(ids))
+
+
 def find_callback(callbacks: list, callback_id: str):
-    return next((c for c in callbacks if c["id"] == callback_id), None)
+    """Nunca escolher o primeiro de dois pedidos com o mesmo ID."""
+    if not isinstance(callback_id, str) or not _catalog_has_unique_ids(callbacks):
+        return None
+    return next((item for item in callbacks if item["id"] == callback_id), None)
 
 
 def add_callback_request(path, caller_id_num: str, caller_id_name: str = "", tenant=None):
@@ -77,8 +93,19 @@ def add_callback_request(path, caller_id_num: str, caller_id_name: str = "", ten
         if not isinstance(tenant, str) or extension_tenant(tenant + "-recepcao") != tenant:
             return None
     callbacks = load_callbacks(path)
+    if not _catalog_has_unique_ids(callbacks):
+        return None
+    existing_ids = {item["id"] for item in callbacks}
+    callback_id = None
+    for _ in range(20):
+        candidate = secrets.token_hex(6)
+        if candidate not in existing_ids:
+            callback_id = candidate
+            break
+    if callback_id is None:
+        return None
     entry = {
-        "id": secrets.token_hex(6),
+        "id": callback_id,
         **contact,
         "status": "pendente",
         "attempts": 0,
@@ -100,7 +127,7 @@ def next_pending_callback(callbacks: list):
     Nunca devolver itens com timestamp NaN, tipo inesperado ou número
     discável corrompido, nem misturar campos t1 e t10.
     """
-    if not isinstance(callbacks, list):
+    if not _catalog_has_unique_ids(callbacks):
         return None
     pending = []
     for item in callbacks:
@@ -132,6 +159,9 @@ def mark_callback_calling(path, callback_id: str, attempt_id=None):
 
     if callback.get("status") != "pendente":
         return False, "callback ja reservado"
+    attempts = callback.get("attempts")
+    if type(attempts) is not int or not 0 <= attempts < MAX_ATTEMPTS:
+        return False, "contador de tentativas do callback invalido"
     attempt_id = attempt_id or secrets.token_hex(16)
     if not isinstance(attempt_id, str) or not re.fullmatch(r"[a-f0-9]{32}", attempt_id):
         return False, "id de tentativa invalido"
@@ -150,8 +180,11 @@ def mark_callback_result(path, callback_id: str, disposition: str):
     if not callback:
         return False, f"callback '{callback_id}' não encontrado"
 
-    if callback["status"] != "discando":
+    if callback.get("status") != "discando":
         return False, "callback nao esta discando"
+    attempts = callback.get("attempts")
+    if type(attempts) is not int or not 1 <= attempts <= MAX_ATTEMPTS:
+        return False, "contador de tentativas do callback invalido"
 
     # Evento AMI desconhecido não comprova tentativa concluída. Não
     # alterar estado nem liberar rediscagem em resultado ambíguo.
