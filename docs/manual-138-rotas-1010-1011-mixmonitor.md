@@ -22,6 +22,13 @@ Há **duas substituições exclusivas do staging**:
 Esse procedimento preserva o comando de gravação usado no fluxo
 produtivo, mas **não** comprova a recepção WebRTC original.
 
+**Restauração obrigatória:** após as quatro chamadas diretas, o laboratório
+reescreve o arquivo original de staging, executa `dialplan reload` e
+comprova os destinos `tN-recepcao` e `tN-recepcao-2` antes do teste
+Chromium/WebRTC. Uma restauração incompleta reprova o job. A primeira
+execução da PR mostrou que não restaurar o dialplan interfere nos CDRs
+do navegador; a correção foi acompanhada de regressões específicas.
+
 ## Quatro fluxos obrigatórios
 
 - t1 → 1010
