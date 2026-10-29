@@ -120,7 +120,9 @@ def exercise_voicemail(container, prepared, report, *, dtmf=False):
                 # Não registrar dígitos, pacotes ou segredos em relatórios.
                 media.send_dtmf('1')
                 checks["vm_dtmf_sent:" + tenant] = True
-            checks["vm_bye:" + tenant] = peer.hangup(dialog) == 200
+            bye = (peer.hangup_or_accept_remote_bye(dialog) if dtmf
+                   else peer.hangup(dialog))
+            checks["vm_bye:" + tenant] = bye == 200
             peer.register(expires=0)
         deadline = time.monotonic() + 6
         while time.monotonic() < deadline:
