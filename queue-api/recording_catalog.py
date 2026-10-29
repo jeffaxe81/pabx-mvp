@@ -12,10 +12,11 @@ import stat
 import tempfile
 from contextlib import contextmanager
 from pathlib import Path
+from recordings import _recording_directory_fd
 
 from recording_access import (
     MAX_POLICY_BYTES, TENANT, _valid_filename, load_recording_policy,
-    _reject_duplicate_json_keys,
+    _reject_duplicate_json_keys, read_regular_file_secure,
 )
 
 MAX_IMPORT_BYTES = 1024 * 1024
@@ -26,13 +27,7 @@ EXTENSION = re.compile(r"^[a-z0-9][a-z0-9_-]{0,79}$")
 
 def load_manifest(path):
     """Importação JSONL com esquema estrito e sem campos desconhecidos."""
-    path = Path(path)
-    metadata = path.lstat()
-    if not stat.S_ISREG(metadata.st_mode) or metadata.st_size > MAX_IMPORT_BYTES:
-        raise ValueError("manifesto não é arquivo regular ou excede o limite")
-    raw = path.read_bytes()
-    if len(raw) > MAX_IMPORT_BYTES:
-        raise ValueError("manifesto excede o limite")
+    raw = read_regular_file_secure(path, MAX_IMPORT_BYTES)
     try:
         lines = raw.decode("utf-8").splitlines()
     except UnicodeError as exc:
@@ -96,9 +91,22 @@ def read_policy_secure(path):
 
 def preview_batch(policy, rows, directory):
     """Não sobrescreve classificação existente. Falha antes de qualquer escrita."""
-    directory = Path(directory)
-    if directory.is_symlink() or not directory.is_dir():
+    directory_fd = _recording_directory_fd(directory)
+    if directory_fd is None:
         raise ValueError("diretório de gravações inválido")
+    try:
+        for row in rows:
+            filename = row["filename"]
+            if not _valid_filename(filename):
+                raise ValueError("nome de gravação inválido")
+            try:
+                info = os.stat(filename, dir_fd=directory_fd, follow_symlinks=False)
+            except (OSError, TypeError, ValueError) as exc:
+                raise ValueError("gravação não encontrada ou link simbólico") from exc
+            if not stat.S_ISREG(info.st_mode):
+                raise ValueError("gravação não encontrada ou link simbólico")
+    finally:
+        os.close(directory_fd)
     updated = dict(policy)
     recordings = dict(policy["recordings"])
     # Provas de origem são globais ao catálogo, não apenas ao lote de
@@ -114,9 +122,6 @@ def preview_batch(policy, rows, directory):
     created = unchanged = 0
     for row in rows:
         filename = row["filename"]
-        audio = directory / filename
-        if audio.is_symlink() or not audio.is_file():
-            raise ValueError("gravação não encontrada ou link simbólico: " + filename)
         previous_tenant = ref_tenants.setdefault(row["source_ref"], row["tenant"])
         if previous_tenant != row["tenant"]:
             raise ValueError("origem compartilhada entre empresas em lotes distintos")
