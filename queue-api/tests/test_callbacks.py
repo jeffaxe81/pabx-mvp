@@ -267,7 +267,9 @@ def test_corrupt_pending_attempt_counter_prevents_originate(tmp_path, bad_attemp
     record = add_callback_request(path, "5511999998888", tenant="t1")
     save_callbacks(path, [{**record, "attempts": bad_attempts}])
     before = path.read_bytes()
-    assert mark_callback_calling(path, record["id"])[0] is False
+    # O loader agora rejeita o snapshot antes de qualquer reserva.
+    with pytest.raises(ValueError, match="pendente inconsistente"):
+        mark_callback_calling(path, record["id"])
     assert path.read_bytes() == before
 
 
