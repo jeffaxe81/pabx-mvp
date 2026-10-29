@@ -189,6 +189,7 @@ class CallPeer(SipTLS):
         branch = self.send_request(dialog, 'BYE')
         self.events.append('bye_sent')
         deadline = time.monotonic() + 10
+        remote_bye_seen = False
         while True:
             start, headers, _ = self.next_message(deadline)
             if start.startswith('BYE '):
@@ -198,7 +199,10 @@ class CallPeer(SipTLS):
                     raise ValueError('CSeq de BYE remoto inválido')
                 self.send_response(headers, 200, local=dialog.local)
                 self.events.append('remote_bye_acknowledged')
-                return 200
+                remote_bye_seen = True
+                # Ainda há uma resposta ao BYE que NÓS enviamos.
+                # Deixá-la no socket confundiria o próximo REGISTER.
+                continue
             match = re.fullmatch(r'SIP/2.0 ([0-9]{3}) .+', start)
             via = headers.get('via', [])
             # Diagnósticos apenas de categoria: não publicar Call-ID,
@@ -216,7 +220,9 @@ class CallPeer(SipTLS):
                 raise ValueError('DTMF resposta: tag divergente')
             self.events.append('response:'+match[1])
             if int(match[1]) >= 200:
-                return int(match[1])
+                # 481 é admissível SOMENTE se o BYE remoto já encerrou
+                # este mesmo diálogo e foi confirmado com 200.
+                return 200 if remote_bye_seen and int(match[1]) in (200, 481) else int(match[1])
 
     def await_hangup(self, dialog):
         start, headers, _ = self.next_message(time.monotonic()+10)
