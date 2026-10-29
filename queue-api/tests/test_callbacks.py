@@ -354,9 +354,11 @@ def test_pending_callback_corruption_fails_closed_before_dispatch(tmp_path, fiel
     good = add_callback_request(path, "5511999998888", tenant="t1")
     save_callbacks(path, [{**good, field: value}])
     before = path.read_bytes()
-    with pytest.raises(ValueError, match="pendente inconsistente"):
+    # NaN/Infinity são rejeitados ainda no parse JSON; os demais
+    # campos inválidos falham na validação do registro pendente.
+    with pytest.raises(ValueError):
         load_callbacks(path)
-    with pytest.raises(ValueError, match="pendente inconsistente"):
+    with pytest.raises(ValueError):
         mark_callback_calling(path, good["id"])
     assert path.read_bytes() == before
 
