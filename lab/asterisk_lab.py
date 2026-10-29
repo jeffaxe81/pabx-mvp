@@ -216,7 +216,9 @@ def summarize(checks, *, calls=False, webrtc=False, dids=False, isolation=False,
         required.update(required_ami_checks())
     if queues:
         from .queue_tenant_checks import required_queue_runtime_checks
+        from .queue_overflow_checks import required_queue_overflow_checks
         required.update(required_queue_runtime_checks())
+        required.update(required_queue_overflow_checks())
     passed = sum(value is True for value in checks.values())
     return {'passed': passed, 'total': len(checks),
             'success': set(checks) == required and passed == len(required)}
@@ -285,6 +287,9 @@ def run(root, report, *, calls=False, webrtc=False, dids=False, isolation=False,
         if calls:
             from .call_checks import prepare_calls
             prepare_calls(root, prepared, source)
+        if queues:
+            from .queue_overflow_checks import prepare_queue_overflow
+            prepare_queue_overflow(prepared)
         if webrtc:
             from .webrtc_checks import prepare_webrtc
             prepare_webrtc(root,prepared,source)
@@ -386,7 +391,9 @@ def run(root, report, *, calls=False, webrtc=False, dids=False, isolation=False,
             exercise_ami(prepared,report)
         if queues:
             from .queue_tenant_checks import exercise_queues
+            from .queue_overflow_checks import exercise_queue_overflow
             exercise_queues(container_id, prepared, report)
+            exercise_queue_overflow(container_id, prepared, report)
     finally:
         if attempted_create:
             cleaned = cleanup_owned(name, ownership)
