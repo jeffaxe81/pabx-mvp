@@ -178,6 +178,8 @@ def test_dtmf_hangup_accepts_correlated_remote_bye_without_wrong_transaction():
             start, response_headers, _ = read_message(server)
             seen.append(start.startswith('SIP/2.0 200 '))
             seen.append(response_headers['call-id'] == [dialog.call_id])
+            # A resposta ao BYE iniciado pelo cliente ainda precisa ser consumida.
+            server.sendall(response(headers, 200))
         except BaseException as exc:
             errors.append(type(exc).__name__)
         finally:
