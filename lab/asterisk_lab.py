@@ -452,7 +452,12 @@ def main(argv=None):
                         'SDP do laboratório deve ser SRTP loopback': 'sdp_not_secure_loopback',
                         'perfil SDP não suportado': 'sdp_profile_unsupported',
                         'conteúdo PCMU divergente': 'pcmu_content_mismatch',
-                        'origem de mídia inesperada': 'media_source_mismatch'}
+                        'origem de mídia inesperada': 'media_source_mismatch',
+                        'DTMF resposta: método SIP inesperado': 'dtmf_unexpected_sip_method',
+                        'DTMF resposta: diálogo divergente': 'dtmf_dialog_mismatch',
+                        'DTMF resposta: CSeq divergente': 'dtmf_cseq_mismatch',
+                        'DTMF resposta: Via divergente': 'dtmf_via_mismatch',
+                        'DTMF resposta: tag divergente': 'dtmf_tag_mismatch'}
         report['error_reason'] = known_errors.get(str(exc), 'other')
         if re.fullmatch(r'chamada SIP rejeitada: [0-9]{3}', str(exc)):
             report['error_reason'] = 'call_rejected_'+str(exc)[-3:]
