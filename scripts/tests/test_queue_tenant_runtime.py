@@ -61,6 +61,8 @@ def test_gate_requires_all_real_queue_checks():
     assert summarize(checks, calls=True, queues=True)["success"]
     assert not summarize(checks, calls=True)["success"]
     assert not summarize({**checks, "queue_exact_tenant:t2": False}, calls=True, queues=True)["success"]
+    assert not summarize({**checks, "queue_wait_observed:t2": False}, calls=True, queues=True)["success"]
+    assert "queue_wait_observed:t3" in required_queue_runtime_checks()
 
 
 def test_queues_mode_requires_calls(tmp_path):

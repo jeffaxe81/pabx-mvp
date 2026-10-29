@@ -13,7 +13,7 @@ from .srtp_media import SrtpMedia
 CASES = (("t1", "t1-1001"), ("t2", "t2-1001"), ("t3", "t3-1001"))
 METRICS = ("queue_registered", "queue_route_loaded", "queue_answered",
            "queue_exact_tenant", "queue_no_foreign", "queue_bye",
-           "queue_channels_cleared")
+           "queue_channels_cleared", "queue_wait_observed")
 
 
 def required_queue_runtime_checks():
@@ -79,15 +79,28 @@ def exercise_queues(container, prepared, report):
                 dialog = peer.dial("1000", media)
                 checks["queue_answered:" + tenant] = True
                 deadline = time.monotonic() + 7
+                first_wait = None
                 while time.monotonic() < deadline:
                     observation = inspected_queue_channel(
                         cli(container, "core show channels concise"), endpoint, tenant
                     )
+                    now = time.monotonic()
                     checks["queue_exact_tenant:" + tenant] |= observation["exact"]
                     checks["queue_no_foreign:" + tenant] |= (
                         observation["exact"] and observation["no_foreign"]
                     )
-                    if checks["queue_exact_tenant:" + tenant] and checks["queue_no_foreign:" + tenant]:
+                    if observation["exact"]:
+                        if first_wait is None:
+                            first_wait = now
+                        # Continuidade da MESMA chamada por >= 1 segundo
+                        # na aplicação Queue, com fila e contexto exatos.
+                        if now - first_wait >= 1.0:
+                            checks["queue_wait_observed:" + tenant] = True
+                    else:
+                        first_wait = None
+                    if (checks["queue_exact_tenant:" + tenant]
+                            and checks["queue_no_foreign:" + tenant]
+                            and checks["queue_wait_observed:" + tenant]):
                         break
                     time.sleep(0.12)
             finally:
@@ -106,6 +119,7 @@ def exercise_queues(container, prepared, report):
         report["queue_tenant_cases"][tenant] = {
             "exact_queue": checks["queue_exact_tenant:" + tenant],
             "no_foreign_queue": checks["queue_no_foreign:" + tenant],
+            "waiting_observed": checks["queue_wait_observed:" + tenant],
             "released": checks["queue_channels_cleared:" + tenant],
         }
     report["live_queue_tenant_routing_tested"] = all(
