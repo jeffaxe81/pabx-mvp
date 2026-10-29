@@ -39,9 +39,16 @@ def _hold_time_seconds(value):
     return None
 
 
+def _valid_queue_name(queue):
+    """Nunca registrar fila ausente, não-hashable ou com caracteres de controle."""
+    return (isinstance(queue, str) and 1 <= len(queue) <= 96
+            and queue.isprintable() and not any(ch.isspace() for ch in queue))
+
+
 def parse_agent_connect_event(event: dict):
     """Não recompensar atendimento com HoldTime ausente/malformado."""
-    if not isinstance(event, dict) or event.get("Event") != "AgentConnect":
+    if (not isinstance(event, dict) or event.get("Event") != "AgentConnect"
+            or not _valid_queue_name(event.get("Queue"))):
         return None
     return {
         "queue": event.get("Queue", ""),
@@ -52,7 +59,8 @@ def parse_agent_connect_event(event: dict):
 
 def parse_queue_caller_abandon_event(event: dict):
     """Abandono conta contra o SLA, independentemente do HoldTime."""
-    if not isinstance(event, dict) or event.get("Event") != "QueueCallerAbandon":
+    if (not isinstance(event, dict) or event.get("Event") != "QueueCallerAbandon"
+            or not _valid_queue_name(event.get("Queue"))):
         return None
     return {
         "queue": event.get("Queue", ""),
@@ -99,6 +107,8 @@ class QueueSLATracker:
             self._queues = {}  # queue -> {"offered": int, "within_sla": int}
 
     def _record(self, queue: str, hold_time: int, outcome: str):
+        if not _valid_queue_name(queue):
+            return
         self._reset_if_new_day()
         stats = self._queues.setdefault(queue, {"offered": 0, "within_sla": 0})
         stats["offered"] += 1

@@ -153,7 +153,11 @@ def mark_callback_result(path, callback_id: str, disposition: str):
     if callback["status"] != "discando":
         return False, "callback nao esta discando"
 
-    status = DISPOSITION_TO_STATUS.get(disposition, "falha")
+    # Evento AMI desconhecido não comprova tentativa concluída. Não
+    # alterar estado nem liberar rediscagem em resultado ambíguo.
+    if not isinstance(disposition, str) or disposition not in DISPOSITION_TO_STATUS:
+        return False, "resultado AMI desconhecido"
+    status = DISPOSITION_TO_STATUS[disposition]
     if status != "concluido" and callback["attempts"] < MAX_ATTEMPTS:
         status = "pendente"
     elif status != "concluido":

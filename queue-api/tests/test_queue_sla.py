@@ -329,3 +329,20 @@ def test_non_dict_ami_event_is_ignored(event):
     tracker = QueueSLATracker()
     tracker.apply_event(event)
     assert tracker.snapshot() == {}
+
+def test_sla_ignores_malformed_queue_identities_without_crashing():
+    tracker = QueueSLATracker()
+    for invalid in (None, [], {}, 123, False, "", " " * 3,
+                    "fila-t1\nInjected", "fila-t1\tbad", "x" * 97):
+        for event in ("AgentConnect", "QueueCallerAbandon"):
+            payload = {"Event": event, "Queue": invalid, "HoldTime": "1"}
+            assert (parse_agent_connect_event(payload) if event == "AgentConnect"
+                    else parse_queue_caller_abandon_event(payload)) is None
+            tracker.apply_event(payload)
+    assert tracker.snapshot() == {}
+    tracker.apply_event({"Event": "AgentConnect", "Queue": "fila-t10",
+                         "HoldTime": "10"})
+    assert tracker.snapshot() == {
+        "fila-t10": {"offered": 1, "within_sla": 1, "sla_percent": 100.0}
+    }
+

@@ -182,3 +182,4 @@ registrado como regra permanente no prompt master
 129. [Isolamento HTTP cruzado de filas e gravações (marco 8)](manual-129-isolamento-http-multiempresa.md)
 130. [Fallback de voicemail em tenants dinâmicos](manual-130-voicemail-fallback-tenant.md)
 131. [Identidade SIP e mailbox de fallback distintas no laboratório](manual-131-voicemail-sip-vs-mailbox.md)
+132. [Quatro frentes de robustez: PIN, gravações, callbacks e SLA](manual-132-qa-quatro-frentes.md)

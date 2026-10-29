@@ -97,6 +97,19 @@ def test_mark_callback_result_retries_then_exhausts(tmp_path):
     assert find_callback(load_callbacks(path), entry["id"])["status"] == "esgotado"
 
 
+def test_unknown_dial_status_keeps_callback_reserved(tmp_path):
+    path = tmp_path / "callbacks.json"
+    item = add_callback_request(path, "5511999998888", tenant="t10")
+    assert mark_callback_calling(path, item["id"])[0]
+    before = path.read_bytes()
+    for value in (None, False, 9, [], {}, "", "SUCCESS", "ANSWERED", "TIMEOUT"):
+        ok, error = mark_callback_result(path, item["id"], value)
+        assert ok is False
+        assert error
+        assert path.read_bytes() == before
+    assert mark_callback_result(path, item["id"], "NOANSWER")[0]
+
+
 # ---------- extract_dialed_number ----------
 
 def test_extract_dialed_number_from_dialstring():

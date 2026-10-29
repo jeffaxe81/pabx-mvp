@@ -84,6 +84,15 @@ def _open_policy_file(path):
         if directory_fd is not None:
             os.close(directory_fd)
 
+def _reject_duplicate_json_keys(pairs):
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError("chave JSON duplicada na política de gravações")
+        result[key] = value
+    return result
+
+
 def load_recording_policy(path):
     """Devolve None para ausente, JSON inválido ou esquema inseguro."""
     # Abertura relativa a diretórios ancorados evita a troca do arquivo
@@ -100,7 +109,9 @@ def load_recording_policy(path):
             raw = opened.read(MAX_POLICY_BYTES + 1)
         if len(raw) > MAX_POLICY_BYTES:
             return None
-        policy = json.loads(raw)
+        policy = json.loads(raw, object_pairs_hook=_reject_duplicate_json_keys,
+                            parse_constant=lambda value: (_ for _ in ()).throw(
+                                ValueError("constante JSON não finita")))
     except (OSError, ValueError, TypeError, UnicodeError):
         return None
     finally:
