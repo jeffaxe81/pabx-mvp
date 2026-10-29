@@ -284,12 +284,14 @@ def run(root, report, *, calls=False, webrtc=False, dids=False, isolation=False,
     folder = Path(tempfile.mkdtemp(prefix='axe-pabx-lab-'))
     try:
         prepared = prepare(root, folder/'private', source)
-        if calls:
-            from .call_checks import prepare_calls
-            prepare_calls(root, prepared, source)
+        # Preparar o overflow antes de salvar o snapshot das rotas diretas:
+        # restore_direct_route_checks precisa preservar 9987 para --queues.
         if queues:
             from .queue_overflow_checks import prepare_queue_overflow
             prepare_queue_overflow(prepared)
+        if calls:
+            from .call_checks import prepare_calls
+            prepare_calls(root, prepared, source)
         if webrtc:
             from .webrtc_checks import prepare_webrtc
             prepare_webrtc(root,prepared,source)
