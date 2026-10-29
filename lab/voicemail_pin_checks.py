@@ -8,7 +8,7 @@ import re
 EXPECTED = {
     "t1": frozenset(("t1-1001", "t1-1002", "t1-recepcao", "t1-recepcao-2")),
     "t2": frozenset(("t2-1001", "t2-recepcao", "t2-recepcao-2")),
-    "t3": frozenset(("t3-recepcao", "t3-recepcao-2")),
+    "t3": frozenset(("t3-1001", "t3-recepcao", "t3-recepcao-2")),
 }
 PIN = re.compile(r"[1-9][0-9]{7}\Z")
 KNOWN_WEAK = {"12345678", "87654321", "11223344", "12121212", "12341234", "87658765"}
