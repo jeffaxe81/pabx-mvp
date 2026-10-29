@@ -96,3 +96,54 @@ def test_lab_queue_overflow_cannot_be_skipped_in_real_runtime_checklist():
     assert overflow_stanza("t1").count("Goto(1000,1)") == 1
     with pytest.raises(ValueError):
         overflow_stanza("t10")
+
+
+def test_direct_route_restoration_cannot_delete_overflow_routes(tmp_path, monkeypatch):
+    """Snapshot 1010/1011 tem de preservar 9987 para o job de filas."""
+    from pathlib import Path
+    from lab.direct_route_recording_checks import (
+        prepare_direct_route_checks, restore_direct_route_checks,
+    )
+    from lab.asterisk_lab import cli
+    root = Path(__file__).resolve().parents[2]
+    conf = tmp_path / "asterisk"
+    conf.mkdir()
+    (conf / "extensions.conf").write_text(
+        (root / "asterisk/extensions.conf").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+    sub = conf / "extensions_tenants"
+    sub.mkdir()
+    (sub / "t3.conf").write_text(
+        "[t3-internal]\nexten => 1000,1,Answer()\n"
+        " same => n,Set(FILA_OVERFLOW=fila-t3)\n"
+        " same => n,Queue(fila-t3,c,,,3)\n"
+        " same => n,GotoIf(TIMEOUT?fila-overflow,1)\n"
+        "exten => fila-overflow,1,NoOp(timeout)\n"
+        "exten => fazer-overflow,1,Goto(1000,1)\n",
+        encoding="utf-8",
+    )
+    prepared = {"conf": conf}
+    prepare_queue_overflow(prepared)
+    before = (conf / "extensions.conf").read_text(encoding="utf-8")
+    prepare_direct_route_checks(prepared)
+    assert prepared["lab_direct_route_original"] == before
+
+    def fake_cli(_container, expression):
+        if expression == "dialplan reload":
+            return "Dialplan reloaded."
+        if expression.startswith("dialplan show "):
+            route = expression.partition("dialplan show ")[2]
+            number, _, context = route.partition("@")
+            tenant = context.partition("-internal")[0]
+            target = tenant + ("-recepcao" if number == "1010" else "-recepcao-2")
+            return "MixMonitor(file.wav,b)\nDial(PJSIP/" + target + ",20,g)\n"
+        return ""
+    monkeypatch.setattr("lab.asterisk_lab.cli", fake_cli)
+    restore_direct_route_checks("container", prepared)
+    assert (conf / "extensions.conf").read_text(encoding="utf-8") == before
+    assert "exten => 9987,1,Set(FILA_IDIOMA=fila-t1-en)" in before
+    assert "exten => 9987,1,Set(FILA_IDIOMA=fila-t2-en)" in before
+    assert "exten => 9987,1,Set(FILA_IDIOMA=fila-t3-en)" in (
+        sub / "t3.conf"
+    ).read_text(encoding="utf-8")
