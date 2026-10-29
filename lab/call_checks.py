@@ -18,8 +18,10 @@ CHECKS = ('call_register', 'call_established', 'srtp', 'tamper_rejected',
 
 
 def required_call_checks():
-    return {f'{check}:{tenant}:{direction}' for check in CHECKS
-            for tenant in TENANTS for direction in DIRECTIONS}
+    from .recording_checks import required_recording_checks
+    return ({f'{check}:{tenant}:{direction}' for check in CHECKS
+             for tenant in TENANTS for direction in DIRECTIONS}
+            | required_recording_checks())
 
 
 def prepare_calls(root, prepared, source_commit):
@@ -46,6 +48,9 @@ def prepare_calls(root, prepared, source_commit):
     cdr.write_text('[mappings]\nLab.csv => '+','.join(
         '${CSV_QUOTE(${CDR('+field+')})}' for field in fields)+'\n')
     cdr.chmod(0o600)
+    # Rotas de gravação somente na cópia privada do Asterisk descartável.
+    from .recording_checks import prepare_recording_routes
+    prepare_recording_routes(prepared)
 
 
 def cdr_rows(raw):
@@ -157,3 +162,5 @@ def exercise_calls(container, prepared, report):
             report['sip_call_tested'] = True
             report['rtp_tested'] = True
             report['srtp_tested'] = True
+    from .recording_checks import exercise_recordings
+    exercise_recordings(container, prepared, report)

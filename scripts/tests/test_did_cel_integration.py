@@ -21,7 +21,8 @@ def test_did_acceptance_requires_a_complete_cel_proof_for_each_scenario():
         ('static-t1','static-t2','dynamic-t3','unknown','deleted','orphan')}
     assert expected <= names
     complete = {name:True for name in names}
-    assert len(complete)==113
+    from lab.recording_checks import required_recording_checks
+    assert len(complete) == 113 + len(required_recording_checks())
     assert summarize(complete,calls=True,dids=True)['success'] is True
     for key in expected:
         assert summarize({name:value for name,value in complete.items() if name!=key},calls=True,dids=True)['success'] is False
