@@ -1,27 +1,31 @@
-# Manual 131 — Separar identidade SIP de caixa postal no laboratório
+# Manual 131 — SIP efêmero do laboratório versus mailbox de fallback
 
-## Incidente prevenido
+## Diagnóstico
 
-O wizard de tenants dinâmicos gera `t3-1001@t3` como caixa postal de
-**depósito** para transbordo; ele **não** cria o endpoint SIP `t3-1001`.
-O laboratório de voicemail não pode usar essa mailbox como identidade
-de autenticação de um REGISTER SIP.
+O wizard de tenants dinâmicos provisiona a caixa `t3-1001@t3` para
+recebimento de mensagens de fallback. Ela **não** implica um ramal SIP
+`t3-1001` implantado em produção.
 
-## Ajuste
+O laboratório de chamadas, entretanto, cria deliberadamente um ramal
+PJSIP `t3-1001` temporário via `prepare_calls()`. Usa credencial SIP
+aleatória e configuração gerada em staging descartável. Isso é necessário
+porque o cliente de teste `CallPeer` usa SIP/TLS + SDES-SRTP, enquanto
+`t3-recepcao` é WebRTC com DTLS-SRTP.
 
-- Para `t1` e `t2`, os endpoints SIP de teste seguem `t1-1001` e
-  `t2-1001`.
-- Para `t3`, o teste SIP/TLS de `*97` autentica **`t3-recepcao`**
-  e verifica no canal ativo o argumento
-  `VoiceMailMain(t3-recepcao@t3)`.
-- A caixa `t3-1001` continua provisionada apenas para receber
-  mensagens de fallback; seu PIN é próprio.
-- Regressão do `prepare()` confirma que o cliente de laboratório
-  possui credenciais para todos os endpoints de teste, mas não para a
-  mailbox `t3-1001`, e que as duas mailboxes estão no arquivo do tenant.
-  O runtime real continua validando os três tenants.
+## Comportamento e regressão
 
-## Reproduzir
+- A suíte SIP real de `*97` mantém os endpoints de laboratório
+  `t1-1001`, `t2-1001`, `t3-1001`.
+- A execução `--calls --voicemail` requer `prepare_calls()`;
+  se o endpoint de laboratório não tiver credencial, falha de maneira
+  explícita antes de originar.
+- Novo teste prova que `prepare()` sozinho **não** cria credencial
+  SIP para `t3-1001`, mesmo criando sua caixa de mensagens, e que
+  `prepare_calls()` cria o peer SIP apenas no staging isolado.
+- O teste do ramal real do navegador permanece no job WebRTC;
+  ele não pode ser substituído por uma prova de SDES-SRTP.
+
+## Como executar
 
 ```bash
 python3 -m pytest -q scripts/tests/test_voicemail_pin_bootstrap_lab.py
@@ -29,10 +33,9 @@ python3 -m lab.asterisk_lab --calls --voicemail --voicemail-dtmf \
   --report lab-results/voicemail.json
 ```
 
-## Limites
+## Limites de homologação
 
-Este teste prova identidade e rota SIP, negociação de DTMF e aplicação
-`VoiceMailMain` no canal exato. **Não prova** PIN válido/inválido,
-lockout ou leitura cruzada de mensagens reais. A issue #88 permanece
-aberta, o marco 8 permanece em andamento e nenhuma liberação para
-produção decorre desta correção.
+Provar rota, mídia DTMF e presença de mailbox não comprova PIN
+válido/inválido, bloqueio após tentativas, leitura negada entre empresas
+ou isolamento do spool. Essas provas continuam pendentes na issue #88.
+O Marco 8 permanece em andamento. Não há liberação para produção.
