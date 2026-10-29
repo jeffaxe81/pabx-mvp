@@ -11,6 +11,10 @@ import time
 from .sip_calls import CallPeer
 from .srtp_media import SrtpMedia
 
+# t3-1001 is a fallback mailbox in production; it only becomes a SIP
+# endpoint inside this disposable --calls laboratory (prepare_calls), with
+# a private generated PJSIP config and ephemeral SIP credentials. t3-recepcao
+# is WebRTC/DTLS-SRTP and cannot be exercised by this SDES-SRTP SIP client.
 CASES = (("t1", "t1-1001"), ("t2", "t2-1001"), ("t3", "t3-1001"))
 METRICS = ("vm_registered", "vm_route_loaded", "vm_answered",
            "vm_exact_mailbox", "vm_no_foreign_mailbox", "vm_bye",
@@ -85,6 +89,10 @@ def exercise_voicemail(container, prepared, report, *, dtmf=False):
             and "PJSIP_ENDPOINT" in route
             and "No such" not in route
         )
+        # Fail closed if the caller skipped prepare_calls: the fallback
+        # mailbox is never itself a production SIP credential.
+        if name not in prepared["credentials"]:
+            raise ValueError("perfil SIP temporário do voicemail não provisionado")
         with ExitStack() as resources:
             peer = CallPeer("127.0.0.1", 5061, prepared["ca"],
                             name, prepared["credentials"][name])
