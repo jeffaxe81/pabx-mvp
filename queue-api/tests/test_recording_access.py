@@ -130,3 +130,20 @@ def test_cors_policy_malformed_collection_fails_closed():
     for origins in (None, "https://voice.example", 7, {"origin": "https://voice.example"}):
         assert allowed_browser_origin("https://voice.example", origins) is False
     assert allowed_browser_origin("https://voice.example", {"https://voice.example"})
+
+def test_recording_catalog_rejects_malformed_optional_source_provenance(tmp_path):
+    good = policy()
+    good["recordings"][FILE_T1]["source_ref"] = "CDR:1792670400.123"
+    path = tmp_path / "catalog.json"
+    path.write_text(json.dumps(good))
+    assert load_recording_policy(path) == good
+    for bad in ([], {}, None, "a", "../bad", "CDR:bad?query",
+                "x\nInjected", "x" * 101):
+        copy = policy()
+        copy["recordings"][FILE_T1]["source_ref"] = bad
+        path.write_text(json.dumps(copy))
+        if bad is None:
+            # Ausente/None preserva formato legado, sem atribuir prova falsa.
+            assert load_recording_policy(path) == copy
+        else:
+            assert load_recording_policy(path) is None
