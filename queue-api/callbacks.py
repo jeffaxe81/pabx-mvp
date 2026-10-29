@@ -53,11 +53,39 @@ def parse_callback_request_event(event: dict):
                              event.get("CallerIDName", ""))
 
 
+def _reject_duplicate_json_keys(pairs):
+    """Um snapshot AMI com duas versões do mesmo campo é ambíguo."""
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError("catalogo de callbacks com chave JSON duplicada")
+        result[key] = value
+    return result
+
+
+def _reject_nonfinite_json_constant(value):
+    raise ValueError("catalogo de callbacks com numero JSON nao finito")
+
+
 def load_callbacks(path) -> list:
+    """Recusa snapshots ambíguos sem os reinterpretar nem os corrigir.
+
+    Nunca considerar um arquivo existente e corrompido como fila vazia:
+    isso esconderia chamadas pendentes ou permitiria perda de dados.
+    """
     path = Path(path)
+    if path.is_symlink():
+        raise ValueError("catalogo de callbacks em link simbolico")
     if not path.exists():
         return []
-    return json.loads(path.read_text(encoding="utf-8"))
+    records = json.loads(
+        path.read_text(encoding="utf-8"),
+        object_pairs_hook=_reject_duplicate_json_keys,
+        parse_constant=_reject_nonfinite_json_constant,
+    )
+    if not _catalog_has_unique_ids(records):
+        raise ValueError("catalogo de callbacks com ids invalidos ou duplicados")
+    return records
 
 
 def save_callbacks(path, callbacks: list):

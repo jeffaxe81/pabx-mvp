@@ -219,11 +219,14 @@ def test_duplicate_callback_id_across_tenants_never_claims_or_updates(tmp_path):
     other = {**own, "tenant": "t10", "caller_id_num": "5511988877777"}
     save_callbacks(path, [own, other])
     before = path.read_bytes()
-    assert next_pending_callback(load_callbacks(path)) is None
-    assert find_callback(load_callbacks(path), own["id"]) is None
-    assert mark_callback_calling(path, own["id"])[0] is False
-    assert mark_callback_result(path, own["id"], "ANSWER")[0] is False
-    assert add_callback_request(path, "5511999998888", tenant="t2") is None
+    with pytest.raises(ValueError, match="duplicados"):
+        load_callbacks(path)
+    with pytest.raises(ValueError, match="duplicados"):
+        mark_callback_calling(path, own["id"])
+    with pytest.raises(ValueError, match="duplicados"):
+        mark_callback_result(path, own["id"], "ANSWER")
+    with pytest.raises(ValueError, match="duplicados"):
+        add_callback_request(path, "5511999998888", tenant="t2")
     assert path.read_bytes() == before
 
 
@@ -233,8 +236,10 @@ def test_duplicate_id_even_when_second_request_finished_blocks_lookup(tmp_path):
     first = add_callback_request(path, "5511999998888", tenant="t1")
     second = {**first, "status": "concluido", "tenant": "t2"}
     save_callbacks(path, [first, second])
-    assert next_pending_callback(load_callbacks(path)) is None
-    assert mark_callback_calling(path, first["id"])[0] is False
+    with pytest.raises(ValueError, match="duplicados"):
+        load_callbacks(path)
+    with pytest.raises(ValueError, match="duplicados"):
+        mark_callback_calling(path, first["id"])
 
 
 @pytest.mark.parametrize("invalid", [None, 2, "", False, {}, []])
@@ -277,3 +282,47 @@ def test_corrupt_dialing_counter_prevents_ami_result_mutation(tmp_path, bad_atte
     before = path.read_bytes()
     assert mark_callback_result(path, record["id"], "ANSWER")[0] is False
     assert path.read_bytes() == before
+
+
+# Persistência: JSON existente e ambíguo nunca equivale a lista vazia.
+@pytest.mark.parametrize("raw", [
+    '{"unexpected": "object"}',
+    'null',
+    '[{"id": "same", "status": "pendente", "requested_at": 1},'
+    ' {"id": "same", "status": "pendente", "requested_at": 2}]',
+    '[{"id": "valid", "status": "pendente", "status": "discando",'
+    ' "requested_at": 1}]',
+    '[{"id": "valid", "status": "pendente", "requested_at": NaN}]',
+    '[{"id": "valid", "status": "pendente", "requested_at": Infinity}]',
+    '[{"id": "valid", "status": "pendente", "requested_at": 1,'
+    ' "nested": {"tenant": "t1", "tenant": "t10"}}]',
+    '{"id": "valid"} garbage',
+])
+def test_callback_loader_refuses_corrupt_json_without_rewriting(tmp_path, raw):
+    path = tmp_path / "callbacks.json"
+    path.write_text(raw, encoding="utf-8")
+    original = path.read_bytes()
+    with pytest.raises((ValueError, __import__("json").JSONDecodeError)):
+        load_callbacks(path)
+    assert path.read_bytes() == original
+    with pytest.raises((ValueError, __import__("json").JSONDecodeError)):
+        add_callback_request(path, "5511999998888", tenant="t1")
+    assert path.read_bytes() == original
+
+
+def test_callback_loader_rejects_symlink(tmp_path):
+    data = tmp_path / "real.json"
+    data.write_text("[]", encoding="utf-8")
+    linked = tmp_path / "callbacks.json"
+    linked.symlink_to(data)
+    with pytest.raises(ValueError, match="simbolico"):
+        load_callbacks(linked)
+    assert data.read_text(encoding="utf-8") == "[]"
+
+
+def test_callback_loader_accepts_empty_or_valid_catalog(tmp_path):
+    path = tmp_path / "callbacks.json"
+    assert load_callbacks(path) == []
+    entry = add_callback_request(path, "5511999998888", tenant="t1")
+    assert entry["tenant"] == "t1"
+    assert load_callbacks(path)[0]["id"] == entry["id"]
