@@ -11,7 +11,9 @@ import time
 from .sip_calls import CallPeer
 from .srtp_media import SrtpMedia
 
-CASES = (("t1", "t1-1001"), ("t2", "t2-1001"), ("t3", "t3-1001"))
+# Identity used to authenticate SIP must exist in pjsip.conf; mailbox t3-1001
+# is a deposit-only fallback, NOT a registered endpoint. Test *97 with t3-recepcao.
+CASES = (("t1", "t1-1001"), ("t2", "t2-1001"), ("t3", "t3-recepcao"))
 METRICS = ("vm_registered", "vm_route_loaded", "vm_answered",
            "vm_exact_mailbox", "vm_no_foreign_mailbox", "vm_bye",
            "vm_channels_cleared")
