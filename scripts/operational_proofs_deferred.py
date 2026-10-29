@@ -6,6 +6,7 @@ homologação e nunca autoriza GO. Código de desenvolvimento pode avançar
 enquanto requisitos externos continuam explicitamente não executados.
 """
 import argparse
+from datetime import date
 import json
 from pathlib import Path
 import re
@@ -41,8 +42,13 @@ def summarize(registry, plan):
         raise ValueError("registro e plano devem ser objetos")
     if registry.get("schema_version") != 1 or registry.get("project") != "AXE PABX":
         raise ValueError("registro nao pertence ao programa AXE PABX")
-    if registry.get("registered_on") != "2026-10-29":
-        raise ValueError("data de registro inesperada")
+    when = registry.get("registered_on")
+    if not isinstance(when, str) or not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", when):
+        raise ValueError("data de registro invalida")
+    try:
+        date.fromisoformat(when)
+    except ValueError as exc:
+        raise ValueError("data de registro invalida") from exc
     if registry.get("execution_mode") != "DEVELOPMENT_ONLY_PROOFS_DEFERRED":
         raise ValueError("modo operacional diferente do solicitado")
     for flag, desired in (
