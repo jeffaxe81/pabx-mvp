@@ -84,3 +84,36 @@ mesma categoria de risco (originar chamada via AMI direto pro tronco).
 - **Sem teste de integração real** do fluxo Originate direto pro
   tronco → callback-connect → Dial do atendente — mesma situação já
   documentada pro resto das integrações AMI do projeto
+
+## Cancelamento de retorno pendente (Marco 9)
+
+Um supervisor ou administrador pode retirar um pedido ainda **pendente**
+da fila usando o botão **Cancelar retorno** na página de campanhas.
+A operação exige simultaneamente Bearer de fila da própria empresa
+e `X-Click-To-Call-Key`; agentes não estão autorizados.
+
+A API oferece `POST /api/callbacks/{id}/cancel` e:
+- `200 {"ok":true,"status":"cancelado"}`: pedido pendente cancelado;
+- `404`: ID inexistente, antigo sem tenant ou pertencente a outra empresa;
+- `409`: já está discando, concluído, cancelado ou esgotado;
+- `503`: catálogo indisponível ou inválido; mantém o arquivo suspeito.
+
+O cancelamento é serializado pelo mesmo lock da reserva de callback:
+a operação que adquirir o lock primeiro prevalece. **Nunca** interrompe
+uma ligação já iniciada, não envia Originate AMI, não apaga o registro
+histórico, nem cancela um pedido em outro tenant.
+
+O botão aparece apenas em pedidos pendentes e solicita confirmação.
+A listagem segue sem exibir históricos concluídos/cancelados.
+
+### Verificações de código (não operacionais)
+
+```bash
+cd queue-api
+python3 -m pytest -q tests/test_callbacks.py tests/test_campaign_tenant_http.py
+cd ..
+python3 -m pytest -q tests/test_campaigns_html.py
+```
+
+As 15 provas operacionais deferidas permanecem sem execução;
+CI e testes de loopback não comprovam telefonia real ou GO.
