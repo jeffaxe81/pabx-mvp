@@ -18,6 +18,7 @@ from queue_state import QueueStateTracker
 TENANTS = ("t1", "t2", "t10")
 QUEUE_TOKEN = {t: chr(65 + i) * 48 for i, t in enumerate(TENANTS)}
 RECORDING_TOKEN = {t: chr(80 + i) * 48 for i, t in enumerate(TENANTS)}
+AGENT_TOKEN = {t: chr(68 + i) * 48 for i, t in enumerate(TENANTS)}
 ORIGIN = "https://console.axe-lab.invalid"
 
 
@@ -198,3 +199,90 @@ def test_policy_revocation_denies_recordings_without_restarting_server(service_b
     rpolicy.write_text(json.dumps(original))
     assert _http(port, "GET", "/api/recordings", RECORDING_TOKEN["t1"])[0] == 401
     assert _http(port, "GET", "/api/recordings", RECORDING_TOKEN["t2"])[0] == 200
+
+
+@pytest.fixture
+def agent_recordings(service_boundary):
+    port, _, path = service_boundary
+    policy = json.loads(path.read_text(encoding="utf-8"))
+    for tenant in TENANTS:
+        credential = _credential(tenant, AGENT_TOKEN[tenant])
+        credential.update(role="agent", extension=tenant + "-recepcao")
+        policy["credentials"].append(credential)
+        for label, owner in (("colleague", tenant + "-1002"), ("unowned", None)):
+            filename = tenant + "-" + label + ".wav"
+            (path.parent / "recordings" / filename).write_bytes(
+                ("RESTRICTED AUDIO " + tenant + " " + label).encode("ascii")
+            )
+            policy["recordings"][filename] = {"tenant": tenant}
+            if owner is not None:
+                policy["recordings"][filename]["owner_extension"] = owner
+    path.write_text(json.dumps(policy), encoding="utf-8")
+    return port, path
+
+
+@pytest.mark.parametrize("tenant", TENANTS)
+def test_agent_listing_ignores_spoofed_owner_and_tenant(agent_recordings, tenant):
+    port, _ = agent_recordings
+    other = next(t for t in TENANTS if t != tenant)
+    status, headers, body = _http(
+        port, "GET", "/api/recordings?tenant=" + other
+        + "&extension=" + tenant + "-1002&role=admin", AGENT_TOKEN[tenant],
+    )
+    assert status == 200
+    assert headers["Cache-Control"] == "no-store"
+    assert {row["filename"] for row in json.loads(body)["recordings"]} == {
+        tenant + "-private.wav",
+    }
+
+
+@pytest.mark.parametrize("tenant", TENANTS)
+@pytest.mark.parametrize("target", TENANTS)
+def test_agent_audio_requires_exact_tenant_and_owner(agent_recordings, tenant, target):
+    port, _ = agent_recordings
+    for label in ("private", "colleague", "unowned"):
+        status, headers, body = _http(
+            port, "GET", "/recordings/" + target + "-" + label + ".wav",
+            AGENT_TOKEN[tenant],
+        )
+        assert headers["Cache-Control"] == "no-store"
+        if target == tenant and label == "private":
+            assert status == 200
+            assert body == ("PRIVATE AUDIO " + tenant).encode("ascii")
+            assert int(headers["Content-Length"]) == len(body)
+        else:
+            assert status == 404
+            assert json.loads(body) == {"error": "gravacao nao encontrada"}
+            assert b"AUDIO" not in body
+    status, _, body = _http(
+        port, "GET", "/recordings/missing.wav", AGENT_TOKEN[tenant],
+    )
+    assert status == 404
+    assert json.loads(body) == {"error": "gravacao nao encontrada"}
+
+
+@pytest.mark.parametrize("tenant", TENANTS)
+@pytest.mark.parametrize("change", ("revoke", "expire"))
+def test_agent_access_removed_before_next_download(agent_recordings, tenant, change):
+    port, path = agent_recordings
+    audio = "/recordings/" + tenant + "-private.wav"
+    assert _http(port, "GET", audio, AGENT_TOKEN[tenant])[0] == 200
+    policy = json.loads(path.read_text(encoding="utf-8"))
+    digest = hashlib.sha256(AGENT_TOKEN[tenant].encode("ascii")).hexdigest()
+    if change == "revoke":
+        policy["credentials"] = [c for c in policy["credentials"]
+                                 if c["token_sha256"] != digest]
+    else:
+        next(c for c in policy["credentials"]
+             if c["token_sha256"] == digest)["expires_at"] = 1
+    path.write_text(json.dumps(policy), encoding="utf-8")
+    for route in ("/api/recordings", audio):
+        status, headers, body = _http(port, "GET", route, AGENT_TOKEN[tenant])
+        assert status == 401
+        assert headers["Cache-Control"] == "no-store"
+        assert b"AUDIO" not in body
+    # Removing one agent must preserve the other agents and supervisor.
+    other = next(t for t in TENANTS if t != tenant)
+    assert _http(port, "GET", "/recordings/" + other + "-private.wav",
+                 AGENT_TOKEN[other])[0] == 200
+    assert _http(port, "GET", audio, RECORDING_TOKEN[tenant])[0] == 200
