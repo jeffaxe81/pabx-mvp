@@ -277,3 +277,47 @@ def test_corrupt_dialing_counter_prevents_ami_result_mutation(tmp_path, bad_atte
     before = path.read_bytes()
     assert mark_callback_result(path, record["id"], "ANSWER")[0] is False
     assert path.read_bytes() == before
+
+
+# Persistência: JSON existente e ambíguo nunca equivale a lista vazia.
+@pytest.mark.parametrize("raw", [
+    '{"unexpected": "object"}',
+    'null',
+    '[{"id": "same", "status": "pendente", "requested_at": 1},'
+    ' {"id": "same", "status": "pendente", "requested_at": 2}]',
+    '[{"id": "valid", "status": "pendente", "status": "discando",'
+    ' "requested_at": 1}]',
+    '[{"id": "valid", "status": "pendente", "requested_at": NaN}]',
+    '[{"id": "valid", "status": "pendente", "requested_at": Infinity}]',
+    '[{"id": "valid", "status": "pendente", "requested_at": 1,'
+    ' "nested": {"tenant": "t1", "tenant": "t10"}}]',
+    '{"id": "valid"} garbage',
+])
+def test_callback_loader_refuses_corrupt_json_without_rewriting(tmp_path, raw):
+    path = tmp_path / "callbacks.json"
+    path.write_text(raw, encoding="utf-8")
+    original = path.read_bytes()
+    with pytest.raises((ValueError, __import__("json").JSONDecodeError)):
+        load_callbacks(path)
+    assert path.read_bytes() == original
+    with pytest.raises((ValueError, __import__("json").JSONDecodeError)):
+        add_callback_request(path, "5511999998888", tenant="t1")
+    assert path.read_bytes() == original
+
+
+def test_callback_loader_rejects_symlink(tmp_path):
+    data = tmp_path / "real.json"
+    data.write_text("[]", encoding="utf-8")
+    linked = tmp_path / "callbacks.json"
+    linked.symlink_to(data)
+    with pytest.raises(ValueError, match="simbolico"):
+        load_callbacks(linked)
+    assert data.read_text(encoding="utf-8") == "[]"
+
+
+def test_callback_loader_accepts_empty_or_valid_catalog(tmp_path):
+    path = tmp_path / "callbacks.json"
+    assert load_callbacks(path) == []
+    entry = add_callback_request(path, "5511999998888", tenant="t1")
+    assert entry["tenant"] == "t1"
+    assert load_callbacks(path)[0]["id"] == entry["id"]
