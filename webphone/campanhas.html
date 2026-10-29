@@ -450,10 +450,28 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
       <div class="campaign-card">
         <div class="campaign-name">${safe(c.caller_id_name || c.caller_id_num)} <span class="mono" style="color:var(--text-muted); font-size:12px;">(${safe(c.caller_id_num)})</span></div>
         <div class="status-row"><span class="status-chip">${safe(callbackStatusLabel[c.status] || c.status)}</span><span class="status-chip">tentativas: ${safe(c.attempts)}</span></div>
+        ${c.status === 'pendente' ? `<button type="button" class="btn-ghost" data-cancel-callback="${safe(c.id)}">Cancelar retorno</button>` : ''}
       </div>`).join('') + `<button class="btn-ghost" id="dialNextCallbackBtn" style="margin-top:10px;">Discar próximo retorno</button>`;
 
     const btn = el('dialNextCallbackBtn');
     if (btn) btn.addEventListener('click', dialNextCallback);
+    document.querySelectorAll('[data-cancel-callback]').forEach((button) => {
+      button.addEventListener('click', () => cancelCallback(button));
+    });
+  }
+
+  function cancelCallback(button) {
+    const id = button.dataset.cancelCallback;
+    if (!/^[a-f0-9]{12}$/.test(id) ||
+        !window.confirm('Cancelar este retorno pendente?')) return;
+    button.disabled = true;
+    apiFetch(`/api/callbacks/${id}/cancel`, { method: 'POST' })
+      .then(() => loadCallbacks())
+      .catch((err) => {
+        button.disabled = false;
+        alert(err.message);
+        loadCallbacks();
+      });
   }
 
   function dialNextCallback() {
