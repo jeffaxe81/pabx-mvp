@@ -21,7 +21,7 @@ import time
 from pathlib import Path
 
 DEFAULT_SLA_THRESHOLD_SECONDS = 20
-_AMI_UNIQUEID = re.compile(r"[A-Za-z0-9._-]{1,96}\\Z")
+_AMI_UNIQUEID = re.compile(r"[A-Za-z0-9._-]{1,96}$")
 
 
 def _day_key(timestamp: float) -> str:
