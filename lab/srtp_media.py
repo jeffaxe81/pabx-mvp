@@ -119,7 +119,7 @@ class SrtpMedia:
         """
         codes = {str(i): i for i in range(10)}
         codes.update({'*': 10, '#': 11, 'A': 12, 'B': 13, 'C': 14, 'D': 15})
-        if (not self.dtmf or digit not in codes or type(duration) is not int
+        if (not self.dtmf or not isinstance(digit, str) or digit not in codes or type(duration) is not int
                 or not 1 <= duration <= 65535):
             raise ValueError('evento DTMF inválido')
         header = struct.pack('!BBHII', 0x80, 101 | (0x80 if marker else 0),
