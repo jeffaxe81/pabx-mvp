@@ -128,3 +128,11 @@ def test_cli_creates_private_manifest_without_mutating_catalog(tmp_path):
     with pytest.raises(SystemExit) as error:
         main(["--recordings-dir", str(recordings), "--cdr-jsonl", str(source), "--output", str(output)])
     assert error.value.code == 2
+
+@pytest.mark.parametrize("invalid", [None, [], {}, 4, True, ["PJSIP/t1-recepcao-00000001"]])
+def test_malformed_cdr_destination_channel_is_ignored_without_crash(tmp_path, invalid):
+    recordings = file(tmp_path)
+    assert corroborate_cdr(cdr(DestinationChannel=invalid)) is None
+    rows, summary = propose_candidates(recordings, [cdr(DestinationChannel=invalid)])
+    assert rows == []
+    assert summary["proposed"] == 0
