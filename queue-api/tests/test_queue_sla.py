@@ -346,3 +346,80 @@ def test_sla_ignores_malformed_queue_identities_without_crashing():
         "fila-t10": {"offered": 1, "within_sla": 1, "sla_percent": 100.0}
     }
 
+
+
+
+def test_duplicate_ami_uniqueid_counts_once_within_queue():
+    tracker = QueueSLATracker(threshold_seconds=20)
+    event = {"Event": "AgentConnect", "Queue": "fila-t1",
+             "HoldTime": "15", "Uniqueid": "1782000000.42"}
+    tracker.apply_event(event)
+    tracker.apply_event(dict(event))
+    assert tracker.snapshot()["fila-t1"] == {
+        "offered": 1, "within_sla": 1, "sla_percent": 100.0,
+    }
+
+
+def test_same_uniqueid_remains_independent_across_tenants():
+    tracker = QueueSLATracker(threshold_seconds=20)
+    for queue, hold in (("fila-t1", "10"), ("fila-t10", "30")):
+        tracker.apply_event({"Event": "AgentConnect", "Queue": queue,
+                             "HoldTime": hold, "Uniqueid": "1782000000.42"})
+    assert tracker.snapshot()["fila-t1"]["sla_percent"] == 100.0
+    assert tracker.snapshot()["fila-t10"]["sla_percent"] == 0.0
+
+
+def test_mixed_ami_final_events_with_same_uniqueid_not_double_counted():
+    tracker = QueueSLATracker()
+    tracker.apply_event({"Event": "QueueCallerAbandon", "Queue": "fila-t2",
+                         "Uniqueid": "1782000000.99", "HoldTime": "4"})
+    tracker.apply_event({"Event": "AgentConnect", "Queue": "fila-t2",
+                         "Uniqueid": "1782000000.99", "HoldTime": "4"})
+    assert tracker.snapshot()["fila-t2"] == {
+        "offered": 1, "within_sla": 0, "sla_percent": 0.0,
+    }
+
+
+def test_distinct_uniqueids_count_as_distinct_calls():
+    tracker = QueueSLATracker()
+    for uniqueid in ("1782000000.10", "1782000000.11"):
+        tracker.apply_event({"Event": "AgentConnect", "Queue": "fila-t1",
+                             "Uniqueid": uniqueid, "HoldTime": "5"})
+    assert tracker.snapshot()["fila-t1"]["offered"] == 2
+
+
+def test_ami_uniqueid_scope_resets_on_new_day():
+    clock = [1000000.0]
+    tracker = QueueSLATracker(clock=lambda: clock[0])
+    event = {"Event": "AgentConnect", "Queue": "fila-t1",
+             "Uniqueid": "1782000000.10", "HoldTime": "2"}
+    tracker.apply_event(event)
+    tracker.apply_event(event)
+    assert tracker.snapshot()["fila-t1"]["offered"] == 1
+    clock[0] += 90000
+    tracker.apply_event(event)
+    assert tracker.snapshot()["fila-t1"]["offered"] == 1
+
+
+@pytest.mark.parametrize("bad", [None, 123, False, [], {},
+                                  "", "bad id", "call\\nInjected",
+                                  "A" * 97, "a/../b"])
+def test_invalid_present_ami_uniqueid_is_not_counted(bad):
+    tracker = QueueSLATracker()
+    event = {"Event": "AgentConnect", "Queue": "fila-t1",
+             "HoldTime": "1", "Uniqueid": bad}
+    if bad is None:
+        # None equivale a ausência no protocolo legado.
+        tracker.apply_event(event)
+        assert tracker.snapshot()["fila-t1"]["offered"] == 1
+    else:
+        tracker.apply_event(event)
+        assert tracker.snapshot() == {}
+
+
+def test_ami_events_without_uniqueid_remain_supported():
+    tracker = QueueSLATracker()
+    for _ in range(2):
+        tracker.apply_event({"Event": "AgentConnect", "Queue": "fila-t1",
+                             "HoldTime": "2"})
+    assert tracker.snapshot()["fila-t1"]["offered"] == 2
