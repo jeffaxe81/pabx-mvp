@@ -1069,11 +1069,22 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 self._send_queue_json(502, {"error": "falha ao originar chamada"})
 
+    def _read_callbacks_for_http(self):
+        """Recusa catálogo ambíguo sem fingir que não há pedidos pendentes."""
+        try:
+            return load_callbacks(CALLBACKS_PATH)
+        except (OSError, UnicodeError, ValueError):
+            self._send_queue_json(503, {"error": "catalogo de callbacks indisponivel"})
+            return None
+
     def _handle_list_callbacks(self):
         identity = self._require_campaign_api_key()
         if identity is None:
             return
-        callbacks = [c for c in load_callbacks(CALLBACKS_PATH)
+        records = self._read_callbacks_for_http()
+        if records is None:
+            return
+        callbacks = [c for c in records
                      if c.get("tenant") == identity["tenant"]]
         self._send_queue_json(200, {"callbacks": callbacks})
 
@@ -1081,9 +1092,11 @@ class Handler(BaseHTTPRequestHandler):
         identity = self._require_campaign_api_key()
         if identity is None:
             return
+        records = self._read_callbacks_for_http()
+        if records is None:
+            return
         callback = next_pending_callback([
-            c for c in load_callbacks(CALLBACKS_PATH)
-            if c.get("tenant") == identity["tenant"]
+            c for c in records if c.get("tenant") == identity["tenant"]
         ])
         if not callback:
             self._send_queue_json(200, {"done": True, "message": "nenhum callback pendente"})
@@ -1101,9 +1114,11 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         with outbound_lock(CALLBACKS_PATH):
+            records = self._read_callbacks_for_http()
+            if records is None:
+                return
             callback = next_pending_callback([
-                c for c in load_callbacks(CALLBACKS_PATH)
-                if c.get("tenant") == identity["tenant"]
+                c for c in records if c.get("tenant") == identity["tenant"]
             ])
             if not callback:
                 self._send_queue_json(200, {"done": True, "message": "nenhum callback pendente"})
@@ -1113,9 +1128,13 @@ class Handler(BaseHTTPRequestHandler):
                 self._send_queue_json(400, {"error": "numero de callback invalido"})
                 return
             attempt_id = secrets.token_hex(16)
-            ok, error = mark_callback_calling(
-                CALLBACKS_PATH, callback["id"], attempt_id=attempt_id,
-            )
+            try:
+                ok, error = mark_callback_calling(
+                    CALLBACKS_PATH, callback["id"], attempt_id=attempt_id,
+                )
+            except (OSError, UnicodeError, ValueError):
+                self._send_queue_json(503, {"error": "catalogo de callbacks indisponivel"})
+                return
             if not ok:
                 self._send_queue_json(409, {"error": "callback nao reservado"})
                 return
