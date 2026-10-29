@@ -54,26 +54,28 @@ def prepare_recording_routes(prepared):
     prepared["lab_recording_filenames"] = names
 
 
-def recording_cdr_matches(raw, tenant):
-    """Evidência integral em UM CDR, sem prefix-match t1/t10."""
+def recording_cdr_reference(raw, tenant):
+    """Devolve a prova CDR única e íntegra sem expor campos da chamada."""
     from .call_checks import cdr_rows
     if tenant not in TENANTS:
-        return False
+        return None
     rows = cdr_rows(raw)
     if rows is None:
-        return False
+        return None
     hits = [
         row for row in rows
-        if row[2] == DESTINATION
-        and row[0] == tenant
-        and row[1] == "1001"
+        if row[2] == DESTINATION and row[0] == tenant and row[1] == "1001"
         and row[3] == tenant + "-internal"
         and re.fullmatch(r"PJSIP/" + tenant + r"-1001-[0-9a-f]+", row[4]) is not None
         and row[6] == "ANSWERED"
         and row[7].isdigit() and int(row[7]) >= 1
         and re.fullmatch(r"[0-9]+\.[0-9]+", row[8]) is not None
     ]
-    return len(hits) == 1
+    return "CDR:" + hits[0][8] if len(hits) == 1 else None
+
+
+def recording_cdr_matches(raw, tenant):
+    return recording_cdr_reference(raw, tenant) is not None
 
 
 def recording_size_valid(raw):
@@ -174,3 +176,10 @@ def exercise_recordings(container, prepared, report):
     report["real_lab_mixmonitor_tested"] = all(
         checks[name] is True for name in required_recording_checks()
     )
+    if not report["real_lab_mixmonitor_tested"]:
+        raise ValueError("MixMonitor/CDR não comprovado; negar teste HTTP")
+    # A API recebe exclusivamente os WAVs que este Asterisk realmente gravou.
+    from .recording_http_checks import exercise_recording_http
+    cdr = command(["docker", "exec", container, "cat",
+                   "/var/log/asterisk/cdr-custom/Lab.csv"])
+    exercise_recording_http(container, prepared, report, cdr.stdout)

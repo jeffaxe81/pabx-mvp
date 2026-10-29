@@ -187,3 +187,4 @@ registrado como regra permanente no prompt master
 134. [Expurgo de gravações ancorado por FD e proteção de privacidade](manual-134-retencao-gravacoes-fd.md)
 135. [Leitura segura de manifesto e CDR por descritor](manual-135-leitura-segura-cdr-manifesto.md)
 136. [MixMonitor real com mídia SRTP e separação por tenant no laboratório](manual-136-mixmonitor-real-tenant-lab.md)
+137. [Download HTTP de WAV real com ACL, CDR e revogação por empresa](manual-137-http-gravacao-real-tenant.md)
