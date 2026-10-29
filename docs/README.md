@@ -180,3 +180,4 @@ registrado como regra permanente no prompt master
 127. [OriginateResponse real no laboratório AMI](manual-127-ami-live-originate.md)
 128. [Observação local de DialBegin/DialEnd no Asterisk real](manual-128-ami-local-dial-trace.md)
 129. [Isolamento HTTP cruzado de filas e gravações (marco 8)](manual-129-isolamento-http-multiempresa.md)
+130. [Homologação de PIN, mensagens e gravações reais](manual-130-homologacao-voicemail-gravacoes.md)

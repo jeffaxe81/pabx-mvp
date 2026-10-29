@@ -7,9 +7,11 @@ import csv
 import hashlib
 import io
 import json
+import math
 from pathlib import Path
 import secrets
 import sys
+import struct
 import threading
 import time
 import urllib.error
@@ -21,11 +23,57 @@ TENANTS = ('t1', 't2', 't3', 't10')
 HTTP_CHECKS = ('catalog_applied', 'http_owner_list', 'http_owner_audio',
                'http_supervisor', 'http_admin', 'http_other_agent',
                'http_cross_tenant', 'http_anonymous', 'http_bad_origin', 'http_revoked')
-CHECKS = ('recording_call', 'recording_cdr', 'recording_audio', *HTTP_CHECKS)
+CHECKS = ('recording_call', 'recording_cdr', 'recording_audio', 'recording_content', *HTTP_CHECKS)
+FREQUENCIES = {'t1': 500, 't2': 1000, 't3': 1500, 't10': 2000}
+
+
+def _pcmu_sample(value):
+    value = ~value & 255
+    sample = ((((value & 15) << 3) + 132) << ((value & 112) >> 4)) - 132
+    return -sample if value & 128 else sample
+
+
+def tenant_tone(tenant):
+    """A different 20 ms PCMU marker for each controlled tenant."""
+    if tenant not in FREQUENCIES:
+        raise ValueError('tenant de mídia não previsto')
+    decoded = [_pcmu_sample(value) for value in range(256)]
+    samples = [round(8000*math.sin(2*math.pi*FREQUENCIES[tenant]*i/8000))
+               for i in range(160)]
+    return bytes(min(range(256), key=lambda code: abs(decoded[code]-sample))
+                 for sample in samples)
+
+
+def recorded_audio_tenant(path, tenant):
+    """Reject swapped recordings even if filename, CDR and WAV are valid."""
+    if tenant not in FREQUENCIES:
+        return False
+    try:
+        with wave.open(str(path), 'rb') as audio:
+            if (audio.getnchannels() != 1 or audio.getsampwidth() != 2
+                    or audio.getframerate() != 8000 or not 4000 <= audio.getnframes() <= 80000):
+                return False
+            frames = audio.readframes(audio.getnframes())
+        samples = struct.unpack('<' + str(len(frames)//2) + 'h', frames)
+        energy = sum(sample*sample for sample in samples)
+        if energy < len(samples)*10000:
+            return False
+        powers = {}
+        for scope, frequency in FREQUENCIES.items():
+            real = sum(value*math.cos(2*math.pi*frequency*i/8000)
+                       for i, value in enumerate(samples))
+            imag = sum(value*math.sin(2*math.pi*frequency*i/8000)
+                       for i, value in enumerate(samples))
+            powers[scope] = 2*(real*real + imag*imag)/(len(samples)*energy)
+        return powers[tenant] > .85 and all(
+            power < .05 for scope, power in powers.items() if scope != tenant)
+    except (OSError, ValueError, EOFError, wave.Error, struct.error):
+        return False
 
 
 def required_recording_checks():
-    return {f'{metric}:{tenant}' for tenant in TENANTS for metric in CHECKS}
+    return {'recording_same_second'} | {
+        f'{metric}:{tenant}' for tenant in TENANTS for metric in CHECKS}
 
 
 def recording_cdr_events(raw):
@@ -211,8 +259,10 @@ def exercise_recordings(root, container, prepared, report):
     report['recording_cases'] = {}
     command(['docker', 'exec', container, 'mkdir', '-p', '/var/spool/asterisk/monitor',
              '/var/log/asterisk/cdr-custom'])
-    for tenant in TENANTS:
-        report['phase'] = 'recording-call:'+tenant
+    barrier = threading.Barrier(len(TENANTS), timeout=15,
+        action=lambda: time.sleep((1.15-time.time()%1)%1))
+
+    def call(tenant):
         with ExitStack() as resources, ThreadPoolExecutor(max_workers=1) as executor:
             caller = CallPeer('127.0.0.1', 5061, prepared['ca'], tenant+'-1101',
                               prepared['credentials'][tenant+'-1101'])
@@ -225,14 +275,24 @@ def exercise_recordings(root, container, prepared, report):
             resources.callback(right.close)
             registered = caller.register() == 200 and callee.register() == 200
             pending = executor.submit(callee.answer, right)
+            # Repeated extension numbers in distinct companies, started in
+            # the same wall-clock second, exercise actual filename collisions.
+            barrier.wait()
             caller_dialog = caller.dial('1102', left)
             callee_dialog = pending.result(timeout=14)
-            media = exchange(left, right, duration=2)
+            marker = tenant_tone(tenant)
+            media = exchange(left, right, duration=2, tones=(marker, marker))
             pending = executor.submit(callee.await_hangup, callee_dialog)
             hungup = caller.hangup(caller_dialog) == 200 and pending.result(timeout=12)
-            checks['recording_call:'+tenant] = registered and hungup and media['authenticated'] and media['payloads_match']
+            passed = registered and hungup and media['authenticated'] and media['payloads_match']
             caller.register(expires=0)
             callee.register(expires=0)
+            return passed
+    report['phase'] = 'recording-calls-concurrent'
+    with ThreadPoolExecutor(max_workers=len(TENANTS)) as executor:
+        pending_calls = {tenant: executor.submit(call, tenant) for tenant in TENANTS}
+        for tenant, pending in pending_calls.items():
+            checks['recording_call:'+tenant] = pending.result(timeout=45)
     report['phase'] = 'recording-cdr-catalog-http'
     staging = prepared['conf'].parent
     audio_dir = staging/'recorded_audio'
@@ -257,6 +317,11 @@ def exercise_recordings(root, container, prepared, report):
         sys.path.remove(str(Path(root)/'queue-api'))
     candidates, summary = propose_candidates(audio_dir, events)
     selected = [row for row in candidates if row.get('owner_extension') == row['tenant']+'-1102']
+    matching_events = [event for event in events if event['AccountCode'] in TENANTS
+                       and event['CallerIDNum'] == '1101' and event['Destination'] == '1102']
+    checks['recording_same_second'] = (len(matching_events) == len(TENANTS)
+        and len({event['StartTime'] for event in matching_events}) == 1
+        and len({row['filename'] for row in selected}) == len(TENANTS))
     for tenant in TENANTS:
         matching = [row for row in selected if row['tenant'] == tenant]
         checks['recording_cdr:'+tenant] = len(matching) == 1 and any(
@@ -264,7 +329,10 @@ def exercise_recordings(root, container, prepared, report):
             and event['CallerIDNum'] == '1101' and event['Destination'] == '1102'
             and 'CDR:'+event['UniqueID'] == matching[0]['source_ref'] for event in events)
         checks['recording_audio:'+tenant] = len(matching) == 1 and recorded_audio_valid(audio_dir/matching[0]['filename'])
-    if not all(checks['recording_cdr:'+tenant] and checks['recording_audio:'+tenant] for tenant in TENANTS):
+        checks['recording_content:'+tenant] = len(matching) == 1 and recorded_audio_tenant(
+            audio_dir/matching[0]['filename'], tenant)
+    if not all(checks['recording_cdr:'+tenant] and checks['recording_audio:'+tenant]
+               and checks['recording_content:'+tenant] for tenant in TENANTS):
         raise RuntimeError('gravação real sem vínculo CDR inequívoco e áudio válido')
     results = exercise_recording_http(root, staging, audio_dir, selected)
     for tenant, metrics in results.items():

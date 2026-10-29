@@ -147,6 +147,17 @@ def cli(container, text):
     return command(['docker', 'exec', container, 'asterisk', '-rx', text]).stdout
 
 
+def source_checkout_clean(root):
+    """Every imported product module must match the labeled source commit."""
+    result = command(['git', '-C', str(root), 'status', '--porcelain',
+                      '--untracked-files=all', '--', 'asterisk',
+                      'admin-api/tenants.py', 'admin-api/conf_generator.py',
+                      'scripts/secrets_generator.py', 'lab', 'queue-api',
+                      'webphone', 'package.json', 'package-lock.json',
+                      'scripts/build_webphone_sip.cjs'], check=False)
+    return result.returncode == 0 and not result.stdout.strip()
+
+
 def diagnose(raw):
     return {
         'missing_template': 'Inheritance requested, but category' in raw,
@@ -270,12 +281,8 @@ def run(root, report, *, calls=False, webrtc=False, dids=False, isolation=False,
     if voicemail_auth or recordings:
         report.update(schema_version=9, kind='real_asterisk_access_homologation_lab',
                       live_voicemail_auth_tested=False, live_recording_access_tested=False)
-    clean = command(['git', '-C', str(root), 'diff', '--quiet', 'HEAD', '--',
-                     'asterisk', 'admin-api/tenants.py', 'admin-api/conf_generator.py',
-                     'scripts/secrets_generator.py', 'lab','webphone','package.json','package-lock.json',
-                     'scripts/build_webphone_sip.cjs'], check=False)
-    report['checks']['checkout_clean'] = clean.returncode == 0
-    if clean.returncode != 0:
+    report['checks']['checkout_clean'] = source_checkout_clean(root)
+    if not report['checks']['checkout_clean']:
         raise RuntimeError('checkout do laboratório contém alterações não commitadas')
     name = 'axe-lab-' + secrets.token_hex(6)
     ownership = secrets.token_hex(32)

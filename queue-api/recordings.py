@@ -18,6 +18,10 @@ ALLOWED_EXTENSIONS = {".wav", ".gsm", ".mp3"}
 # outro padrão do próprio Asterisk e não batem aqui - ficam listadas,
 # só não são filtráveis por atendente/número (ver manual 21).
 FILENAME_RE = re.compile(r"^(\d{8}-\d{6})-([^-]*)-([^.]+)\.\w+$")
+UNIQUE_FILENAME_RE = re.compile(
+    r"^(\d{8}-\d{6})-([0-9]*)-t[1-9][0-9]*-([0-9]{3,6})-"
+    r"[0-9]{10,14}\.[0-9]{1,12}\.(?:wav|gsm|mp3)$"
+)
 _OPEN_SUPPORTS_DIR_FD = os.open in getattr(os, "supports_dir_fd", ())
 
 
@@ -59,7 +63,7 @@ def parse_recording_filename(filename: str):
     ou None se não bater o padrão esperado (ex: gravação gerada
     diretamente pela fila, com nome no formato do Asterisk).
     """
-    match = FILENAME_RE.match(filename)
+    match = UNIQUE_FILENAME_RE.fullmatch(filename) or FILENAME_RE.match(filename)
     if not match:
         return None
     timestamp, caller_number, destination = match.groups()

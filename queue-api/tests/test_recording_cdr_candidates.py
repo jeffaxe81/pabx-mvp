@@ -92,6 +92,52 @@ def test_tagged_filename_accepted_when_all_sources_agree(tmp_path):
     assert rows[0]["tenant"] == "t2"
 
 
+def test_unique_filenames_correlate_same_second_t1_t10_calls_without_collision(tmp_path):
+    recordings = tmp_path / 'recordings'
+    recordings.mkdir()
+    names = ['20261022-120000-551199998888-t1-1010-1792670400.123.wav',
+             '20261022-120000-551199998888-t10-1010-1792670400.124.wav']
+    for name in names:
+        (recordings / name).write_bytes(b'RIFF synthetic')
+    rows, summary = propose_candidates(recordings, [cdr(), cdr('t10', UniqueID='1792670400.124')])
+    assert rows == [
+        {'filename': names[0], 'tenant': 't1', 'owner_extension': 't1-recepcao',
+         'source_ref': 'CDR:1792670400.123'},
+        {'filename': names[1], 'tenant': 't10', 'owner_extension': 't10-recepcao',
+         'source_ref': 'CDR:1792670400.124'},
+    ]
+    assert summary['ambiguous'] == 0
+
+
+@pytest.mark.parametrize('events', [
+    [cdr(UniqueID='1792670400.999')],
+    [cdr('t10')],
+    [cdr(), cdr()],
+    [cdr(), cdr('t10')],
+    [cdr(), cdr(DestinationChannel='PJSIP/t1-other-00000002')],
+    [cdr(StartTime='2026-10-22 12:00:01')],
+    [cdr(CallerIDNum='551199998887')],
+    [cdr(Destination='1011')],
+    [cdr(), cdr(StartTime='2026-10-22 12:00:01')],
+])
+def test_unique_filename_rejects_wrong_id_tenant_and_duplicate_evidence(tmp_path, events):
+    recordings = file(tmp_path, '20261022-120000-551199998888-t1-1010-1792670400.123.wav')
+    assert propose_candidates(recordings, events)[0] == []
+
+
+def test_unique_filename_without_explicit_tenant_is_not_importable(tmp_path):
+    recordings = file(tmp_path, '20261022-120000-551199998888-1010-1792670400.123.wav')
+    assert propose_candidates(recordings, [cdr()])[0] == []
+
+
+def test_same_tenant_concurrent_calls_remain_distinct_by_uniqueid(tmp_path):
+    recordings = file(tmp_path, '20261022-120000-551199998888-t1-1010-1792670400.123.wav')
+    (recordings / '20261022-120000-551199998888-t1-1010-1792670400.124.wav').write_bytes(b'RIFF other')
+    rows, summary = propose_candidates(recordings, [cdr(), cdr(UniqueID='1792670400.124')])
+    assert [row['source_ref'] for row in rows] == ['CDR:1792670400.123', 'CDR:1792670400.124']
+    assert summary['proposed'] == 2
+
+
 def test_bogus_filename_and_symlinks_are_skipped(tmp_path):
     recordings = file(tmp_path)
     (recordings / "other.wav").write_bytes(b"OTHER")

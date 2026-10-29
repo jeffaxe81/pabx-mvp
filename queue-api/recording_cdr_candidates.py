@@ -19,7 +19,8 @@ CDR_LIMIT_BYTES = 4 * 1024 * 1024
 CDR_LIMIT_ROWS = 10000
 RECORDING_RE = re.compile(
     r"^(?P<date>\d{8})-(?P<hour>\d{6})-(?P<caller>\d{3,15})-"
-    r"(?:(?P<tag>t[1-9][0-9]*)-)?(?P<destination>\d{3,6})\.(?:wav|gsm|mp3)$"
+    r"(?:(?P<tag>t[1-9][0-9]*)-)?(?P<destination>\d{3,6})"
+    r"(?:-(?P<uniqueid>[0-9]{10,14}\.[0-9]{1,12}))?\.(?:wav|gsm|mp3)$"
 )
 UNIQUE_ID = re.compile(r"^[0-9]{10,14}\.[0-9]{1,12}$")
 CHANNEL_RE = re.compile(r"^PJSIP/(?P<operator>t[1-9][0-9]*-[a-z0-9_-]+)-[a-fA-F0-9]+$")
@@ -108,10 +109,12 @@ def propose_candidates(recordings_dir, cdr_events):
     if root.is_symlink() or not root.is_dir():
         raise ValueError("diretório de gravações inválido")
     by_call = defaultdict(list)
+    by_uniqueid = defaultdict(list)
     for raw in cdr_events:
         valid = corroborate_cdr(raw)
         if valid is not None:
             by_call[valid["match"]].append(valid)
+            by_uniqueid[valid["source_ref"]].append(valid)
 
     rows = []
     ambiguous = unmatched = skipped = 0
@@ -125,13 +128,23 @@ def propose_candidates(recordings_dir, cdr_events):
             continue
         parts = filename.groupdict()
         key = (parts["date"] + "-" + parts["hour"], parts["caller"], parts["destination"])
-        matches = by_call.get(key, [])
+        if parts['uniqueid'] is not None:
+            if parts['tag'] is None:
+                skipped += 1
+                continue
+            # A identidade da chamada separa chamadas legítimas simultâneas.
+            # Qualquer repetição dessa identidade é ambígua, mesmo se os
+            # campos de tenant/horário/destino do segundo CDR discordarem.
+            matches = by_uniqueid.get('CDR:'+parts['uniqueid'], [])
+        else:
+            matches = by_call.get(key, [])
         # Arquivos com tag de tenant também são descartados se houver
         # evidências contraditórias de outra empresa para a mesma chamada.
         if len(matches) > 1:
             ambiguous += 1
             continue
-        if not matches or (parts["tag"] is not None and parts["tag"] != matches[0]["tenant"]):
+        if (not matches or matches[0]['match'] != key
+                or (parts["tag"] is not None and parts["tag"] != matches[0]["tenant"])):
             unmatched += 1
             continue
         match = matches[0]

@@ -169,6 +169,12 @@ def exercise_voicemail_auth(container, prepared, report):
         while time.monotonic() < deadline:
             observer.pump(.12)
             result = logs(channel, tenant)
+            report['voicemail_auth_observation'] = {
+                'tenant': tenant, **result,
+                'authenticated_packets': observer.authenticated_packets,
+                'marker_one_packets': observer.markers[0],
+                'marker_two_packets': observer.markers[1],
+            }
             if predicate(result):
                 return result
         raise ValueError('estado esperado do voicemail não observado')

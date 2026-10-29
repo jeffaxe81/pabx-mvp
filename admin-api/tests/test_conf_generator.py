@@ -39,6 +39,15 @@ def test_extensions_dial_includes_mixmonitor_and_dial():
     assert "Dial(PJSIP/recepcao-3,20)" in content
 
 
+def test_recording_filename_separates_tenants_and_concurrent_calls():
+    # Same second/caller/destination may repeat: tenant and UniqueID both
+    # belong in the physical path, before any access policy is consulted.
+    for tenant in ('t1', 't10'):
+        content = render_extensions_dynamic_dial([{**SAMPLE[0], 'tenant': tenant}])
+        assert ('${STRFTIME(${EPOCH},,%Y%m%d-%H%M%S)}-'
+                '${FILTER(0-9,${CALLERID(num)})}-'+tenant+'-1112-${UNIQUEID}.wav,b)') in content
+
+
 def test_extensions_hints_reference_correct_endpoint():
     content = render_extensions_dynamic_hints(SAMPLE)
     assert "exten => 1112,hint,PJSIP/recepcao-3" in content

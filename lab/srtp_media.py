@@ -108,9 +108,12 @@ class SrtpMedia:
         return self.rx.unprotect(packet)
 
 
-def exchange(left, right, *, duration=1.5):
+def exchange(left, right, *, duration=1.5, tones=TONES):
     """Envia tons distintos, valida conteúdo autenticado e testa rejeições locais."""
     peers = (left, right)
+    if (not isinstance(tones, tuple) or len(tones) != 2
+            or any(not isinstance(tone, bytes) or len(tone) != 160 for tone in tones)):
+        raise ValueError('marcadores de mídia inválidos')
     if any(peer.address is None or peer.rx is None for peer in peers):
         raise ValueError('SRTP não negociado')
     received = [0, 0]
@@ -121,7 +124,7 @@ def exchange(left, right, *, duration=1.5):
         now = time.monotonic()
         if now >= next_send:
             for i, peer in enumerate(peers):
-                peer.socket.sendto(peer.protect(TONES[i]), peer.address)
+                peer.socket.sendto(peer.protect(tones[i]), peer.address)
             next_send = now + 0.02
         ready, _, _ = select.select([p.socket for p in peers], [], [],
                                     max(0, min(next_send, deadline)-time.monotonic()))
@@ -139,7 +142,7 @@ def exchange(left, right, *, duration=1.5):
                 else:
                     raise ValueError('SRTP adulterado foi aceito')
             plain = peer.unprotect(packet)
-            if rtp_payload(plain) != TONES[1-i]:
+            if rtp_payload(plain) != tones[1-i]:
                 raise ValueError('conteúdo PCMU divergente')
             if not rejection_checked[i]:
                 try:

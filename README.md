@@ -925,3 +925,4 @@ Plano de aceleração: [100 dias do AXE PABX](docs/roadmap-100-dias-antecipacao-
 
 123. [Correio de voz autenticado por endpoint SIP](docs/manual-123-voicemail-endpoint-autenticado.md)
 124. [Prova SIP real de voicemail *97 por tenant](docs/manual-124-voicemail-runtime.md)
+130. [Homologação de PIN, mensagens e gravações reais](docs/manual-130-homologacao-voicemail-gravacoes.md)

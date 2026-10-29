@@ -91,6 +91,15 @@ def test_parse_filename_extracts_caller_and_destination():
     assert parsed["destination"] == "1000"
 
 
+def test_unique_recording_filename_keeps_numeric_destination_for_filters():
+    for tenant in ('t1', 't10'):
+        assert parse_recording_filename(
+            '20261028-100000-1101-'+tenant+'-1102-1793210400.123.wav') == {
+                'timestamp': '20261028-100000', 'caller_number': '1101',
+                'destination': '1102',
+            }
+
+
 def test_parse_filename_handles_empty_caller_id():
     """Chamada interna sem CALLERID(num) gera nome tipo '...--1000.wav'."""
     parsed = parse_recording_filename("20240101-100000--1000.wav")
