@@ -20,9 +20,11 @@ CHECKS = ('call_register', 'call_established', 'srtp', 'tamper_rejected',
 def required_call_checks():
     from .recording_checks import required_recording_checks
     from .recording_http_checks import required_recording_http_checks
+    from .direct_route_recording_checks import required_direct_route_checks
     return ({f'{check}:{tenant}:{direction}' for check in CHECKS
              for tenant in TENANTS for direction in DIRECTIONS}
-            | required_recording_checks() | required_recording_http_checks())
+            | required_recording_checks() | required_recording_http_checks()
+            | required_direct_route_checks())
 
 
 def prepare_calls(root, prepared, source_commit):
@@ -52,6 +54,8 @@ def prepare_calls(root, prepared, source_commit):
     # Rotas de gravação somente na cópia privada do Asterisk descartável.
     from .recording_checks import prepare_recording_routes
     prepare_recording_routes(prepared)
+    from .direct_route_recording_checks import prepare_direct_route_checks
+    prepare_direct_route_checks(prepared)
 
 
 def cdr_rows(raw):
@@ -165,3 +169,10 @@ def exercise_calls(container, prepared, report):
             report['srtp_tested'] = True
     from .recording_checks import exercise_recordings
     exercise_recordings(container, prepared, report)
+    from .direct_route_recording_checks import (
+        exercise_direct_routes, restore_direct_route_checks,
+    )
+    exercise_direct_routes(container, prepared, report)
+    # O Chromium usa 1010/1011 COM atendentes WebRTC, nunca os substitutos
+    # SIP deste ensaio. Restaurar antes que exercise_webrtc seja chamado.
+    restore_direct_route_checks(container, prepared)

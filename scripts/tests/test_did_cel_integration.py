@@ -23,8 +23,10 @@ def test_did_acceptance_requires_a_complete_cel_proof_for_each_scenario():
     complete = {name:True for name in names}
     from lab.recording_checks import required_recording_checks
     from lab.recording_http_checks import required_recording_http_checks
+    from lab.direct_route_recording_checks import required_direct_route_checks
     assert len(complete) == (113 + len(required_recording_checks())
-                             + len(required_recording_http_checks()))
+                             + len(required_recording_http_checks())
+                             + len(required_direct_route_checks()))
     assert summarize(complete,calls=True,dids=True)['success'] is True
     for key in expected:
         assert summarize({name:value for name,value in complete.items() if name!=key},calls=True,dids=True)['success'] is False
