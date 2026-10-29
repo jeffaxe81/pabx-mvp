@@ -188,7 +188,7 @@ def cleanup_owned(name, ownership):
     return result
 
 
-def summarize(checks, *, calls=False, webrtc=False, dids=False, isolation=False, voicemail=False, ami=False, queues=False):
+def summarize(checks, *, calls=False, webrtc=False, dids=False, isolation=False, voicemail=False, voicemail_dtmf=False, ami=False, queues=False):
     required = {'real_runtime', 'tls_transport', 'wss_transport', 'container_removed',
                 'checkout_clean', 'runtime_mounts', 'source_label'}
     required.update(name+':'+tid for tid in ('t1', 't2', 't3')
@@ -208,6 +208,9 @@ def summarize(checks, *, calls=False, webrtc=False, dids=False, isolation=False,
     if voicemail:
         from .voicemail_checks import required_voicemail_checks
         required.update(required_voicemail_checks())
+    if voicemail_dtmf:
+        from .voicemail_checks import required_voicemail_dtmf_checks
+        required.update(required_voicemail_dtmf_checks())
     if ami:
         from .ami_live_checks import required_ami_checks
         required.update(required_ami_checks())
@@ -219,7 +222,7 @@ def summarize(checks, *, calls=False, webrtc=False, dids=False, isolation=False,
             'success': set(checks) == required and passed == len(required)}
 
 
-def run(root, report, *, calls=False, webrtc=False, dids=False, isolation=False, voicemail=False, ami=False, queues=False):
+def run(root, report, *, calls=False, webrtc=False, dids=False, isolation=False, voicemail=False, voicemail_dtmf=False, ami=False, queues=False):
     if webrtc and not calls:
         raise ValueError('WebRTC requer o modo de chamadas')
     if dids and not calls:
@@ -230,6 +233,8 @@ def run(root, report, *, calls=False, webrtc=False, dids=False, isolation=False,
         raise ValueError('voicemail real requer modo de chamadas')
     if queues and not calls:
         raise ValueError('filas reais requerem modo de chamadas')
+    if voicemail_dtmf and (not voicemail or not calls):
+        raise ValueError('DTMF do voicemail exige --calls e --voicemail')
     source = command(['git', '-C', str(root), 'rev-parse', 'HEAD']).stdout.strip()
     if not re.fullmatch(r'[0-9a-f]{40}', source):
         raise ValueError('SHA do checkout inválido')
@@ -252,6 +257,10 @@ def run(root, report, *, calls=False, webrtc=False, dids=False, isolation=False,
     if voicemail:
         report.update(schema_version=6, kind='real_asterisk_voicemail_route_lab',
                       live_voicemail_route_tested=False)
+    if voicemail_dtmf:
+        report.update(schema_version=9, kind='real_asterisk_voicemail_dtmf_transport_lab',
+                      voicemail_dtmf_transport_only=False,
+                      voicemail_pin_authentication_verified=False)
     if ami:
         report.update(schema_version=7, kind='real_asterisk_ami_originate_response_lab',
                       live_ami_originate_response_tested=False,
@@ -371,7 +380,7 @@ def run(root, report, *, calls=False, webrtc=False, dids=False, isolation=False,
             exercise_isolation(container_id,prepared,report)
         if voicemail:
             from .voicemail_checks import exercise_voicemail
-            exercise_voicemail(container_id,prepared,report)
+            exercise_voicemail(container_id,prepared,report,dtmf=voicemail_dtmf)
         if ami:
             from .ami_live_checks import exercise_ami
             exercise_ami(prepared,report)
@@ -387,7 +396,7 @@ def run(root, report, *, calls=False, webrtc=False, dids=False, isolation=False,
         report['private_staging_retained'] = retain_staging
         if not retain_staging:
             shutil.rmtree(folder)
-    report.update(summarize(report['checks'], calls=calls,webrtc=webrtc,dids=dids,isolation=isolation,voicemail=voicemail,ami=ami,queues=queues))
+    report.update(summarize(report['checks'], calls=calls,webrtc=webrtc,dids=dids,isolation=isolation,voicemail=voicemail,voicemail_dtmf=voicemail_dtmf,ami=ami,queues=queues))
     return report['success']
 
 
@@ -399,6 +408,8 @@ def main(argv=None):
     parser.add_argument('--dids', action='store_true', help='testar DIDs estáticos, dinâmicos e rejeições SIP')
     parser.add_argument('--isolation', action='store_true', help='negativas SIP reais entre empresas')
     parser.add_argument('--voicemail', action='store_true', help='validar a rota *97 SIP real por tenant')
+    parser.add_argument('--voicemail-dtmf', action='store_true',
+                        help='enviar DTMF sintético por SRTP no *97 (não autentica PIN)')
     parser.add_argument('--ami', action='store_true', help='verificar OriginateResponse no AMI real isolado')
     parser.add_argument('--queues', action='store_true', help='validar fila exata t1/t2/t3 via SIP real')
     args = parser.parse_args(argv)
@@ -412,6 +423,8 @@ def main(argv=None):
         parser.error('--voicemail requer --calls')
     if args.queues and not args.calls:
         parser.error('--queues requer --calls')
+    if args.voicemail_dtmf and not (args.calls and args.voicemail):
+        parser.error('--voicemail-dtmf requer --calls --voicemail')
     report = {}
     try:
         kwargs = {'calls':args.calls, 'webrtc':args.webrtc, 'dids':args.dids}
@@ -419,6 +432,8 @@ def main(argv=None):
             kwargs['isolation'] = True
         if args.voicemail:
             kwargs['voicemail'] = True
+        if args.voicemail_dtmf:
+            kwargs['voicemail_dtmf'] = True
         if args.ami:
             kwargs['ami'] = True
         if args.queues:
@@ -468,6 +483,8 @@ def main(argv=None):
         print('Negativas SIP entre empresas: '+json.dumps(report['sip_isolation_cases'],sort_keys=True))
     if report.get('voicemail_route_cases'):
         print('Rotas voicemail por empresa: '+json.dumps(report['voicemail_route_cases'],sort_keys=True))
+    if 'voicemail_dtmf_transport_only' in report:
+        print('Transporte DTMF SRTP (sem autenticação PIN): '+str(report['voicemail_dtmf_transport_only']))
     for case, evidence in report.get('did_cel_results',{}).items():
         print('Trilha DID '+case+': '+json.dumps(evidence,sort_keys=True))
     return 0 if success else 1
