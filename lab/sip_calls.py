@@ -179,6 +179,51 @@ class CallPeer(SipTLS):
             raise ValueError('resposta de outro diálogo SIP')
         return code
 
+    def hangup_or_accept_remote_bye(self, dialog):
+        """Encerra após DTMF; aceita BYE remoto SOMENTE se for do mesmo diálogo.
+
+        Asterisk pode encerrar VoiceMailMain ao receber evento de teclado.
+        Nenhuma resposta de transação aleatória pode satisfazer este teste.
+        """
+        dialog.cseq += 1
+        branch = self.send_request(dialog, 'BYE')
+        self.events.append('bye_sent')
+        deadline = time.monotonic() + 10
+        remote_bye_seen = False
+        while True:
+            start, headers, _ = self.next_message(deadline)
+            if start.startswith('BYE '):
+                self.validate_incoming(dialog, start, headers, 'BYE')
+                cseq = re.fullmatch(r'([1-9][0-9]*) BYE', single(headers, 'cseq'))
+                if not cseq:
+                    raise ValueError('CSeq de BYE remoto inválido')
+                self.send_response(headers, 200, local=dialog.local)
+                self.events.append('remote_bye_acknowledged')
+                remote_bye_seen = True
+                # Ainda há uma resposta ao BYE que NÓS enviamos.
+                # Deixá-la no socket confundiria o próximo REGISTER.
+                continue
+            match = re.fullmatch(r'SIP/2.0 ([0-9]{3}) .+', start)
+            via = headers.get('via', [])
+            # Diagnósticos apenas de categoria: não publicar Call-ID,
+            # cabeçalhos, senha SIP nem bytes de mídia no relatório CI.
+            if not match:
+                raise ValueError('DTMF resposta: método SIP inesperado')
+            if single(headers, 'call-id') != dialog.call_id:
+                raise ValueError('DTMF resposta: diálogo divergente')
+            if single(headers, 'cseq') != f'{dialog.cseq} BYE':
+                raise ValueError('DTMF resposta: CSeq divergente')
+            if not via or not re.search(r';branch='+re.escape(branch)+r'(?:;|$)', via[0]):
+                raise ValueError('DTMF resposta: Via divergente')
+            if (tag(single(headers, 'from')) != tag(dialog.local)
+                    or tag(single(headers, 'to')) != tag(dialog.remote)):
+                raise ValueError('DTMF resposta: tag divergente')
+            self.events.append('response:'+match[1])
+            if int(match[1]) >= 200:
+                # 481 é admissível SOMENTE se o BYE remoto já encerrou
+                # este mesmo diálogo e foi confirmado com 200.
+                return 200 if remote_bye_seen and int(match[1]) in (200, 481) else int(match[1])
+
     def await_hangup(self, dialog):
         start, headers, _ = self.next_message(time.monotonic()+10)
         self.validate_incoming(dialog, start, headers, 'BYE')

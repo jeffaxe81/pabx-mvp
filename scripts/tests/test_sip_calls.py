@@ -150,3 +150,83 @@ def test_contact_rejects_external_host_and_invalid_port(uri):
     from lab.sip_calls import contact_uri
     with pytest.raises(ValueError):
         contact_uri({'contact':['<'+uri+'>']})
+
+def test_dtmf_hangup_accepts_correlated_remote_bye_without_wrong_transaction():
+    from lab.sip_calls import Dialog
+    client, server = socket.socketpair()
+    client.settimeout(2)
+    server.settimeout(2)
+    peer = peer_on(client)
+    dialog = Dialog('dtmf-test@localhost',
+                    '<sip:t1-1001@localhost>;tag=local',
+                    '<sip:asterisk@localhost>;tag=remote',
+                    'sip:asterisk@127.0.0.1:5061;transport=tls', 2)
+    seen = []
+    errors = []
+
+    def serve():
+        try:
+            start, headers, _ = read_message(server)
+            assert start.startswith('BYE ')
+            assert headers['call-id'] == [dialog.call_id]
+            wire = ('BYE sip:t1-1001@localhost SIP/2.0\r\n'
+                    'Via: SIP/2.0/TLS localhost;branch=z9hG4bKtest\r\n'
+                    'From: '+dialog.remote+'\r\nTo: '+dialog.local+'\r\n'
+                    'Call-ID: '+dialog.call_id+'\r\nCSeq: 77 BYE\r\n'
+                    'Content-Length: 0\r\n\r\n')
+            server.sendall(wire.encode('ascii'))
+            start, response_headers, _ = read_message(server)
+            seen.append(start.startswith('SIP/2.0 200 '))
+            seen.append(response_headers['call-id'] == [dialog.call_id])
+            # A resposta ao BYE iniciado pelo cliente ainda precisa ser consumida.
+            server.sendall(response(headers, 200))
+        except BaseException as exc:
+            errors.append(type(exc).__name__)
+        finally:
+            server.close()
+
+    thread = threading.Thread(target=serve, daemon=True)
+    thread.start()
+    try:
+        assert peer.hangup_or_accept_remote_bye(dialog) == 200
+        thread.join(3)
+        assert seen == [True, True]
+        assert not errors
+        assert 'remote_bye_acknowledged' in peer.events
+    finally:
+        peer.close()
+        thread.join(3)
+
+
+def test_dtmf_hangup_rejects_remote_bye_from_other_dialogue():
+    from lab.sip_calls import Dialog
+    client, server = socket.socketpair()
+    client.settimeout(2)
+    server.settimeout(2)
+    peer = peer_on(client)
+    dialog = Dialog('expected@localhost',
+                    '<sip:t1-1001@localhost>;tag=local',
+                    '<sip:asterisk@localhost>;tag=remote',
+                    'sip:asterisk@127.0.0.1:5061;transport=tls', 2)
+
+    def serve():
+        try:
+            read_message(server)
+            server.sendall((
+                'BYE sip:t1-1001@localhost SIP/2.0\r\n'
+                'Via: SIP/2.0/TLS localhost;branch=z9hG4bKtest\r\n'
+                'From: '+dialog.remote+'\r\nTo: '+dialog.local+'\r\n'
+                'Call-ID: unrelated@localhost\r\nCSeq: 77 BYE\r\n'
+                'Content-Length: 0\r\n\r\n').encode('ascii'))
+        finally:
+            server.close()
+
+    thread = threading.Thread(target=serve, daemon=True)
+    thread.start()
+    try:
+        with pytest.raises(ValueError, match='diálogo'):
+            peer.hangup_or_accept_remote_bye(dialog)
+        assert 'remote_bye_acknowledged' not in peer.events
+    finally:
+        peer.close()
+        thread.join(3)

@@ -55,10 +55,18 @@ def inspected_voicemail_channel(raw, endpoint, tenant):
     return {"exact": exact, "no_foreign": exact}
 
 
-def exercise_voicemail(container, prepared, report):
+def required_voicemail_dtmf_checks():
+    """Comprova negociação/transmissão, não autenticação da caixa postal."""
+    return {f'{name}:{tenant}' for name in ('vm_dtmf_negotiated',
+            'vm_dtmf_sent') for tenant, _ in CASES}
+
+
+def exercise_voicemail(container, prepared, report, *, dtmf=False):
     from .asterisk_lab import cli
     checks = report["checks"]
     checks.update({name: False for name in required_voicemail_checks()})
+    if dtmf:
+        checks.update({name: False for name in required_voicemail_dtmf_checks()})
     report["live_voicemail_route_tested"] = False
     report["voicemail_route_cases"] = {}
 
@@ -81,7 +89,7 @@ def exercise_voicemail(container, prepared, report):
             peer = CallPeer("127.0.0.1", 5061, prepared["ca"],
                             name, prepared["credentials"][name])
             resources.callback(peer.close)
-            media = SrtpMedia()
+            media = SrtpMedia(dtmf=dtmf)
             resources.callback(media.close)
             checks["vm_registered:" + tenant] = peer.register() == 200
             if not checks["vm_registered:" + tenant]:
@@ -90,6 +98,12 @@ def exercise_voicemail(container, prepared, report):
             # nas provas de chamadas com SRTP, mas a extensão é *97.
             dialog = peer.dial("*97", media)
             checks["vm_answered:" + tenant] = True
+            if dtmf:
+                # O SDP precisa anunciar e aceitar RFC4733 sobre SRTP.
+                # Ainda não prova que VoiceMailMain validou qualquer PIN.
+                checks["vm_dtmf_negotiated:" + tenant] = (
+                    media.address is not None and media.rx is not None
+                )
             deadline = time.monotonic() + 4
             while time.monotonic() < deadline:
                 observation = inspected_voicemail_channel(
@@ -101,7 +115,14 @@ def exercise_voicemail(container, prepared, report):
                 if checks["vm_exact_mailbox:" + tenant] and checks["vm_no_foreign_mailbox:" + tenant]:
                     break
                 time.sleep(0.1)
-            checks["vm_bye:" + tenant] = peer.hangup(dialog) == 200
+            if dtmf and checks["vm_exact_mailbox:" + tenant]:
+                # Um dígito sintético, insuficiente para autenticar PIN.
+                # Não registrar dígitos, pacotes ou segredos em relatórios.
+                media.send_dtmf('1')
+                checks["vm_dtmf_sent:" + tenant] = True
+            bye = (peer.hangup_or_accept_remote_bye(dialog) if dtmf
+                   else peer.hangup(dialog))
+            checks["vm_bye:" + tenant] = bye == 200
             peer.register(expires=0)
         deadline = time.monotonic() + 6
         while time.monotonic() < deadline:
@@ -121,3 +142,8 @@ def exercise_voicemail(container, prepared, report):
     report["live_voicemail_route_tested"] = all(
         checks[name] is True for name in required_voicemail_checks()
     )
+    if dtmf:
+        report["voicemail_dtmf_transport_only"] = all(
+            checks[name] is True for name in required_voicemail_dtmf_checks()
+        )
+        report["voicemail_pin_authentication_verified"] = False
