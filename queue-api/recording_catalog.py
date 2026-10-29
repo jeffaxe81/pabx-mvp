@@ -40,6 +40,7 @@ def load_manifest(path):
         raise ValueError("manifesto vazio ou excede o limite de registros")
     records = []
     seen = set()
+    ref_tenants = {}
     for number, line in enumerate(lines, start=1):
         try:
             row = json.loads(line)
@@ -62,6 +63,9 @@ def load_manifest(path):
             or not owner.startswith(tenant + "-")
         ):
             raise ValueError(f"ramal de outra empresa ou inválido na linha {number}")
+        if ref in ref_tenants and ref_tenants[ref] != tenant:
+            raise ValueError(f"referência de origem compartilhada entre empresas, linha {number}")
+        ref_tenants[ref] = tenant
         if filename in seen:
             raise ValueError(f"arquivo repetido no manifesto, linha {number}")
         seen.add(filename)

@@ -147,3 +147,18 @@ def test_symlink_manifest_rejected(tmp_path):
     alias.symlink_to(manifest)
     with pytest.raises(ValueError, match="regular"):
         reconcile_catalog(policy, media, alias)
+
+def test_one_source_reference_cannot_classify_two_tenants(tmp_path):
+    media, policy, manifest = setup_files(tmp_path)
+    other_name = "20261022-120100-551199998888-1010.wav"
+    (media / other_name).write_bytes(b"RIFF TEST SECOND")
+    first = json.loads(manifest.read_text())
+    second = {
+        "filename": other_name, "tenant": "t10", "source_ref": first["source_ref"],
+        "owner_extension": "t10-recepcao",
+    }
+    manifest.write_text(json.dumps(first) + "\n" + json.dumps(second) + "\n")
+    previous = policy.read_bytes()
+    with pytest.raises(ValueError, match="compartilhada entre empresas"):
+        reconcile_catalog(policy, media, manifest, True)
+    assert policy.read_bytes() == previous
