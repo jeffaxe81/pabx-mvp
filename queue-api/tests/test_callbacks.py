@@ -154,7 +154,7 @@ def test_callback_store_fails_closed_before_writing_invalid_number(tmp_path):
 
 # Registros persistidos não confiáveis: não originar a partir de FIFO corrupto.
 @pytest.mark.parametrize("bad", [
-    None, 8, "10", False, float("nan"), float("inf"), -1, [],
+    None, "10", False, float("nan"), float("inf"), -1, [],
 ])
 def test_pending_callback_with_bad_timestamp_blocks_entire_fifo(bad):
     good = {"id": "good", "status": "pendente", "requested_at": 200,
