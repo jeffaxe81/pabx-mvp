@@ -141,6 +141,7 @@ def load_recording_policy(path):
                 return None
         elif cred.get("extension") is not None:
             return None
+    source_tenants = {}
     for filename, metadata in policy["recordings"].items():
         if not _valid_filename(filename) or not isinstance(metadata, dict):
             return None
@@ -148,10 +149,13 @@ def load_recording_policy(path):
         if not isinstance(tenant, str) or not TENANT.fullmatch(tenant):
             return None
         source_ref = metadata.get("source_ref")
-        if source_ref is not None and (
-            not isinstance(source_ref, str) or not SOURCE_REF.fullmatch(source_ref)
-        ):
-            return None
+        if source_ref is not None:
+            if not isinstance(source_ref, str) or not SOURCE_REF.fullmatch(source_ref):
+                return None
+            # A mesma prova CDR/AMI não pode atestar duas empresas.
+            previous = source_tenants.setdefault(source_ref, tenant)
+            if previous != tenant:
+                return None
         owner = metadata.get("owner_extension")
         if owner is not None and not _extension_belongs_to_tenant(owner, tenant):
             return None
