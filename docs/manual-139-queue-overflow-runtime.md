@@ -16,6 +16,9 @@ A prova cobre `t1`, `t2` e `t3`.
    idioma em inglês e o timeout de **2 segundos**, depois executa
    `Goto(1000,1)`. O bloco original de `1000`,
    `fila-overflow` e `fazer-overflow` não é substituído.
+   A entrada é preparada **antes** do snapshot das rotas diretas
+   `1010/1011`, de modo que a restauração de seus destinos WebRTC
+   não apague a extensão temporária de overflow.
 2. Um ramal `tN-1001` registra por SIP/TLS, negocia mídia SRTP e
    liga para `9987`, que entrega a chamada ao fluxo real de fila.
 3. Durante a ligação, o laboratório lê `core show channels concise`
