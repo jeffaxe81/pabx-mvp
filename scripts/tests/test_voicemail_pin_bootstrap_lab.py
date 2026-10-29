@@ -3,6 +3,7 @@ from pathlib import Path
 
 from lab.voicemail_pin_checks import validate_prepared_voicemail
 from lab.asterisk_lab import prepare
+from lab.voicemail_checks import CASES
 
 
 def sample():
@@ -69,3 +70,17 @@ def test_preflight_refuses_obvious_eight_digit_sequences():
     for weak in ("12345678", "87654321", "11223344", "12121212"):
         changed = static.replace("12345679", weak)
         assert not validate_prepared_voicemail(changed, dynamic)["ok"]
+
+
+def test_voicemail_runtime_cases_use_sip_endpoints_not_deposit_only_mailboxes(tmp_path):
+    """The t3 fallback mailbox is not a PJSIP account and cannot REGISTER."""
+    assert CASES == (("t1", "t1-1001"), ("t2", "t2-1001"),
+                     ("t3", "t3-recepcao"))
+    root = Path(__file__).resolve().parents[2]
+    prepared = prepare(root, tmp_path / "sip-voicemail-staging")
+    assert all(endpoint in prepared["credentials"] for _, endpoint in CASES)
+    assert "t3-1001" not in prepared["credentials"]
+    dynamic = (prepared["conf"] / "voicemail_tenants" / "t3.conf").read_text()
+    assert "[t3]" in dynamic
+    assert "t3-1001 => " in dynamic
+    assert "t3-recepcao => " in dynamic
