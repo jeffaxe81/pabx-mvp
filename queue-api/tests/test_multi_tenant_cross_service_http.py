@@ -198,3 +198,21 @@ def test_policy_revocation_denies_recordings_without_restarting_server(service_b
     rpolicy.write_text(json.dumps(original))
     assert _http(port, "GET", "/api/recordings", RECORDING_TOKEN["t1"])[0] == 401
     assert _http(port, "GET", "/api/recordings", RECORDING_TOKEN["t2"])[0] == 200
+
+@pytest.mark.parametrize("tenant", TENANTS)
+@pytest.mark.parametrize("target", TENANTS)
+def test_every_cross_tenant_pickup_pair_is_rejected_before_ami(
+    service_boundary, tenant, target,
+):
+    if tenant == target:
+        return
+    port, spy, _ = service_boundary
+    status, _, body = _http(
+        port, "POST", "/api/queue/pickup", QUEUE_TOKEN[tenant],
+        payload={"channel": "Local/" + target + "-private",
+                 "extension": tenant + "-recepcao",
+                 "queue": "fila-" + tenant},
+    )
+    assert status == 403
+    assert spy.actions == []
+    assert b"PRIVATE AUDIO" not in body
