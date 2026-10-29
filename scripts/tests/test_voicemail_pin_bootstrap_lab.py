@@ -3,6 +3,7 @@ from pathlib import Path
 
 from lab.voicemail_pin_checks import validate_prepared_voicemail
 from lab.asterisk_lab import prepare
+from lab.call_checks import prepare_calls
 from lab.voicemail_checks import CASES
 
 
@@ -72,15 +73,17 @@ def test_preflight_refuses_obvious_eight_digit_sequences():
         assert not validate_prepared_voicemail(changed, dynamic)["ok"]
 
 
-def test_voicemail_runtime_cases_use_sip_endpoints_not_deposit_only_mailboxes(tmp_path):
-    """The t3 fallback mailbox is not a PJSIP account and cannot REGISTER."""
+def test_voicemail_runtime_lab_endpoint_is_ephemeral_not_production(tmp_path):
+    """t3-1001 is a deposit-only mailbox until prepare_calls adds a lab SIP peer."""
     assert CASES == (("t1", "t1-1001"), ("t2", "t2-1001"),
-                     ("t3", "t3-recepcao"))
+                     ("t3", "t3-1001"))
     root = Path(__file__).resolve().parents[2]
     prepared = prepare(root, tmp_path / "sip-voicemail-staging")
-    assert all(endpoint in prepared["credentials"] for _, endpoint in CASES)
     assert "t3-1001" not in prepared["credentials"]
     dynamic = (prepared["conf"] / "voicemail_tenants" / "t3.conf").read_text()
     assert "[t3]" in dynamic
     assert "t3-1001 => " in dynamic
     assert "t3-recepcao => " in dynamic
+    prepare_calls(root, prepared, "HEAD")
+    assert all(endpoint in prepared["credentials"] for _, endpoint in CASES)
+    assert "t3-1001" in (prepared["conf"] / "generated" / "pjsip_dynamic.conf").read_text()
