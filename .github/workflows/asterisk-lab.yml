@@ -12,6 +12,29 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  access-homologation:
+    name: Asterisk | PIN e mensagens voicemail, gravação CDR e acesso HTTP
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Instalar cliente SRTP fixado
+        run: python3 -m pip install -r lab/requirements.txt
+      - name: Homologar PIN, mensagens sintéticas, MixMonitor, CDR e HTTP
+        run: python3 -m lab.asterisk_lab --calls --recordings --voicemail-auth --report lab-results/access-homologation.json
+      - name: Preservar somente evidências sanitizadas de acesso
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: asterisk-real-access-homologation-${{ github.sha }}
+          path: lab-results/access-homologation.json
+          if-no-files-found: error
+          retention-days: 14
   incoming-dids:
     name: Asterisk | DIDs conhecidos e rejeição segura
     runs-on: ubuntu-24.04

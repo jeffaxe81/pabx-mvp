@@ -188,7 +188,7 @@ def cleanup_owned(name, ownership):
     return result
 
 
-def summarize(checks, *, calls=False, webrtc=False, dids=False, isolation=False, voicemail=False, ami=False, queues=False):
+def summarize(checks, *, calls=False, webrtc=False, dids=False, isolation=False, voicemail=False, ami=False, queues=False, voicemail_auth=False, recordings=False):
     required = {'real_runtime', 'tls_transport', 'wss_transport', 'container_removed',
                 'checkout_clean', 'runtime_mounts', 'source_label'}
     required.update(name+':'+tid for tid in ('t1', 't2', 't3')
@@ -214,12 +214,18 @@ def summarize(checks, *, calls=False, webrtc=False, dids=False, isolation=False,
     if queues:
         from .queue_tenant_checks import required_queue_runtime_checks
         required.update(required_queue_runtime_checks())
+    if voicemail_auth:
+        from .voicemail_auth_runtime import required_voicemail_auth_checks
+        required.update(required_voicemail_auth_checks())
+    if recordings:
+        from .recording_checks import required_recording_checks
+        required.update(required_recording_checks())
     passed = sum(value is True for value in checks.values())
     return {'passed': passed, 'total': len(checks),
             'success': set(checks) == required and passed == len(required)}
 
 
-def run(root, report, *, calls=False, webrtc=False, dids=False, isolation=False, voicemail=False, ami=False, queues=False):
+def run(root, report, *, calls=False, webrtc=False, dids=False, isolation=False, voicemail=False, ami=False, queues=False, voicemail_auth=False, recordings=False):
     if webrtc and not calls:
         raise ValueError('WebRTC requer o modo de chamadas')
     if dids and not calls:
@@ -230,6 +236,8 @@ def run(root, report, *, calls=False, webrtc=False, dids=False, isolation=False,
         raise ValueError('voicemail real requer modo de chamadas')
     if queues and not calls:
         raise ValueError('filas reais requerem modo de chamadas')
+    if (voicemail_auth or recordings) and not calls:
+        raise ValueError('homologação de acesso requer modo de chamadas')
     source = command(['git', '-C', str(root), 'rev-parse', 'HEAD']).stdout.strip()
     if not re.fullmatch(r'[0-9a-f]{40}', source):
         raise ValueError('SHA do checkout inválido')
@@ -259,6 +267,9 @@ def run(root, report, *, calls=False, webrtc=False, dids=False, isolation=False,
     if queues:
         report.update(schema_version=8, kind='real_asterisk_tenant_queue_lab',
                       live_queue_tenant_routing_tested=False)
+    if voicemail_auth or recordings:
+        report.update(schema_version=9, kind='real_asterisk_access_homologation_lab',
+                      live_voicemail_auth_tested=False, live_recording_access_tested=False)
     clean = command(['git', '-C', str(root), 'diff', '--quiet', 'HEAD', '--',
                      'asterisk', 'admin-api/tenants.py', 'admin-api/conf_generator.py',
                      'scripts/secrets_generator.py', 'lab','webphone','package.json','package-lock.json',
@@ -276,6 +287,12 @@ def run(root, report, *, calls=False, webrtc=False, dids=False, isolation=False,
         if calls:
             from .call_checks import prepare_calls
             prepare_calls(root, prepared, source)
+        if voicemail_auth or recordings:
+            from .voicemail_auth_runtime import prepare_voicemail_auth
+            prepare_voicemail_auth(root, prepared, source)
+        if recordings:
+            from .recording_checks import prepare_recordings
+            prepare_recordings(root, prepared, source)
         if webrtc:
             from .webrtc_checks import prepare_webrtc
             prepare_webrtc(root,prepared,source)
@@ -378,6 +395,12 @@ def run(root, report, *, calls=False, webrtc=False, dids=False, isolation=False,
         if queues:
             from .queue_tenant_checks import exercise_queues
             exercise_queues(container_id, prepared, report)
+        if recordings:
+            from .recording_checks import exercise_recordings
+            exercise_recordings(root, container_id, prepared, report)
+        if voicemail_auth:
+            from .voicemail_auth_runtime import exercise_voicemail_auth
+            exercise_voicemail_auth(container_id, prepared, report)
     finally:
         if attempted_create:
             cleaned = cleanup_owned(name, ownership)
@@ -387,7 +410,7 @@ def run(root, report, *, calls=False, webrtc=False, dids=False, isolation=False,
         report['private_staging_retained'] = retain_staging
         if not retain_staging:
             shutil.rmtree(folder)
-    report.update(summarize(report['checks'], calls=calls,webrtc=webrtc,dids=dids,isolation=isolation,voicemail=voicemail,ami=ami,queues=queues))
+    report.update(summarize(report['checks'], calls=calls,webrtc=webrtc,dids=dids,isolation=isolation,voicemail=voicemail,ami=ami,queues=queues,voicemail_auth=voicemail_auth,recordings=recordings))
     return report['success']
 
 
@@ -401,6 +424,8 @@ def main(argv=None):
     parser.add_argument('--voicemail', action='store_true', help='validar a rota *97 SIP real por tenant')
     parser.add_argument('--ami', action='store_true', help='verificar OriginateResponse no AMI real isolado')
     parser.add_argument('--queues', action='store_true', help='validar fila exata t1/t2/t3 via SIP real')
+    parser.add_argument('--voicemail-auth', action='store_true', help='PIN, tentativas e mensagens sintéticas t1/t10 em SRTP real')
+    parser.add_argument('--recordings', action='store_true', help='MixMonitor, CDR, catálogo e autorização HTTP reais')
     args = parser.parse_args(argv)
     if args.webrtc and not args.calls:
         parser.error('--webrtc requer --calls')
@@ -412,6 +437,8 @@ def main(argv=None):
         parser.error('--voicemail requer --calls')
     if args.queues and not args.calls:
         parser.error('--queues requer --calls')
+    if (args.voicemail_auth or args.recordings) and not args.calls:
+        parser.error('--voicemail-auth e --recordings requerem --calls')
     report = {}
     try:
         kwargs = {'calls':args.calls, 'webrtc':args.webrtc, 'dids':args.dids}
@@ -423,6 +450,10 @@ def main(argv=None):
             kwargs['ami'] = True
         if args.queues:
             kwargs['queues'] = True
+        if args.voicemail_auth:
+            kwargs['voicemail_auth'] = True
+        if args.recordings:
+            kwargs['recordings'] = True
         success = run(Path(__file__).resolve().parents[1], report, **kwargs)
     except Exception as exc:
         success = False
