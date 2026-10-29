@@ -47,8 +47,11 @@ def prepare_queue_overflow(prepared):
         path = destinations[tenant]
         anchor = f"[{tenant}-internal]\n"
         body = staged[path]
-        if body.count(anchor) != 1 or f"exten => {EXTENSION}," in body:
+        if body.count(anchor) != 1:
             raise ValueError("contexto de overflow ausente/duplicado")
+        section = body.split(anchor, 1)[1].split("\n[", 1)[0]
+        if f"exten => {EXTENSION}," in section:
+            raise ValueError("entrada de overflow duplicada no contexto")
         if not all(x in body for x in (
             "same => n,Queue(", "same => n,GotoIf(", "fila-overflow",
             "fazer-overflow", "Set(FILA_OVERFLOW=",
