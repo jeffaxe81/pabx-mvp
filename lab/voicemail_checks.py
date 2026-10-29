@@ -50,7 +50,7 @@ def inspected_voicemail_channel(raw, endpoint, tenant):
         return negative
     row = matching[0]
     exact = (row[1] == tenant + "-internal" and row[2] == "*97"
-             and row[5] == "VoiceMailMain"
+             and row[4] == "Up" and row[5] == "VoiceMailMain"
              and row[6] == endpoint + "@" + tenant)
     return {"exact": exact, "no_foreign": exact}
 

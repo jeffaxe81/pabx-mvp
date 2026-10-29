@@ -96,3 +96,11 @@ def test_mismatched_identity_fails_closed(endpoint, tenant):
     assert inspected_voicemail_channel(good, endpoint, tenant) == {
         "exact": False, "no_foreign": False,
     }
+
+@pytest.mark.parametrize("channel_state", ["Ring", "Down", "Ringing", "", "Busy"])
+def test_voicemail_route_requires_live_up_channel(channel_state):
+    row = ("PJSIP/t1-1001-00000001!t1-internal!*97!5!" +
+           channel_state + "!VoiceMailMain!t1-1001@t1!123.1")
+    assert inspected_voicemail_channel(row, "t1-1001", "t1") == {
+        "exact": False, "no_foreign": False,
+    }
