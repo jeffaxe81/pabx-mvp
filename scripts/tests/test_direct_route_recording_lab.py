@@ -82,3 +82,55 @@ def test_cdr_requires_same_tenant_origin_destination_answer(tenant, number):
         row.replace(f",{number},", ",1000,"),
     ):
         assert direct_cdr_reference(bad, tenant, number) is None
+
+
+def test_restoration_preserves_original_webrtc_destinations(tmp_path, monkeypatch):
+    from lab.direct_route_recording_checks import restore_direct_route_checks
+    stage = tmp_path / "asterisk"
+    stage.mkdir()
+    path = stage / "extensions.conf"
+    baseline = (ROOT / "asterisk/extensions.conf").read_text(encoding="utf-8")
+    path.write_text(baseline, encoding="utf-8")
+    prepared = {"conf": stage}
+    prepare_direct_route_checks(prepared)
+    assert prepared["lab_direct_route_staged"]
+    seen = []
+
+    def fake_cli(container, cmd):
+        assert container == "test-container"
+        seen.append(cmd)
+        if cmd == "dialplan reload":
+            return "Dialplan reloaded."
+        if cmd.startswith("dialplan show "):
+            dial = cmd.partition("dialplan show ")[2]
+            number, _, ctx = dial.partition("@")
+            tenant = ctx.split("-internal")[0]
+            if tenant not in {"t1", "t2"} or number not in {"1010", "1011"}:
+                return ""
+            target = tenant + ("-recepcao" if number == "1010" else "-recepcao-2")
+            return ("MixMonitor(/var/spool/asterisk/monitor/file.wav,b)\n"
+                    + f"Dial(PJSIP/{target},20,g)\n")
+        return ""
+
+    monkeypatch.setattr("lab.asterisk_lab.cli", fake_cli)
+    restore_direct_route_checks("test-container", prepared)
+    assert path.read_text(encoding="utf-8") == baseline
+    assert prepared["lab_direct_route_restored"] is True
+    assert prepared["lab_direct_route_staged"] is False
+    assert len(seen) == 5
+    with pytest.raises(ValueError, match="ausente"):
+        restore_direct_route_checks("test-container", prepared)
+
+
+def test_restore_rejects_missing_webrtc_destination(tmp_path, monkeypatch):
+    from lab.direct_route_recording_checks import restore_direct_route_checks
+    stage = tmp_path / "asterisk"
+    stage.mkdir()
+    path = stage / "extensions.conf"
+    baseline = (ROOT / "asterisk/extensions.conf").read_text(encoding="utf-8")
+    path.write_text(baseline, encoding="utf-8")
+    prepared = {"conf": stage}
+    prepare_direct_route_checks(prepared)
+    monkeypatch.setattr("lab.asterisk_lab.cli", lambda *_: "Dialplan reloaded.")
+    with pytest.raises(ValueError, match="não foi restaurada"):
+        restore_direct_route_checks("test-container", prepared)
