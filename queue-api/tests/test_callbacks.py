@@ -392,3 +392,52 @@ def test_closed_callback_historical_fields_do_not_block_pending_queue(tmp_path):
               "caller_id_num": None, "attempts": "legacy"}
     save_callbacks(path, [closed, good])
     assert next_pending_callback(load_callbacks(path))["id"] == good["id"]
+
+
+# Marco 9 — cancelamento administrativo sem originar chamadas.
+def test_cancel_pending_callback_preserves_other_tenants_and_history(tmp_path):
+    from callbacks import cancel_pending_callback
+    path = tmp_path / "callbacks.json"
+    own = add_callback_request(path, "5511999998888", tenant="t1")
+    other = add_callback_request(path, "5511988877777", tenant="t10")
+    legacy = add_callback_request(path, "5511977766666")
+    ok, reason = cancel_pending_callback(path, own["id"], "t1")
+    assert (ok, reason) == (True, None)
+    entries = {c["id"]: c for c in load_callbacks(path)}
+    assert entries[own["id"]]["status"] == "cancelado"
+    assert entries[own["id"]]["cancelled_at"] >= own["requested_at"]
+    assert entries[other["id"]]["status"] == "pendente"
+    assert entries[legacy["id"]]["status"] == "pendente"
+    assert mark_callback_calling(path, own["id"])[0] is False
+
+
+def test_cancel_callback_rejects_cross_tenant_legacy_and_second_cancel(tmp_path):
+    from callbacks import cancel_pending_callback
+    path = tmp_path / "callbacks.json"
+    own = add_callback_request(path, "5511999998888", tenant="t1")
+    legacy = add_callback_request(path, "5511988877777")
+    before = path.read_bytes()
+    for callback_id, tenant in [(own["id"], "t10"), (legacy["id"], "t1"),
+                                (own["id"], "t01"), ("missing", "t1")]:
+        assert cancel_pending_callback(path, callback_id, tenant) == (False, "not_found")
+        assert path.read_bytes() == before
+    assert cancel_pending_callback(path, own["id"], "t1")[0]
+    cancelled = path.read_bytes()
+    assert cancel_pending_callback(path, own["id"], "t1") == (False, "not_pending")
+    assert path.read_bytes() == cancelled
+
+
+def test_cancel_callback_rejects_inflight_and_corrupted_catalog(tmp_path):
+    from callbacks import cancel_pending_callback, save_callbacks
+    path = tmp_path / "callbacks.json"
+    own = add_callback_request(path, "5511999998888", tenant="t1")
+    assert mark_callback_calling(path, own["id"])[0]
+    before = path.read_bytes()
+    assert cancel_pending_callback(path, own["id"], "t1") == (False, "not_pending")
+    assert path.read_bytes() == before
+    save_callbacks(path, [{**load_callbacks(path)[0], "id": "same"},
+                          {**load_callbacks(path)[0], "id": "same"}])
+    corrupted = path.read_bytes()
+    with pytest.raises(ValueError):
+        cancel_pending_callback(path, own["id"], "t1")
+    assert path.read_bytes() == corrupted
