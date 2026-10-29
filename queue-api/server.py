@@ -1157,7 +1157,7 @@ def _retention_cleanup_loop():
         if RECORDINGS_RETENTION_DAYS > 0:
             deleted = delete_expired_recordings(RECORDINGS_DIR, RECORDINGS_RETENTION_DAYS)
             if deleted:
-                print(f"[retenção] {len(deleted)} gravação(ões) expurgada(s): {deleted}")
+                print(f"[retenção] {len(deleted)} gravação(ões) expurgada(s)")
         time.sleep(24 * 3600)
 
 
