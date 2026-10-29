@@ -65,7 +65,8 @@ def rtp_payload(packet):
 
 
 class SrtpMedia:
-    def __init__(self):
+    def __init__(self, *, dtmf=False):
+        self.dtmf = dtmf
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.socket.bind(('127.0.0.1', 0))
         self.socket.setblocking(False)
@@ -85,12 +86,21 @@ class SrtpMedia:
 
     def offer(self):
         return (f'v=0\r\no=- 1 1 IN IP4 127.0.0.1\r\ns=AXE Private Lab\r\n'
-                f'c=IN IP4 127.0.0.1\r\nt=0 0\r\nm=audio {self.port} RTP/SAVP 0\r\n'
-                f'a=rtpmap:0 PCMU/8000\r\na=crypto:{self.crypto_tag} {PROFILE} '
+                f'c=IN IP4 127.0.0.1\r\nt=0 0\r\nm=audio {self.port} RTP/SAVP {"0 101" if self.dtmf else "0"}\r\n'
+                f'a=rtpmap:0 PCMU/8000\r\n'
+                + ('a=rtpmap:101 telephone-event/8000\r\na=fmtp:101 0-16\r\n' if self.dtmf else '')
+                + f'a=crypto:{self.crypto_tag} {PROFILE} '
                 f'inline:{base64.b64encode(self.key).decode()}\r\na=sendrecv\r\n').encode('ascii')
 
     def negotiate(self, sdp):
         address, key = parse_sdp(sdp)
+        if self.dtmf:
+            lines = sdp.decode('ascii').splitlines()
+            media = [line.split() for line in lines if line.startswith('m=audio ')]
+            maps = [line for line in lines if line.startswith('a=rtpmap:101 ')]
+            if (len(media) != 1 or '101' not in media[0][3:]
+                    or maps != ['a=rtpmap:101 telephone-event/8000']):
+                raise ValueError('DTMF RFC4733 não negociado')
         self.crypto_tag = re.search(rb'(?m)^a=crypto:([1-9][0-9]*) ', sdp)[1].decode('ascii')
         self.rx = pylibsrtp.Session(pylibsrtp.Policy(
             key=key, ssrc_type=pylibsrtp.Policy.SSRC_ANY_INBOUND))
@@ -101,6 +111,39 @@ class SrtpMedia:
         self.sequence = (self.sequence + 1) & 0xffff
         self.timestamp = (self.timestamp + len(payload)) & 0xffffffff
         return self.tx.protect(packet)
+
+    def protect_dtmf(self, digit, *, duration, end=False, marker=False, timestamp=None):
+        """Protege evento RFC4733 (PT 101) pelo SRTP do próprio diálogo.
+
+        Não registra dígitos, PIN ou bytes em logs/relatórios. Apenas lab.
+        """
+        codes = {str(i): i for i in range(10)}
+        codes.update({'*': 10, '#': 11, 'A': 12, 'B': 13, 'C': 14, 'D': 15})
+        if (not self.dtmf or digit not in codes or type(duration) is not int
+                or not 1 <= duration <= 65535):
+            raise ValueError('evento DTMF inválido')
+        header = struct.pack('!BBHII', 0x80, 101 | (0x80 if marker else 0),
+                             self.sequence, self.timestamp if timestamp is None else timestamp,
+                             self.ssrc)
+        event = struct.pack('!BBH', codes[digit], (0x80 if end else 0) | 10, duration)
+        self.sequence = (self.sequence + 1) & 0xffff
+        return self.tx.protect(header + event)
+
+    def send_dtmf(self, digit):
+        """Envia evento de 140ms e três pacotes de término pela mídia SRTP.
+
+        Não confirma PIN aceito pelo VoiceMailMain; isso requer outro teste.
+        """
+        if self.address is None or self.rx is None or not self.dtmf:
+            raise ValueError('DTMF SRTP não negociado')
+        start = self.timestamp
+        for index, duration in enumerate((160, 320, 480, 640, 800, 960, 1120, 1120, 1120)):
+            packet = self.protect_dtmf(digit, duration=duration,
+                                       marker=index == 0, end=index >= 6,
+                                       timestamp=start)
+            self.socket.sendto(packet, self.address)
+            time.sleep(0.02)
+        self.timestamp = (start + 1600) & 0xffffffff
 
     def unprotect(self, packet):
         if self.rx is None:
