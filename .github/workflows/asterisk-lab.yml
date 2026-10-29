@@ -156,7 +156,7 @@ jobs:
       - name: Instalar cliente SRTP de laboratorio
         run: python3 -m pip install -r lab/requirements.txt
       - name: Validar *97 via SIP real t1, t2 e t3
-        run: python3 -m lab.asterisk_lab --calls --voicemail --report lab-results/voicemail.json
+        run: python3 -m lab.asterisk_lab --calls --voicemail --voicemail-dtmf --report lab-results/voicemail.json
       - name: Preservar somente prova sanitizada de mailbox
         if: always()
         uses: actions/upload-artifact@v4
