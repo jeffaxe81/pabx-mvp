@@ -201,12 +201,19 @@ class CallPeer(SipTLS):
                 return 200
             match = re.fullmatch(r'SIP/2.0 ([0-9]{3}) .+', start)
             via = headers.get('via', [])
-            if (not match or single(headers, 'call-id') != dialog.call_id
-                    or single(headers, 'cseq') != f'{dialog.cseq} BYE'
-                    or not via or not re.search(r';branch='+re.escape(branch)+r'(?:;|$)', via[0])
-                    or tag(single(headers, 'from')) != tag(dialog.local)
+            # Diagnósticos apenas de categoria: não publicar Call-ID,
+            # cabeçalhos, senha SIP nem bytes de mídia no relatório CI.
+            if not match:
+                raise ValueError('DTMF resposta: método SIP inesperado')
+            if single(headers, 'call-id') != dialog.call_id:
+                raise ValueError('DTMF resposta: diálogo divergente')
+            if single(headers, 'cseq') != f'{dialog.cseq} BYE':
+                raise ValueError('DTMF resposta: CSeq divergente')
+            if not via or not re.search(r';branch='+re.escape(branch)+r'(?:;|$)', via[0]):
+                raise ValueError('DTMF resposta: Via divergente')
+            if (tag(single(headers, 'from')) != tag(dialog.local)
                     or tag(single(headers, 'to')) != tag(dialog.remote)):
-                raise ValueError('resposta de outra transação SIP')
+                raise ValueError('DTMF resposta: tag divergente')
             self.events.append('response:'+match[1])
             if int(match[1]) >= 200:
                 return int(match[1])
