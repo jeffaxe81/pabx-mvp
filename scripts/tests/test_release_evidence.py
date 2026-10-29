@@ -170,3 +170,11 @@ def test_cli_invalid_report_has_error_exit_code(tmp_path, capsys):
     assert release.main(["--sha", SHA, "--lab-audit", str(a),
                          "--homologation", str(b)]) == 2
     assert "inválidas" in capsys.readouterr().err
+
+def test_release_evidence_rejects_duplicate_top_level_and_nested_keys(tmp_path):
+    path = tmp_path / "untrusted.json"
+    for raw in ('{"schema_version":1,"schema_version":1}',
+                '{"checks":{"tenant_isolation":true,"tenant_isolation":false}}'):
+        path.write_text(raw, encoding="utf-8")
+        with pytest.raises(ValueError, match="duplicada"):
+            release.read_report(path)

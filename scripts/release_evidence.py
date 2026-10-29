@@ -16,6 +16,16 @@ SHA_RE = re.compile(r"[0-9a-fA-F]{40}\Z")
 MAX_EVIDENCE_BYTES = 1024 * 1024
 
 
+def reject_duplicate_keys(pairs):
+    """Falha fechado para chaves repetidas, inclusive em objetos internos."""
+    output = {}
+    for key, value in pairs:
+        if key in output:
+            raise ValueError("evidência JSON com chave duplicada")
+        output[key] = value
+    return output
+
+
 def read_report(path):
     location = Path(path)
     if location.is_symlink() or not location.is_file():
@@ -24,7 +34,7 @@ def read_report(path):
         raise ValueError("arquivo de evidência acima do limite")
     raw = location.read_bytes()
     try:
-        payload = json.loads(raw.decode("utf-8"))
+        payload = json.loads(raw.decode("utf-8"), object_pairs_hook=reject_duplicate_keys)
     except (UnicodeError, json.JSONDecodeError) as exc:
         raise ValueError("arquivo de evidência não é JSON UTF-8") from exc
     return payload, hashlib.sha256(raw).hexdigest()
