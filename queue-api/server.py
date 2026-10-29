@@ -213,9 +213,14 @@ def handle_ami_event(event: dict):
     if screen_pop_error:
         print(f"[AVISO] falha no screen-pop: {screen_pop_error}")
 
-    apply_originate_response(event)
-    apply_campaign_dial_result(event)
-    apply_callback_dial_result(event)
+    try:
+        apply_originate_response(event)
+        apply_campaign_dial_result(event)
+        apply_callback_dial_result(event)
+    except (OSError, UnicodeError, ValueError):
+        # Corrupção do catálogo não pode interromper a recepção AMI.
+        # Nenhum resultado ambíguo é atribuído a uma chamada.
+        print("[AVISO] catalogo de outbound indisponivel; resultado AMI nao aplicado")
 
     callback_request = parse_callback_request_event(event)
     if callback_request:
@@ -224,9 +229,13 @@ def handle_ami_event(event: dict):
                 and extension_tenant(tenant + "-recepcao") == tenant
                 and all(event.get(key) == tenant for key in ("AccountCode", "Accountcode")
                         if key in event)):
-            with outbound_lock(CALLBACKS_PATH):
-                add_callback_request(CALLBACKS_PATH, callback_request["caller_id_num"],
-                                     callback_request["caller_id_name"], tenant=tenant)
+            try:
+                with outbound_lock(CALLBACKS_PATH):
+                    add_callback_request(CALLBACKS_PATH, callback_request["caller_id_num"],
+                                         callback_request["caller_id_name"], tenant=tenant)
+            except (OSError, UnicodeError, ValueError):
+                # Preservar snapshot suspeito; não regravar como lista vazia.
+                print("[AVISO] catalogo de callbacks indisponivel; pedido AMI nao persistido")
 
     survey_result = parse_survey_event(event)
     if survey_result and survey_result.get("tenant"):
