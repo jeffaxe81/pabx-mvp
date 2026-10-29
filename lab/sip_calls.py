@@ -179,6 +179,38 @@ class CallPeer(SipTLS):
             raise ValueError('resposta de outro diálogo SIP')
         return code
 
+    def hangup_or_accept_remote_bye(self, dialog):
+        """Encerra após DTMF; aceita BYE remoto SOMENTE se for do mesmo diálogo.
+
+        Asterisk pode encerrar VoiceMailMain ao receber evento de teclado.
+        Nenhuma resposta de transação aleatória pode satisfazer este teste.
+        """
+        dialog.cseq += 1
+        branch = self.send_request(dialog, 'BYE')
+        self.events.append('bye_sent')
+        deadline = time.monotonic() + 10
+        while True:
+            start, headers, _ = self.next_message(deadline)
+            if start.startswith('BYE '):
+                self.validate_incoming(dialog, start, headers, 'BYE')
+                cseq = re.fullmatch(r'([1-9][0-9]*) BYE', single(headers, 'cseq'))
+                if not cseq:
+                    raise ValueError('CSeq de BYE remoto inválido')
+                self.send_response(headers, 200, local=dialog.local)
+                self.events.append('remote_bye_acknowledged')
+                return 200
+            match = re.fullmatch(r'SIP/2.0 ([0-9]{3}) .+', start)
+            via = headers.get('via', [])
+            if (not match or single(headers, 'call-id') != dialog.call_id
+                    or single(headers, 'cseq') != f'{dialog.cseq} BYE'
+                    or not via or not re.search(r';branch='+re.escape(branch)+r'(?:;|$)', via[0])
+                    or tag(single(headers, 'from')) != tag(dialog.local)
+                    or tag(single(headers, 'to')) != tag(dialog.remote)):
+                raise ValueError('resposta de outra transação SIP')
+            self.events.append('response:'+match[1])
+            if int(match[1]) >= 200:
+                return int(match[1])
+
     def await_hangup(self, dialog):
         start, headers, _ = self.next_message(time.monotonic()+10)
         self.validate_incoming(dialog, start, headers, 'BYE')
