@@ -185,3 +185,4 @@ registrado como regra permanente no prompt master
 132. [Quatro frentes de robustez: PIN, gravações, callbacks e SLA](manual-132-qa-quatro-frentes.md)
 133. [Proveniência CDR exclusiva por empresa em gravações](manual-133-gravacoes-evidencia-exclusiva.md)
 134. [Expurgo de gravações ancorado por FD e proteção de privacidade](manual-134-retencao-gravacoes-fd.md)
+135. [Leitura segura de manifesto e CDR por descritor](manual-135-leitura-segura-cdr-manifesto.md)
