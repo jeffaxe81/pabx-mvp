@@ -68,3 +68,16 @@ def test_callback_panel_excludes_finished_statuses():
 def test_dial_next_callback_uses_correct_endpoint():
     html = load_html()
     assert "/api/callbacks/dial-next" in html
+
+
+def test_pending_callback_cancellation_button_and_endpoint():
+    html = load_html()
+    start = html.index("function renderCallbacks")
+    end = html.index("function dialNextCallback", start)
+    body = html[start:end]
+    assert "c.status === 'pendente'" in body
+    assert "data-cancel-callback" in body
+    assert "function cancelCallback(button)" in body
+    assert "/api/callbacks/${id}/cancel" in body
+    assert "window.confirm" in body
+    assert "button.disabled = true" in body
