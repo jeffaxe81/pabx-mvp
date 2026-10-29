@@ -208,3 +208,72 @@ def test_finite_timestamp_preserves_global_fifo_and_tenant_scoping():
 def test_fifo_rejects_non_list_snapshot_without_crashing():
     for malformed in ({}, "pending", None, False):
         assert next_pending_callback(malformed) is None
+
+
+
+# Marco 9 — identidade de callback única em todo o catálogo persistido.
+def test_duplicate_callback_id_across_tenants_never_claims_or_updates(tmp_path):
+    from callbacks import save_callbacks
+    path = tmp_path / "callbacks.json"
+    own = add_callback_request(path, "5511999998888", tenant="t1")
+    other = {**own, "tenant": "t10", "caller_id_num": "5511988877777"}
+    save_callbacks(path, [own, other])
+    before = path.read_bytes()
+    assert next_pending_callback(load_callbacks(path)) is None
+    assert find_callback(load_callbacks(path), own["id"]) is None
+    assert mark_callback_calling(path, own["id"])[0] is False
+    assert mark_callback_result(path, own["id"], "ANSWER")[0] is False
+    assert add_callback_request(path, "5511999998888", tenant="t2") is None
+    assert path.read_bytes() == before
+
+
+def test_duplicate_id_even_when_second_request_finished_blocks_lookup(tmp_path):
+    from callbacks import save_callbacks
+    path = tmp_path / "callbacks.json"
+    first = add_callback_request(path, "5511999998888", tenant="t1")
+    second = {**first, "status": "concluido", "tenant": "t2"}
+    save_callbacks(path, [first, second])
+    assert next_pending_callback(load_callbacks(path)) is None
+    assert mark_callback_calling(path, first["id"])[0] is False
+
+
+@pytest.mark.parametrize("invalid", [None, 2, "", False, {}, []])
+def test_malformed_callback_catalog_id_fails_closed(invalid):
+    other = {"id": "valid", "status": "pendente", "requested_at": 100}
+    malformed = {"id": invalid, "status": "concluido"}
+    assert find_callback([other, malformed], "valid") is None
+    assert next_pending_callback([other, malformed]) is None
+
+
+def test_generated_callback_id_collision_does_not_overwrite(tmp_path, monkeypatch):
+    import callbacks
+    path = tmp_path / "callbacks.json"
+    existing = add_callback_request(path, "5511999998888", tenant="t1")
+    before = path.read_bytes()
+    monkeypatch.setattr(callbacks.secrets, "token_hex", lambda _: existing["id"])
+    assert add_callback_request(path, "5511999997777", tenant="t2") is None
+    assert path.read_bytes() == before
+
+
+@pytest.mark.parametrize("bad_attempts", [None, -1, 2, 999, "1", False, 0.5])
+def test_corrupt_pending_attempt_counter_prevents_originate(tmp_path, bad_attempts):
+    from callbacks import save_callbacks
+    path = tmp_path / "callbacks.json"
+    record = add_callback_request(path, "5511999998888", tenant="t1")
+    save_callbacks(path, [{**record, "attempts": bad_attempts}])
+    before = path.read_bytes()
+    assert mark_callback_calling(path, record["id"])[0] is False
+    assert path.read_bytes() == before
+
+
+@pytest.mark.parametrize("bad_attempts", [None, -1, 0, 3, "1", True, 1.5])
+def test_corrupt_dialing_counter_prevents_ami_result_mutation(tmp_path, bad_attempts):
+    from callbacks import save_callbacks
+    path = tmp_path / "callbacks.json"
+    record = add_callback_request(path, "5511999998888", tenant="t1")
+    assert mark_callback_calling(path, record["id"])[0]
+    record = load_callbacks(path)[0]
+    save_callbacks(path, [{**record, "attempts": bad_attempts}])
+    before = path.read_bytes()
+    assert mark_callback_result(path, record["id"], "ANSWER")[0] is False
+    assert path.read_bytes() == before
