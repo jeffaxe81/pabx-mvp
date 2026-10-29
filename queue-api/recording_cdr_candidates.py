@@ -13,7 +13,10 @@ from datetime import datetime
 from pathlib import Path
 
 from recording_catalog import SOURCE_REF, EXTENSION
-from recording_access import TENANT, _valid_filename, _reject_duplicate_json_keys
+from recordings import _recording_directory_fd
+import os
+from recording_access import (TENANT, _valid_filename, _reject_duplicate_json_keys,
+                              read_regular_file_secure)
 
 CDR_LIMIT_BYTES = 4 * 1024 * 1024
 CDR_LIMIT_ROWS = 10000
@@ -27,13 +30,7 @@ CHANNEL_RE = re.compile(r"^PJSIP/(?P<operator>t[1-9][0-9]*-[a-z0-9_-]+)-[a-fA-F0
 
 def load_raw_cdr(path):
     """Aceita somente exportação local JSONL regular, sem links ou conteúdo gigante."""
-    source = Path(path)
-    info = source.lstat()
-    if not stat.S_ISREG(info.st_mode) or info.st_size > CDR_LIMIT_BYTES:
-        raise ValueError("CDR deve ser arquivo regular e até 4 MiB")
-    data = source.read_bytes()
-    if len(data) > CDR_LIMIT_BYTES:
-        raise ValueError("CDR ultrapassa limite")
+    data = read_regular_file_secure(path, CDR_LIMIT_BYTES)
     try:
         text = data.decode("utf-8")
     except UnicodeError as exc:
@@ -108,8 +105,8 @@ def corroborate_cdr(event):
 
 def propose_candidates(recordings_dir, cdr_events):
     """Retorna (manifesto, resumo). Ambiguidades são sempre descartadas."""
-    root = Path(recordings_dir)
-    if root.is_symlink() or not root.is_dir():
+    directory_fd = _recording_directory_fd(recordings_dir)
+    if directory_fd is None:
         raise ValueError("diretório de gravações inválido")
     by_call = defaultdict(list)
     for raw in cdr_events:
@@ -119,31 +116,42 @@ def propose_candidates(recordings_dir, cdr_events):
 
     rows = []
     ambiguous = unmatched = skipped = 0
-    for audio in sorted(root.iterdir(), key=lambda item: item.name):
-        if audio.is_symlink() or not audio.is_file() or not _valid_filename(audio.name):
-            skipped += 1
-            continue
-        filename = RECORDING_RE.fullmatch(audio.name)
-        if filename is None:
-            skipped += 1
-            continue
-        parts = filename.groupdict()
-        key = (parts["date"] + "-" + parts["hour"], parts["caller"], parts["destination"])
-        matches = by_call.get(key, [])
-        # Arquivos com tag de tenant também são descartados se houver
-        # evidências contraditórias de outra empresa para a mesma chamada.
-        if len(matches) > 1:
-            ambiguous += 1
-            continue
-        if not matches or (parts["tag"] is not None and parts["tag"] != matches[0]["tenant"]):
-            unmatched += 1
-            continue
-        match = matches[0]
-        rows.append({
-            "filename": audio.name, "tenant": match["tenant"],
-            "owner_extension": match["owner_extension"],
-            "source_ref": match["source_ref"],
-        })
+    try:
+        with os.scandir(directory_fd) as entries:
+            names = sorted(entry.name for entry in entries)
+        for name in names:
+            if not _valid_filename(name):
+                skipped += 1
+                continue
+            try:
+                metadata = os.stat(name, dir_fd=directory_fd, follow_symlinks=False)
+            except (OSError, TypeError, ValueError):
+                skipped += 1
+                continue
+            if not stat.S_ISREG(metadata.st_mode):
+                skipped += 1
+                continue
+            filename = RECORDING_RE.fullmatch(name)
+            if filename is None:
+                skipped += 1
+                continue
+            parts = filename.groupdict()
+            key = (parts["date"] + "-" + parts["hour"], parts["caller"], parts["destination"])
+            matches = by_call.get(key, [])
+            if len(matches) > 1:
+                ambiguous += 1
+                continue
+            if not matches or (parts["tag"] is not None and parts["tag"] != matches[0]["tenant"]):
+                unmatched += 1
+                continue
+            match = matches[0]
+            rows.append({
+                "filename": name, "tenant": match["tenant"],
+                "owner_extension": match["owner_extension"],
+                "source_ref": match["source_ref"],
+            })
+    finally:
+        os.close(directory_fd)
     return rows, {
         "proposed": len(rows), "ambiguous": ambiguous,
         "without_evidence": unmatched, "unsupported": skipped,
