@@ -336,6 +336,16 @@ exten => 1011,hint,PJSIP/{tenant_id}-recepcao-2
 """
 
 
+def _strong_voicemail_pin(pin):
+    """PIN individual numérico sem sequências triviais ou padrões repetidos."""
+    if not isinstance(pin, str) or re.fullmatch(r"[1-9][0-9]{7}", pin) is None:
+        return False
+    if len(set(pin)) < 3 or any(pin == pin[:size] * (8 // size) for size in (1, 2, 4)):
+        return False
+    return (pin not in "01234567890123456789"
+            and pin not in "98765432109876543210")
+
+
 def generate_tenant_voicemail_pins(tenant_id: str) -> dict:
     """Gera PINs numéricos independentes para caixas de voz de um tenant."""
     if not isinstance(tenant_id, str) or not TENANT_ID_RE.fullmatch(tenant_id):
@@ -347,9 +357,13 @@ def generate_tenant_voicemail_pins(tenant_id: str) -> dict:
     pins = {}
     used = set()
     for name in names:
-        pin = str(secrets.randbelow(90_000_000) + 10_000_000)
-        while pin in used:
+        # Limitar tentativas impede laço infinito se a fonte de entropia falhar.
+        for _ in range(64):
             pin = str(secrets.randbelow(90_000_000) + 10_000_000)
+            if pin not in used and _strong_voicemail_pin(pin):
+                break
+        else:
+            raise ValueError("não foi possível gerar PIN de voicemail seguro")
         pins[name] = pin
         used.add(pin)
     return pins
@@ -369,7 +383,7 @@ def render_tenant_voicemail(tenant_id: str, pins=None) -> str:
         raise ValueError("conjunto de caixas postais do tenant incompleto")
     for name in names:
         pin = pins[name]
-        if not isinstance(pin, str) or not re.fullmatch(r"[1-9][0-9]{7}", pin):
+        if not _strong_voicemail_pin(pin):
             raise ValueError("PIN de caixa postal inseguro")
     if len(set(pins.values())) != len(names):
         raise ValueError("caixas postais não podem compartilhar PIN")
