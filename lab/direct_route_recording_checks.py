@@ -72,6 +72,9 @@ def prepare_direct_route_checks(prepared):
         raise ValueError("dialplan de staging não mudou")
     path.write_text(updated, encoding="utf-8")
     path.chmod(0o600)
+    # Salvar a versão anterior apenas na memória do processo de teste.
+    # Inclui os contextos 9988 de laboratório; não toca o checkout git.
+    prepared["lab_direct_route_original"] = source
     prepared["lab_direct_route_staged"] = True
 
 
@@ -208,3 +211,27 @@ def exercise_direct_routes(container, prepared, report):
     report["real_direct_route_mixmonitor_lab_tested"] = all(
         checks[k] is True for k in required_direct_route_checks()
     )
+
+
+def restore_direct_route_checks(container, prepared):
+    """Restaura a configuração privada e comprova os destinos WebRTC reais."""
+    from .asterisk_lab import cli
+    source = prepared.pop("lab_direct_route_original", None)
+    if not isinstance(source, str) or not source or not prepared.get("lab_direct_route_staged"):
+        raise ValueError("fonte original da rota direta ausente")
+    path = Path(prepared["conf"]) / "extensions.conf"
+    path.write_text(source, encoding="utf-8")
+    path.chmod(0o600)
+    result = cli(container, "dialplan reload")
+    if "No such command" in result or "error" in result.lower():
+        raise ValueError("reload original do dialplan não aceito")
+    for tenant in ("t1", "t2"):
+        for number in ("1010", "1011"):
+            target = tenant + ("-recepcao" if number == "1010" else "-recepcao-2")
+            route = cli(container, f"dialplan show {number}@{tenant}-internal")
+            if ("Dial(PJSIP/" + target + ",20,g)" not in route
+                    or "Dial(PJSIP/" + tenant + "-1002,20,g)" in route
+                    or "MixMonitor(" not in route):
+                raise ValueError("rota WebRTC não foi restaurada")
+    prepared["lab_direct_route_staged"] = False
+    prepared["lab_direct_route_restored"] = True
