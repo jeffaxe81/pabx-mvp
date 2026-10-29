@@ -14,6 +14,7 @@ exigem Bearer com tenant e Origin explicitamente permitido. Nunca colocar
 tokens de fila em URLs ou em código estático publicado pelo Nginx.
 """
 import json
+import re
 import secrets
 import os
 import threading
@@ -39,6 +40,7 @@ from campaigns import (
 from callbacks import (
     parse_callback_request_event, add_callback_request, load_callbacks,
     find_callback, next_pending_callback, mark_callback_calling, mark_callback_result,
+    cancel_pending_callback,
     DISPOSITION_TO_STATUS as CALLBACK_DISPOSITIONS,
 )
 from survey import parse_survey_event, SurveyStore, average_score, score_distribution, summarize_by_operator
@@ -389,6 +391,7 @@ class Handler(BaseHTTPRequestHandler):
             }
             or path.startswith("/api/presence/")
             or path.startswith("/api/campaigns/")
+            or re.fullmatch(r"/api/callbacks/[0-9a-f]{12}/cancel", path) is not None
             or path == "/api/extension" + "-states"
         )
 
@@ -735,6 +738,8 @@ class Handler(BaseHTTPRequestHandler):
             self._handle_dial_next_contact()
         elif self.path == "/api/callbacks/dial-next":
             self._handle_dial_next_callback()
+        elif re.fullmatch(r"/api/callbacks/[0-9a-f]{12}/cancel", self.path):
+            self._handle_cancel_callback()
         elif urlparse(self.path).path.startswith("/api/presence/"):
             self._handle_set_presence()
         elif self.path == "/api/queue/pause":
@@ -1096,6 +1101,30 @@ class Handler(BaseHTTPRequestHandler):
         callbacks = [c for c in records
                      if c.get("tenant") == identity["tenant"]]
         self._send_queue_json(200, {"callbacks": callbacks})
+
+    def _handle_cancel_callback(self):
+        """Cancela pedido pendente, nunca chamada iniciada ou de outro tenant."""
+        identity = self._require_campaign_api_key()
+        if identity is None:
+            return
+        callback_id = self.path[len("/api/callbacks/"):-len("/cancel")]
+        if callback_id.endswith("/"):
+            callback_id = callback_id[:-1]
+        try:
+            with outbound_lock(CALLBACKS_PATH):
+                ok, status = cancel_pending_callback(
+                    CALLBACKS_PATH, callback_id, identity["tenant"],
+                )
+        except (OSError, UnicodeError, ValueError):
+            self._send_queue_json(503, {"error": "catalogo de callbacks indisponivel"})
+            return
+        if not ok:
+            if status == "not_found":
+                self._send_queue_json(404, {"error": "callback nao encontrado"})
+            else:
+                self._send_queue_json(409, {"error": "callback ja reservado ou finalizado"})
+            return
+        self._send_queue_json(200, {"ok": True, "id": callback_id, "status": "cancelado"})
 
     def _handle_dial_next_callback(self):
         identity = self._require_campaign_api_key()
