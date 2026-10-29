@@ -51,18 +51,21 @@ def test_oversized_or_invalid_output_fails_closed():
 
 def test_gate_requires_all_real_queue_checks():
     from lab.call_checks import required_call_checks
+    from lab.queue_overflow_checks import required_queue_overflow_checks
     base = {"real_runtime", "tls_transport", "wss_transport", "container_removed",
             "checkout_clean", "runtime_mounts", "source_label"}
     base.update(f"{key}:{tenant}" for key in (
         "context", "register", "contact", "unregister", "wrong_password"
     ) for tenant in ("t1", "t2", "t3"))
-    checks = {key: True for key in base | required_call_checks() | required_queue_runtime_checks()}
+    checks = {key: True for key in base | required_call_checks() | required_queue_runtime_checks() | required_queue_overflow_checks()}
     assert len(CASES) == 3
     assert summarize(checks, calls=True, queues=True)["success"]
     assert not summarize(checks, calls=True)["success"]
     assert not summarize({**checks, "queue_exact_tenant:t2": False}, calls=True, queues=True)["success"]
     assert not summarize({**checks, "queue_wait_observed:t2": False}, calls=True, queues=True)["success"]
     assert "queue_wait_observed:t3" in required_queue_runtime_checks()
+    assert "overflow_general_queue:t3" in required_queue_overflow_checks()
+    assert not summarize({**checks, "overflow_general_queue:t3": False}, calls=True, queues=True)["success"]
 
 
 def test_queues_mode_requires_calls(tmp_path):
