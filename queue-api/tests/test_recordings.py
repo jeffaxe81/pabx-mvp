@@ -196,3 +196,53 @@ def test_retention_ignores_non_audio_files(tmp_path):
 
 def test_retention_on_missing_directory_returns_empty(tmp_path):
     assert delete_expired_recordings(tmp_path / "nao-existe", retention_days=30) == []
+
+
+def test_retention_does_not_follow_symlinked_root_or_parent(tmp_path):
+    actual = tmp_path / "real"
+    actual.mkdir()
+    old = actual / "pessoa-5511999999999.wav"
+    _touch(old, mtime_offset=-40 * 86400)
+    root_link = tmp_path / "root-link"
+    root_link.symlink_to(actual, target_is_directory=True)
+    parent = tmp_path / "parent"
+    parent.mkdir()
+    parent_link = parent / "nested"
+    parent_link.symlink_to(actual, target_is_directory=True)
+    assert delete_expired_recordings(root_link, 30) == []
+    assert delete_expired_recordings(parent_link, 30) == []
+    assert old.exists()
+    assert delete_expired_recordings(actual, 30) == [old.name]
+
+
+def test_retention_ignores_symlinked_audio_special_files_and_malformed_names(tmp_path):
+    outside = tmp_path / "not-in-recordings-retention.wav"
+    _touch(outside, mtime_offset=-40 * 86400)
+    folder = tmp_path / "monitor"
+    folder.mkdir()
+    (folder / "linked.wav").symlink_to(outside)
+    (folder / "directory.wav").mkdir()
+    bad = folder / "bad\nname.wav"
+    _touch(bad, mtime_offset=-40 * 86400)
+    fifo = folder / "pipe.wav"
+    if hasattr(os, "mkfifo"):
+        os.mkfifo(fifo)
+    old = folder / "regular.wav"
+    _touch(old, mtime_offset=-40 * 86400)
+    assert delete_expired_recordings(folder, 30) == ["regular.wav"]
+    assert outside.exists()
+    assert (folder / "linked.wav").is_symlink()
+    assert bad.exists()
+    assert (folder / "directory.wav").is_dir()
+    if hasattr(os, "mkfifo"):
+        assert fifo.exists()
+
+
+def test_retention_fails_closed_on_invalid_types_and_clock(tmp_path):
+    old = tmp_path / "old.wav"
+    _touch(old, mtime_offset=-40 * 86400)
+    for duration in (None, False, 30.0, "30", {}, -1, 0):
+        assert delete_expired_recordings(tmp_path, duration) == []
+    for now in (None, "2026", False, float("nan"), float("inf")):
+        assert delete_expired_recordings(tmp_path, 30, clock=lambda x=now: x) == []
+    assert old.exists()
