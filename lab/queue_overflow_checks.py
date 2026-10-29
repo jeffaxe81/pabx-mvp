@@ -127,14 +127,18 @@ def exercise_queue_overflow(container, prepared, report):
         report["phase"] = "queue-overflow:" + tenant
         route = cli(container, f"dialplan show {EXTENSION}@{tenant}-internal")
         original = cli(container, f"dialplan show 1000@{tenant}-internal")
-        checks["overflow_loaded" + suffix] = (
-            f"Set(FILA_IDIOMA=fila-{tenant}-en)" in route
-            and "Set(OVERFLOW_TIMEOUT_SECONDS=2)" in route
-            and "Goto(1000,1)" in route
-            and "Queue(" in original
-            and "GotoIf(" in original
+        loaded_parts = (
+            f"Set(FILA_IDIOMA=fila-{tenant}-en)" in route,
+            "Set(OVERFLOW_TIMEOUT_SECONDS=2)" in route,
+            "Goto(1000,1)" in route,
+            "Queue(" in original,
+            "GotoIf(" in original,
         )
+        checks["overflow_loaded" + suffix] = all(loaded_parts)
         if not checks["overflow_loaded" + suffix]:
+            # Só cinco booleans diagnósticos, nunca publicar dialplan/segredos.
+            report["phase"] = ("queue-overflow-load:" + tenant + ":"
+                               + "".join("1" if ok else "0" for ok in loaded_parts))
             raise ValueError("roteamento de transbordo não carregado")
         with ExitStack() as resources:
             peer = CallPeer("127.0.0.1", 5061, prepared["ca"],
