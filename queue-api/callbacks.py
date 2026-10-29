@@ -195,6 +195,30 @@ def next_pending_callback(callbacks: list):
     return min(pending, key=lambda item: item["requested_at"]) if pending else None
 
 
+
+def cancel_pending_callback(path, callback_id, tenant):
+    """Cancela somente pedido pendente da empresa autenticada.
+
+    O chamador precisa manter outbound_lock(path) durante toda a
+    leitura, validação e escrita; outra requisição não pode reservar
+    simultaneamente o mesmo pedido. Não encerra chamadas já originadas.
+    """
+    if (not isinstance(callback_id, str)
+            or re.fullmatch(r"[0-9a-f]{12}", callback_id) is None
+            or not isinstance(tenant, str)
+            or re.fullmatch(r"t[1-9][0-9]*", tenant) is None):
+        return False, "not_found"
+    callbacks = load_callbacks(path)
+    callback = find_callback(callbacks, callback_id)
+    if callback is None or callback.get("tenant") != tenant:
+        return False, "not_found"
+    if callback.get("status") != "pendente":
+        return False, "not_pending"
+    callback["status"] = "cancelado"
+    callback["cancelled_at"] = time.time()
+    save_callbacks(path, callbacks)
+    return True, "cancelado"
+
 def mark_callback_calling(path, callback_id: str, attempt_id=None):
     callbacks = load_callbacks(path)
     callback = find_callback(callbacks, callback_id)

@@ -1,7 +1,7 @@
 from callbacks import (
     parse_callback_request_event, add_callback_request, load_callbacks,
     find_callback, next_pending_callback, mark_callback_calling,
-    mark_callback_result, extract_dialed_number,
+    mark_callback_result, extract_dialed_number, cancel_pending_callback,
 )
 
 
@@ -392,3 +392,68 @@ def test_closed_callback_historical_fields_do_not_block_pending_queue(tmp_path):
               "caller_id_num": None, "attempts": "legacy"}
     save_callbacks(path, [closed, good])
     assert next_pending_callback(load_callbacks(path))["id"] == good["id"]
+
+
+# Marco 9 — cancelamento explícito somente de callbacks ainda pendentes.
+def test_cancel_pending_callback_persists_status_without_dialing(tmp_path):
+    path = tmp_path / "callbacks.json"
+    entry = add_callback_request(path, "5511999998888", tenant="t1")
+    ok, status = cancel_pending_callback(path, entry["id"], "t1")
+    assert (ok, status) == (True, "cancelado")
+    stored = load_callbacks(path)[0]
+    assert stored["id"] == entry["id"]
+    assert stored["status"] == "cancelado"
+    assert type(stored["cancelled_at"]) is float
+    assert stored["attempts"] == 0
+    assert next_pending_callback(load_callbacks(path)) is None
+
+
+def test_cancel_callback_never_changes_other_tenant_or_legacy(tmp_path):
+    path = tmp_path / "callbacks.json"
+    own = add_callback_request(path, "5511999998888", tenant="t1")
+    other = add_callback_request(path, "5511999997777", tenant="t10")
+    legacy = add_callback_request(path, "5511999996666")
+    before = path.read_bytes()
+    for target in (other, legacy):
+        assert cancel_pending_callback(path, target["id"], "t1") == (
+            False, "not_found")
+    assert path.read_bytes() == before
+    assert cancel_pending_callback(path, own["id"], "t1")[0] is True
+    records = load_callbacks(path)
+    assert next(item for item in records if item["id"] == other["id"])["status"] == "pendente"
+    assert next(item for item in records if item["id"] == legacy["id"])["status"] == "pendente"
+
+
+def test_callback_cancel_refuses_dialing_and_repeat_without_rewriting(tmp_path):
+    path = tmp_path / "callbacks.json"
+    entry = add_callback_request(path, "5511999998888", tenant="t1")
+    assert mark_callback_calling(path, entry["id"])[0] is True
+    before = path.read_bytes()
+    assert cancel_pending_callback(path, entry["id"], "t1") == (False, "not_pending")
+    assert path.read_bytes() == before
+    other = add_callback_request(path, "5511999997777", tenant="t1")
+    assert cancel_pending_callback(path, other["id"], "t1")[0] is True
+    after = path.read_bytes()
+    assert cancel_pending_callback(path, other["id"], "t1") == (False, "not_pending")
+    assert path.read_bytes() == after
+
+
+@pytest.mark.parametrize("bad", [
+    None, False, "", "AAAAAAAABBBB", "1" * 11, "1" * 13,
+    "a" * 12 + "/other", "%2e%2e", {"id": "a" * 12}
+])
+def test_cancel_invalid_callback_id_never_rewrites(tmp_path, bad):
+    path = tmp_path / "callbacks.json"
+    add_callback_request(path, "5511999998888", tenant="t1")
+    before = path.read_bytes()
+    assert cancel_pending_callback(path, bad, "t1") == (False, "not_found")
+    assert path.read_bytes() == before
+
+
+@pytest.mark.parametrize("tenant", [None, "t01", "t1x", "t10\n", False, {}])
+def test_cancel_invalid_tenant_never_rewrites(tmp_path, tenant):
+    path = tmp_path / "callbacks.json"
+    entry = add_callback_request(path, "5511999998888", tenant="t1")
+    before = path.read_bytes()
+    assert cancel_pending_callback(path, entry["id"], tenant) == (False, "not_found")
+    assert path.read_bytes() == before
