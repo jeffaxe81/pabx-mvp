@@ -183,3 +183,4 @@ registrado como regra permanente no prompt master
 130. [Fallback de voicemail em tenants dinâmicos](manual-130-voicemail-fallback-tenant.md)
 131. [Identidade SIP e mailbox de fallback distintas no laboratório](manual-131-voicemail-sip-vs-mailbox.md)
 132. [Quatro frentes de robustez: PIN, gravações, callbacks e SLA](manual-132-qa-quatro-frentes.md)
+133. [Proveniência CDR exclusiva por empresa em gravações](manual-133-gravacoes-evidencia-exclusiva.md)
