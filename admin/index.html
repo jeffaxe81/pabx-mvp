@@ -1254,11 +1254,13 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
         const creds = data.sip_credentials || {};
         const pins = data.voicemail_pins || {};
         const ids = [`${data.tenant.tenant_id}-recepcao`, `${data.tenant.tenant_id}-recepcao-2`];
-        if (ids.every((id) => typeof creds[id] === 'string' && typeof pins[id] === 'string')) {
+        const mailboxes = [`${data.tenant.tenant_id}-1001`, ...ids];
+        if (ids.every((id) => typeof creds[id] === 'string') &&
+            mailboxes.every((id) => typeof pins[id] === 'string')) {
           const lines = ['SIP / WebRTC'];
           lines.push(...ids.map((id) => `${id}: ${creds[id]}`));
-          lines.push('', 'PINs de correio de voz');
-          lines.push(...ids.map((id) => `${id}: ${pins[id]}`));
+          lines.push('', 'PINs de correio de voz (inclui fallback 1001)');
+          lines.push(...mailboxes.map((id) => `${id}: ${pins[id]}`));
           el('wizardCredentialsText').textContent = lines.join('\n');
           el('wizardCredentialsPanel').style.display = 'block';
         }

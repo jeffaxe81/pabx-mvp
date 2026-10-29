@@ -25,7 +25,7 @@ def credentials():
     return {
         "t3-recepcao": "A" * 32,
         "t3-recepcao-2": "B" * 32,
-    }, {"t3-recepcao": "12345678", "t3-recepcao-2": "87654321"}
+    }, {"t3-1001": "24681357", "t3-recepcao": "12345678", "t3-recepcao-2": "87654321"}
 
 
 def make_factory(events, failure=None, compensation_fails=False):

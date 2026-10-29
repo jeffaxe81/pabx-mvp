@@ -201,6 +201,7 @@ def test_render_extensions_includes_dynamic_ramal_files():
 def test_render_voicemail_creates_telephonist_mailboxes():
     content = render_tenant_voicemail("t3")
     assert "[t3]" in content
+    assert "t3-1001 => " in content
     assert "t3-recepcao => " in content
     assert "t3-recepcao-2 => " in content
     assert "=> 1234," not in content
@@ -210,15 +211,17 @@ def test_render_voicemail_creates_telephonist_mailboxes():
 def test_voicemail_pins_are_random_unique_and_eight_digits():
     first = generate_tenant_voicemail_pins("t3")
     second = generate_tenant_voicemail_pins("t3")
-    assert set(first) == {"t3-recepcao", "t3-recepcao-2"}
+    assert set(first) == {"t3-1001", "t3-recepcao", "t3-recepcao-2"}
     assert all(pin.isdigit() and len(pin) == 8 for pin in first.values())
-    assert len(set(first.values())) == 2
+    assert len(set(first.values())) == 3
     assert first != second
 
 
 def test_voicemail_render_uses_pins_generated_for_response():
-    pins = {"t3-recepcao": "12345678", "t3-recepcao-2": "87654321"}
+    pins = {"t3-1001": "24681357", "t3-recepcao": "12345678",
+            "t3-recepcao-2": "87654321"}
     content = render_tenant_voicemail("t3", pins)
+    assert "t3-1001 => 24681357," in content
     assert "t3-recepcao => 12345678," in content
     assert "t3-recepcao-2 => 87654321," in content
 
@@ -226,9 +229,11 @@ def test_voicemail_render_uses_pins_generated_for_response():
 def test_voicemail_render_rejects_weak_or_reused_pins():
     import pytest
     for pins in (
-        {"t3-recepcao": "1234", "t3-recepcao-2": "87654321"},
-        {"t3-recepcao": "12345678", "t3-recepcao-2": "12345678"},
-        {"t3-recepcao": "12345678", "t3-recepcao-2": "5678901\\nsecret"},
+        {"t3-1001": "24681357", "t3-recepcao": "1234", "t3-recepcao-2": "87654321"},
+        {"t3-1001": "24681357", "t3-recepcao": "24681357", "t3-recepcao-2": "87654321"},
+        {"t3-1001": "24681357", "t3-recepcao": "12345678", "t3-recepcao-2": "12345678"},
+        {"t3-1001": "24681357", "t3-recepcao": "12345678", "t3-recepcao-2": "5678901\\nsecret"},
+        {"t3-recepcao": "12345678", "t3-recepcao-2": "87654321"},
         {},
     ):
         with pytest.raises(ValueError):
@@ -393,3 +398,14 @@ def test_parser_reads_repository_real_inbound_context():
     reserved = parse_static_inbound_dids(dialplan)
     assert "5511900001111" in reserved
     assert "5511900002222" in reserved
+
+def test_dynamic_tenant_voicemail_fallback_exists_in_same_tenant():
+    """VoiceMail(tN-1001@tN) in Queue/URA must resolve to a real mailbox."""
+    for tenant in ("t3", "t10"):
+        dialplan = render_tenant_extensions(tenant)
+        voicemail = render_tenant_voicemail(tenant)
+        assert f"VoiceMail(${{TENANT}}-1001@${{TENANT}},u)" in dialplan
+        assert f"[{tenant}]" in voicemail
+        assert f"{tenant}-1001 => " in voicemail
+        assert f"t1-1001 => " not in voicemail
+

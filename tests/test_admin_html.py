@@ -584,3 +584,13 @@ def test_tenant_dropdown_loads_dynamic_options_without_injecting_html():
     assert "loadTenantOptions()" in login
     load = html[html.index("function loadTenants()"):html.index("function renderTenantsTable", html.index("function loadTenants()"))]
     assert "loadTenantOptions()" in load
+
+
+def test_wizard_shows_fallback_mailbox_pin_without_fake_sip_account():
+    """PIN tN-1001 must be delivered once, but no SIP identity is created."""
+    html = load_html()
+    assert 'const mailboxes = [`${data.tenant.tenant_id}-1001`, ...ids];' in html
+    assert "mailboxes.every((id) => typeof pins[id] === 'string')" in html
+    assert "lines.push(...mailboxes.map((id)" in html
+    assert "lines.push(...ids.map((id) =>" in html
+

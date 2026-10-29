@@ -19,6 +19,7 @@ t2-recepcao => 67891234,T2
 t2-recepcao-2 => 78912345,T2
 """
     dynamic = """[t3]
+t3-1001 => 81235679,T3
 t3-recepcao => 89123456,T3
 t3-recepcao-2 => 91234567,T3
 """
@@ -27,7 +28,7 @@ t3-recepcao-2 => 91234567,T3
 
 def test_preflight_requires_exact_mailboxes_and_distinct_strong_pins():
     assert validate_prepared_voicemail(*sample()) == {
-        "ok": True, "mailboxes": 9, "invalid": 0,
+        "ok": True, "mailboxes": 10, "invalid": 0,
     }
 
 
@@ -47,6 +48,7 @@ def test_preflight_rejects_confused_prefix_missing_mailbox_or_malformed_input():
     static, dynamic = sample()
     assert not validate_prepared_voicemail(static.replace("[t2]", "[t10]"), dynamic)["ok"]
     assert not validate_prepared_voicemail(static.replace("t1-1002 =>", "t1-1999 =>"), dynamic)["ok"]
+    assert not validate_prepared_voicemail(static, dynamic.replace("t3-1001 =>", "t10-1001 =>"))["ok"]
     assert not validate_prepared_voicemail(static + "t2-1001 => 19234567,duplicate\n", dynamic)["ok"]
     for invalid in (None, [], "x" * (1024 * 1024 + 1)):
         assert not validate_prepared_voicemail(invalid, dynamic)["ok"]
@@ -58,7 +60,7 @@ def test_lab_prepare_uses_randomized_mailbox_pins_without_exposing_them(tmp_path
     static = (prepared["conf"] / "voicemail.conf").read_text()
     dynamic = (prepared["conf"] / "voicemail_tenants"/"t3.conf").read_text()
     verified = validate_prepared_voicemail(static, dynamic)
-    assert verified == {"ok": True, "mailboxes": 9, "invalid": 0}
+    assert verified == {"ok": True, "mailboxes": 10, "invalid": 0}
     assert "troque_esta_senha_vm_" not in static
     assert " => 1234," not in static
 
