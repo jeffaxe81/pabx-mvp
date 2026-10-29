@@ -11,7 +11,8 @@ from pathlib import Path
 
 TENANT = re.compile(r"t[1-9][0-9]*\Z")
 MAILBOX = re.compile(r"t[1-9][0-9]*-[a-z0-9][a-z0-9_-]*\Z")
-COMMON = {"12345678", "87654321", "11111111", "00000000", "99999999"}
+COMMON = {"12345678", "87654321", "11111111", "00000000", "99999999",
+          "11223344", "12121212", "12341234", "87658765"}
 
 
 def audit_voicemail_text(content, seen_pins=None):
@@ -53,7 +54,7 @@ def audit_voicemail_text(content, seen_pins=None):
         seen.add(pin)
         # O painel gera 8 dígitos; padrões conhecidos ou comprimento curto
         # não atendem ao aceite. Nunca divulgar o valor.
-        if (not pin.isascii() or not pin.isdecimal() or len(pin) < 8
+        if (not re.fullmatch(r"[1-9][0-9]{7}", pin)
                 or pin in COMMON or len(set(pin)) < 3):
             result["weak_pins"] += 1
     result["tenants"] = sorted(result["tenants"])

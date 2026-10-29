@@ -83,3 +83,12 @@ t1-1001 => 93847261,Um
 t1-1002 => 93847261,Dois
 """
     assert audit_voicemail_text(both)["reused_pins"] == 1
+
+def test_auditor_rejects_predictable_pins_and_nonstandard_length_without_disclosing():
+    for pin in ("11223344", "12121212", "12341234", "87658765",
+                "938472610", "02384726"):
+        result = audit_voicemail_text("[t1]\nt1-1001 => " + pin + ",Nome\n")
+        assert result["ok"] is False
+        assert result["weak_pins"] == 1
+        assert pin not in json.dumps(result)
+    assert audit_voicemail_text("[t1]\nt1-1001 => 93847261,Nome\n")["ok"]
