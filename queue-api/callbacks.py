@@ -8,6 +8,7 @@ tentativas/status já usado em campaigns.py.
 Lógica pura, sem rede - 100% testável.
 """
 import json
+import math
 import re
 import secrets
 import time
@@ -92,14 +93,35 @@ def add_callback_request(path, caller_id_num: str, caller_id_name: str = "", ten
 
 
 def next_pending_callback(callbacks: list):
+    """Seleciona FIFO somente com snapshot íntegro; corrupção nega discagem.
+
+    O catálogo é persistido em JSON e pode ser alterado fora da API.
+    Ignorar um item pendente inválido permitiria furar a ordem da fila.
+    Nunca devolver itens com timestamp NaN, tipo inesperado ou número
+    discável corrompido, nem misturar campos t1 e t10.
     """
-    Mais antigo primeiro (FIFO) - é isso que garante que o cliente
-    "não perde a vez" mesmo tendo saído da fila.
-    """
-    pending = [c for c in callbacks if c["status"] == "pendente"]
-    if not pending:
+    if not isinstance(callbacks, list):
         return None
-    return min(pending, key=lambda c: c["requested_at"])
+    pending = []
+    for item in callbacks:
+        if not isinstance(item, dict):
+            return None
+        if item.get("status") != "pendente":
+            continue
+        when = item.get("requested_at")
+        if (not isinstance(item.get("id"), str) or not item["id"]
+                or type(when) not in (int, float) or not math.isfinite(when)
+                or when < 0):
+            return None
+        if "caller_id_num" in item and _callback_contact(item["caller_id_num"]) is None:
+            return None
+        tenant = item.get("tenant")
+        if tenant is not None and (
+                not isinstance(tenant, str)
+                or re.fullmatch(r"t[1-9][0-9]*", tenant) is None):
+            return None
+        pending.append(item)
+    return min(pending, key=lambda item: item["requested_at"]) if pending else None
 
 
 def mark_callback_calling(path, callback_id: str, attempt_id=None):
