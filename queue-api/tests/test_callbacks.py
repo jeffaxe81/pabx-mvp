@@ -219,11 +219,14 @@ def test_duplicate_callback_id_across_tenants_never_claims_or_updates(tmp_path):
     other = {**own, "tenant": "t10", "caller_id_num": "5511988877777"}
     save_callbacks(path, [own, other])
     before = path.read_bytes()
-    assert next_pending_callback(load_callbacks(path)) is None
-    assert find_callback(load_callbacks(path), own["id"]) is None
-    assert mark_callback_calling(path, own["id"])[0] is False
-    assert mark_callback_result(path, own["id"], "ANSWER")[0] is False
-    assert add_callback_request(path, "5511999998888", tenant="t2") is None
+    with pytest.raises(ValueError, match="duplicados"):
+        load_callbacks(path)
+    with pytest.raises(ValueError, match="duplicados"):
+        mark_callback_calling(path, own["id"])
+    with pytest.raises(ValueError, match="duplicados"):
+        mark_callback_result(path, own["id"], "ANSWER")
+    with pytest.raises(ValueError, match="duplicados"):
+        add_callback_request(path, "5511999998888", tenant="t2")
     assert path.read_bytes() == before
 
 
@@ -233,8 +236,10 @@ def test_duplicate_id_even_when_second_request_finished_blocks_lookup(tmp_path):
     first = add_callback_request(path, "5511999998888", tenant="t1")
     second = {**first, "status": "concluido", "tenant": "t2"}
     save_callbacks(path, [first, second])
-    assert next_pending_callback(load_callbacks(path)) is None
-    assert mark_callback_calling(path, first["id"])[0] is False
+    with pytest.raises(ValueError, match="duplicados"):
+        load_callbacks(path)
+    with pytest.raises(ValueError, match="duplicados"):
+        mark_callback_calling(path, first["id"])
 
 
 @pytest.mark.parametrize("invalid", [None, 2, "", False, {}, []])
