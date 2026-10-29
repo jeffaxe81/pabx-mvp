@@ -26,7 +26,7 @@ def lab(tmp_path):
     ):
         (root / sub).mkdir(parents=True)
     sip = {"t3-recepcao": "C" * 32, "t3-recepcao-2": "D" * 32}
-    pins = {"t3-recepcao": "12345678", "t3-recepcao-2": "87654321"}
+    pins = {"t3-1001": "24681357", "t3-recepcao": "12345678", "t3-recepcao-2": "87654321"}
     for file, content in build_tenant_files(root, "t3", sip, pins).items():
         file.write_text(content, encoding="utf-8")
     shared = root / "generated" / "pjsip_dynamic.conf"
