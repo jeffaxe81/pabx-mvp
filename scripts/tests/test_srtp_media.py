@@ -97,8 +97,12 @@ def test_rfc4733_srtp_negotiation_rejects_missing_or_spoofed_telephone_event():
     try:
         assert b'RTP/SAVP 0 101' in caller.offer()
         assert b'a=rtpmap:101 telephone-event/8000' in caller.offer()
-        with pytest.raises(ValueError, match='DTMF'):
-            caller.negotiate(SrtpMedia().offer())
+        plain = SrtpMedia()
+        try:
+            with pytest.raises(ValueError, match='DTMF'):
+                caller.negotiate(plain.offer())
+        finally:
+            plain.close()
         spoofed = callee.offer().replace(
             b'101 telephone-event/8000', b'101 PCMU/8000')
         with pytest.raises(ValueError, match='DTMF'):
@@ -144,7 +148,7 @@ def test_rfc4733_pin_digits_are_srtp_protected_and_never_echoed():
         callee.close()
 
 
-@pytest.mark.parametrize('digit', ['', 'x', '99', None, 4, 'secret'])
+@pytest.mark.parametrize('digit', ['', 'x', '99', None, 4, [], {}, 'secret'])
 def test_rfc4733_rejects_unsupported_digit_without_emitting_payload(digit):
     from lab.srtp_media import SrtpMedia
     peer = SrtpMedia(dtmf=True)
