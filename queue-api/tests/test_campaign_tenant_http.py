@@ -506,3 +506,52 @@ def test_callback_cancel_corrupt_snapshot_503_and_never_rewrites(api):
     assert own(api, target, method="POST")[0] == 503
     assert callbacks.read_bytes() == before
     assert ami.actions == []
+
+
+
+# Marco 9 — cancelamento concorre com claim e Originate sob um lock compartilhado.
+def test_callback_cancel_and_dial_next_concurrent_one_winner(api):
+    import concurrent.futures
+
+    _, _, callbacks, ami, _ = api
+    entry = next(c for c in load_callbacks(callbacks) if c.get("tenant") == "t1")
+    foreign = next(c for c in load_callbacks(callbacks) if c.get("tenant") == "t2")
+    cancel_path = "/api/callbacks/" + entry["id"] + "/cancel"
+    dial_path = "/api/callbacks/dial-next"
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(
+            lambda path: own(api, path, method="POST"),
+            (cancel_path, dial_path),
+        ))
+    cancelled, dialed = results
+    latest = {c["id"]: c for c in load_callbacks(callbacks)}
+    assert latest[foreign["id"]]["status"] == "pendente"
+    assert dialed[0] == 200
+    if cancelled[0] == 200:
+        assert cancelled[2]["status"] == "cancelado"
+        assert dialed[2]["done"] is True
+        assert latest[entry["id"]]["status"] == "cancelado"
+        assert latest[entry["id"]]["attempts"] == 0
+        assert ami.actions == []
+    else:
+        assert cancelled[0] == 409
+        assert dialed[2]["ok"] is True
+        assert latest[entry["id"]]["status"] == "discando"
+        assert latest[entry["id"]]["attempts"] == 1
+        assert len(ami.actions) == 1
+
+
+def test_callback_cancel_parallel_retries_only_one_mutation(api):
+    import concurrent.futures
+
+    _, _, callbacks, ami, _ = api
+    entry = next(c for c in load_callbacks(callbacks) if c.get("tenant") == "t1")
+    route = "/api/callbacks/" + entry["id"] + "/cancel"
+    with concurrent.futures.ThreadPoolExecutor(max_workers=6) as pool:
+        results = list(pool.map(lambda _: own(api, route, method="POST"), range(6)))
+    assert sorted(result[0] for result in results) == [200] + [409] * 5
+    after = next(c for c in load_callbacks(callbacks) if c["id"] == entry["id"])
+    assert after["status"] == "cancelado"
+    assert after["attempts"] == 0
+    assert ami.actions == []
