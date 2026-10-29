@@ -162,3 +162,34 @@ def test_one_source_reference_cannot_classify_two_tenants(tmp_path):
     with pytest.raises(ValueError, match="compartilhada entre empresas"):
         reconcile_catalog(policy, media, manifest, True)
     assert policy.read_bytes() == previous
+
+
+def test_manifest_duplicate_tenant_key_is_rejected(tmp_path):
+    media, policy, manifest = setup_files(tmp_path)
+    previous = policy.read_bytes()
+    raw = manifest.read_text()
+    manifest.write_text(raw.replace('"tenant": "t1"', '"tenant": "t10", "tenant": "t1"'))
+    with pytest.raises(ValueError, match="JSON"):
+        reconcile_catalog(policy, media, manifest, True)
+    assert policy.read_bytes() == previous
+
+
+def test_cross_tenant_reference_reuse_across_separate_imports_is_blocked(tmp_path):
+    media, policy, manifest = setup_files(tmp_path)
+    assert reconcile_catalog(policy, media, manifest, True)["new"] == 1
+    previous = policy.read_bytes()
+    other_name = "20261022-120100-551199998888-1010.wav"
+    (media / other_name).write_bytes(b"RIFF TEST SECOND")
+    first = json.loads(manifest.read_text())
+    second = {
+        "filename": other_name,
+        "tenant": "t10",
+        "owner_extension": "t10-recepcao",
+        "source_ref": first["source_ref"],
+    }
+    manifest.write_text(json.dumps(second) + "\n")
+    with pytest.raises(ValueError, match="compartilhada"):
+        reconcile_catalog(policy, media, manifest, True)
+    assert policy.read_bytes() == previous
+    assert load_recording_policy(policy)["recordings"][AUDIO]["tenant"] == "t1"
+
