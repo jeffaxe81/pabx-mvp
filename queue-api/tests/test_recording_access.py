@@ -34,6 +34,20 @@ def test_policy_missing_or_invalid_json_fails_closed(tmp_path):
     assert load_recording_policy(p) is None
 
 
+def test_policy_rejects_duplicate_json_keys_nested_and_top_level(tmp_path):
+    path = tmp_path / "recordings-policy.json"
+    data = policy()
+    valid = json.dumps(data)
+    path.write_text(valid)
+    assert load_recording_policy(path) == data
+    path.write_text(valid.replace('"credentials":', '"credentials": [], "credentials":', 1))
+    assert load_recording_policy(path) is None
+    path.write_text(valid.replace('"tenant": "t1"', '"tenant": "t10", "tenant": "t1"', 1))
+    assert load_recording_policy(path) is None
+    path.write_text(valid.replace('"expires_at": 4102444800', '"expires_at": NaN'))
+    assert load_recording_policy(path) is None
+
+
 def test_policy_loads_only_valid_schema(tmp_path):
     p = tmp_path / "policy.json"
     p.write_text(json.dumps(policy()))
