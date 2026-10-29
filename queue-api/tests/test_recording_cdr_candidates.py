@@ -153,3 +153,38 @@ def test_cdr_loader_rejects_ambiguous_accountcode_and_nonfinite(tmp_path):
     path.write_text(valid + "\n", encoding="utf-8")
     assert load_raw_cdr(path) == [cdr()]
 
+
+def test_cdr_refuses_symlinked_parent_and_fifo(tmp_path):
+    source = tmp_path / "cdr.jsonl"
+    source.write_text(json.dumps(cdr()) + "\n", encoding="utf-8")
+    alias = tmp_path / "ancestor"
+    alias.symlink_to(tmp_path, target_is_directory=True)
+    with pytest.raises(ValueError, match="regular"):
+        load_raw_cdr(alias / source.name)
+    fifo = tmp_path / "stream.jsonl"
+    os.mkfifo(fifo)
+    with pytest.raises(ValueError, match="regular"):
+        load_raw_cdr(fifo)
+    assert load_raw_cdr(source) == [cdr()]
+
+
+def test_proposal_refuses_symlinked_recording_parent(tmp_path):
+    recordings = file(tmp_path)
+    alias = tmp_path / "parent-link"
+    alias.symlink_to(tmp_path, target_is_directory=True)
+    with pytest.raises(ValueError, match="diretório"):
+        propose_candidates(alias / recordings.name, [cdr()])
+    rows, summary = propose_candidates(recordings, [cdr()])
+    assert len(rows) == summary["proposed"] == 1
+
+
+def test_proposal_excludes_symlink_to_matching_filename(tmp_path):
+    recordings = file(tmp_path)
+    target = recordings / FILE
+    target.unlink()
+    private = tmp_path / "outside.wav"
+    private.write_bytes(b"NOT AN AUTHORIZED AUDIO")
+    target.symlink_to(private)
+    rows, summary = propose_candidates(recordings, [cdr()])
+    assert rows == []
+    assert summary["unsupported"] == 1

@@ -84,6 +84,33 @@ def _open_policy_file(path):
         if directory_fd is not None:
             os.close(directory_fd)
 
+def read_regular_file_secure(path, maximum_bytes):
+    """Lê a fonte privada por FD seguro, sem seguir links nos ancestrais.
+
+    O fstat se refere ao próprio arquivo aberto, e não a um caminho que
+    possa ser trocado entre lstat e read_bytes. Nenhum arquivo especial
+    é lido, e não há fallback permissivo.
+    """
+    if type(maximum_bytes) is not int or maximum_bytes <= 0:
+        raise ValueError("limite de leitura inválido")
+    fd = _open_policy_file(path)
+    if fd is None:
+        raise ValueError("fonte não é arquivo regular seguro")
+    try:
+        metadata = os.fstat(fd)
+        if not stat.S_ISREG(metadata.st_mode) or metadata.st_size > maximum_bytes:
+            raise ValueError("fonte não é arquivo regular ou excede o limite")
+        with os.fdopen(fd, "rb") as opened:
+            fd = None
+            content = opened.read(maximum_bytes + 1)
+        if len(content) > maximum_bytes:
+            raise ValueError("fonte excede o limite")
+        return content
+    finally:
+        if fd is not None:
+            os.close(fd)
+
+
 def _reject_duplicate_json_keys(pairs):
     result = {}
     for key, value in pairs:
