@@ -50,5 +50,13 @@
     "https://github.com/jeffaxe81/pabx-mvp/issues/30",
     "https://github.com/jeffaxe81/pabx-mvp/pull/53",
     "https://github.com/jeffaxe81/pabx-mvp/pull/59"
-  ]
+  ],
+  "development_proof_deferral": {
+    "registered_on": "2026-10-29",
+    "register_path": "docs/quality/provas-operacionais-diferidas.json",
+    "mode": "DEVELOPMENT_ONLY_PROOFS_DEFERRED",
+    "external_tests_remain_pending": true,
+    "automated_security_tests_required": true,
+    "no_production_go": true
+  }
 }
