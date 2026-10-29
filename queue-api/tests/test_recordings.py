@@ -216,7 +216,7 @@ def test_retention_does_not_follow_symlinked_root_or_parent(tmp_path):
 
 
 def test_retention_ignores_symlinked_audio_special_files_and_malformed_names(tmp_path):
-    outside = tmp_path.parent / "not-in-recordings-retention.wav"
+    outside = tmp_path / "not-in-recordings-retention.wav"
     _touch(outside, mtime_offset=-40 * 86400)
     folder = tmp_path / "monitor"
     folder.mkdir()
