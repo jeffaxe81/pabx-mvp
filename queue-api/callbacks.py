@@ -85,6 +85,22 @@ def load_callbacks(path) -> list:
     )
     if not _catalog_has_unique_ids(records):
         raise ValueError("catalogo de callbacks com ids invalidos ou duplicados")
+    for record in records:
+        if record.get("status") != "pendente":
+            continue
+        number = record.get("caller_id_num")
+        contact = _callback_contact(number)
+        when = record.get("requested_at")
+        attempts = record.get("attempts")
+        tenant = record.get("tenant")
+        if (contact is None or contact["caller_id_num"] != number
+                or type(when) not in (int, float) or not math.isfinite(when)
+                or when < 0
+                or type(attempts) is not int or not 0 <= attempts < MAX_ATTEMPTS
+                or (tenant is not None
+                    and (not isinstance(tenant, str)
+                         or re.fullmatch(r"t[1-9][0-9]*", tenant) is None))):
+            raise ValueError("catalogo de callbacks com pedido pendente inconsistente")
     return records
 
 
