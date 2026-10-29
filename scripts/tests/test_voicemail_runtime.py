@@ -104,3 +104,30 @@ def test_voicemail_route_requires_live_up_channel(channel_state):
     assert inspected_voicemail_channel(row, "t1-1001", "t1") == {
         "exact": False, "no_foreign": False,
     }
+
+def test_voicemail_dtmf_transport_requires_separate_evidence_and_no_pin_claim():
+    from lab.voicemail_checks import required_voicemail_dtmf_checks
+    from lab.call_checks import required_call_checks
+    basic = {'real_runtime', 'tls_transport', 'wss_transport',
+             'container_removed', 'checkout_clean', 'runtime_mounts', 'source_label'}
+    basic |= {f'{name}:{tenant}' for name in (
+        'context', 'register', 'contact', 'unregister', 'wrong_password'
+    ) for tenant in ('t1', 't2', 't3')}
+    base = basic | required_call_checks() | required_voicemail_checks()
+    full = {key: True for key in base | required_voicemail_dtmf_checks()}
+    assert summarize(full, calls=True, voicemail=True, voicemail_dtmf=True)['success']
+    for missing in required_voicemail_dtmf_checks():
+        incomplete = {key: value for key, value in full.items() if key != missing}
+        assert not summarize(incomplete, calls=True, voicemail=True,
+                             voicemail_dtmf=True)['success']
+    assert len(required_voicemail_dtmf_checks()) == 6
+
+
+def test_voicemail_dtmf_mode_requires_calls_and_voicemail(tmp_path):
+    from lab.asterisk_lab import main
+    import pytest
+    for flags in (['--voicemail-dtmf'], ['--calls', '--voicemail-dtmf'],
+                  ['--voicemail', '--voicemail-dtmf']):
+        with pytest.raises(SystemExit) as error:
+            main([*flags, '--report', str(tmp_path / 'dtmf.json')])
+        assert error.value.code != 0
