@@ -420,3 +420,89 @@ def test_corrupt_pending_callback_is_not_reported_as_empty_queue(api, field, val
         assert dialing[2] == {"error": "catalogo de callbacks indisponivel"}
     assert ami.actions == []
     assert callbacks.read_bytes() == before_write
+
+
+
+# Marco 9 — gestão de callback com cancelamento antes da origem AMI.
+def test_supervisor_can_cancel_only_own_pending_callback_over_http(api):
+    _, _, callbacks, ami, _ = api
+    records = load_callbacks(callbacks)
+    own_entry = next(c for c in records if c.get("tenant") == "t1")
+    foreign = next(c for c in records if c.get("tenant") == "t2")
+    own_url = "/api/callbacks/" + own_entry["id"] + "/cancel"
+    foreign_url = "/api/callbacks/" + foreign["id"] + "/cancel"
+
+    before = callbacks.read_bytes()
+    assert own(api, foreign_url, method="POST")[0] == 404
+    assert callbacks.read_bytes() == before
+    assert own(api, own_url, tenant="t2", method="POST")[0] == 404
+    assert callbacks.read_bytes() == before
+
+    status, headers, body = own(api, own_url, method="POST")
+    assert status == 200
+    assert headers["Cache-Control"] == "no-store"
+    assert body == {"ok": True, "id": own_entry["id"], "status": "cancelado"}
+    after = load_callbacks(callbacks)
+    assert next(c for c in after if c["id"] == own_entry["id"])["status"] == "cancelado"
+    assert next(c for c in after if c["id"] == foreign["id"])["status"] == "pendente"
+    assert own(api, own_url, method="POST")[0] == 409
+    assert own(api, "/api/callbacks/dial-next", method="POST")[2]["done"] is True
+    assert ami.actions == []
+
+
+def test_callback_cancel_requires_bearer_role_second_key_and_allowed_origin(api):
+    base, _, callbacks, ami, policy = api
+    entry = next(c for c in load_callbacks(callbacks) if c.get("tenant") == "t1")
+    url = "/api/callbacks/" + entry["id"] + "/cancel"
+    original = callbacks.read_bytes()
+    assert request(base, url, key=KEY, method="POST")[0] == 401
+    assert request(base, url, TOKENS["t1"], method="POST")[0] == 403
+    assert request(base, url, TOKENS["agent"], KEY, method="POST")[0] == 403
+    assert request(base, url, TOKENS["t1"], KEY, method="POST",
+                   origin="https://untrusted.invalid")[0] == 403
+    status, headers, _ = request(base, url, method="OPTIONS",
+                                 origin="http://localhost:8082")
+    assert status == 204
+    assert "X-Click-To-Call-Key" in headers["Access-Control-Allow-Headers"]
+    assert request(base, url, method="OPTIONS",
+                   origin="https://untrusted.invalid")[0] == 403
+    assert callbacks.read_bytes() == original
+    assert ami.actions == []
+
+
+def test_callback_cancel_never_aborts_started_originate(api):
+    _, _, callbacks, ami, _ = api
+    entry = next(c for c in load_callbacks(callbacks) if c.get("tenant") == "t1")
+    assert own(api, "/api/callbacks/dial-next", method="POST")[0] == 200
+    assert len(ami.actions) == 1
+    before = callbacks.read_bytes()
+    result = own(api, "/api/callbacks/" + entry["id"] + "/cancel", method="POST")
+    assert result[0] == 409
+    assert callbacks.read_bytes() == before
+    assert len(ami.actions) == 1
+
+
+def test_callback_cancel_rejects_unrecognized_path_without_mutation(api):
+    base, _, callbacks, ami, _ = api
+    entry = next(c for c in load_callbacks(callbacks) if c.get("tenant") == "t1")
+    original = callbacks.read_bytes()
+    for path in (
+        "/api/callbacks/" + entry["id"] + "/cancel/extra",
+        "/api/callbacks/" + entry["id"] + "/cancel?tenant=t2",
+        "/api/callbacks/" + entry["id"].upper() + "/cancel",
+        "/api/callbacks/" + entry["id"] + "/cancel/",
+    ):
+        assert own(api, path, method="POST")[0] == 404
+    assert callbacks.read_bytes() == original
+    assert ami.actions == []
+
+
+def test_callback_cancel_corrupt_snapshot_503_and_never_rewrites(api):
+    _, _, callbacks, ami, _ = api
+    entry = next(c for c in load_callbacks(callbacks) if c.get("tenant") == "t1")
+    target = "/api/callbacks/" + entry["id"] + "/cancel"
+    callbacks.write_text('[{"id": "bad", "id": "changed"}]', encoding="utf-8")
+    before = callbacks.read_bytes()
+    assert own(api, target, method="POST")[0] == 503
+    assert callbacks.read_bytes() == before
+    assert ami.actions == []
