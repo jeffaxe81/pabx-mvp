@@ -16,10 +16,12 @@ Lógica pura aqui, sem rede - 100% testável. Reset diário com relógio
 injetável, mesmo padrão de metrics.py.
 """
 import json
+import re
 import time
 from pathlib import Path
 
 DEFAULT_SLA_THRESHOLD_SECONDS = 20
+_AMI_UNIQUEID = re.compile(r"[A-Za-z0-9._-]{1,96}\\Z")
 
 
 def _day_key(timestamp: float) -> str:
@@ -105,6 +107,8 @@ class QueueSLATracker:
                     })
             self._day = today
             self._queues = {}  # queue -> {"offered": int, "within_sla": int}
+            # Dedupe apenas dentro do dia da fila; não confundir t1 e t10.
+            self._seen_ami_calls = set()
 
     def _record(self, queue: str, hold_time: int, outcome: str):
         if not _valid_queue_name(queue):
@@ -121,13 +125,25 @@ class QueueSLATracker:
 
     def apply_event(self, event: dict):
         answered = parse_agent_connect_event(event)
-        if answered:
-            self._record(answered["queue"], answered["hold_time"], "answered")
+        outcome = answered if answered else parse_queue_caller_abandon_event(event)
+        if not outcome:
             return
 
-        abandoned = parse_queue_caller_abandon_event(event)
-        if abandoned:
-            self._record(abandoned["queue"], abandoned["hold_time"], "abandoned")
+        # AMI pode reenviar eventos após reconexão. Uniqueid identifica
+        # a chamada; sem ele mantemos compatibilidade com eventos legados.
+        # Quando fornecido, porém, deve ser válido para não falsificar
+        # deduplicação com IDs incompletos ou tipos inesperados.
+        raw_id = event.get("Uniqueid")
+        if raw_id is not None and (
+                not isinstance(raw_id, str) or not _AMI_UNIQUEID.fullmatch(raw_id)):
+            return
+        self._reset_if_new_day()
+        key = (outcome["queue"], raw_id) if raw_id is not None else None
+        if key is not None and key in self._seen_ami_calls:
+            return
+        self._record(outcome["queue"], outcome["hold_time"], outcome["outcome"])
+        if key is not None:
+            self._seen_ami_calls.add(key)
 
     def snapshot(self) -> dict:
         """
