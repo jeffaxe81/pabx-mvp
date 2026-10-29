@@ -161,3 +161,24 @@ def test_recording_catalog_rejects_malformed_optional_source_provenance(tmp_path
             assert load_recording_policy(path) == copy
         else:
             assert load_recording_policy(path) is None
+
+
+def test_catalog_rejects_shared_source_reference_across_tenants(tmp_path):
+    """A single CDR cannot authorize recordings in two companies."""
+    path = tmp_path / "recordings-policy.json"
+    base = policy()
+    base["recordings"][FILE_T1]["source_ref"] = "CDR:1792670400.123"
+    base["recordings"][FILE_T2]["source_ref"] = "CDR:1792670400.123"
+    path.write_text(json.dumps(base), encoding="utf-8")
+    assert load_recording_policy(path) is None
+    # Repeated references within the SAME tenant are legitimate (e.g. legs).
+    base["recordings"][FILE_T2]["tenant"] = "t1"
+    base["recordings"][FILE_T2]["owner_extension"] = "t1-1010"
+    path.write_text(json.dumps(base), encoding="utf-8")
+    assert load_recording_policy(path) == base
+    # Prefix t1 vs t10 must never collapse into the same identity.
+    base["recordings"][FILE_T2]["tenant"] = "t10"
+    base["recordings"][FILE_T2]["owner_extension"] = "t10-1010"
+    path.write_text(json.dumps(base), encoding="utf-8")
+    assert load_recording_policy(path) is None
+

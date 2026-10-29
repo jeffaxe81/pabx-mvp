@@ -15,6 +15,7 @@ from pathlib import Path
 
 from recording_access import (
     MAX_POLICY_BYTES, TENANT, _valid_filename, load_recording_policy,
+    _reject_duplicate_json_keys,
 )
 
 MAX_IMPORT_BYTES = 1024 * 1024
@@ -43,7 +44,11 @@ def load_manifest(path):
     ref_tenants = {}
     for number, line in enumerate(lines, start=1):
         try:
-            row = json.loads(line)
+            row = json.loads(
+                line, object_pairs_hook=_reject_duplicate_json_keys,
+                parse_constant=lambda _: (_ for _ in ()).throw(
+                    ValueError("número JSON não finito")),
+            )
         except ValueError as exc:
             raise ValueError(f"JSON inválido na linha {number}") from exc
         if not isinstance(row, dict) or not {"filename", "tenant", "source_ref"} <= row.keys():
@@ -96,12 +101,25 @@ def preview_batch(policy, rows, directory):
         raise ValueError("diretório de gravações inválido")
     updated = dict(policy)
     recordings = dict(policy["recordings"])
+    # Provas de origem são globais ao catálogo, não apenas ao lote de
+    # importação. Evita associar a mesma chamada a t1 e t10 em lotes diferentes.
+    ref_tenants = {}
+    for metadata in recordings.values():
+        ref = metadata.get("source_ref")
+        if ref is None:
+            continue
+        prior = ref_tenants.setdefault(ref, metadata["tenant"])
+        if prior != metadata["tenant"]:
+            raise ValueError("catálogo com origem compartilhada entre empresas")
     created = unchanged = 0
     for row in rows:
         filename = row["filename"]
         audio = directory / filename
         if audio.is_symlink() or not audio.is_file():
             raise ValueError("gravação não encontrada ou link simbólico: " + filename)
+        previous_tenant = ref_tenants.setdefault(row["source_ref"], row["tenant"])
+        if previous_tenant != row["tenant"]:
+            raise ValueError("origem compartilhada entre empresas em lotes distintos")
         metadata = {
             "tenant": row["tenant"],
             "source_ref": row["source_ref"],

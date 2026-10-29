@@ -136,3 +136,20 @@ def test_malformed_cdr_destination_channel_is_ignored_without_crash(tmp_path, in
     rows, summary = propose_candidates(recordings, [cdr(DestinationChannel=invalid)])
     assert rows == []
     assert summary["proposed"] == 0
+
+
+def test_cdr_loader_rejects_ambiguous_accountcode_and_nonfinite(tmp_path):
+    path = tmp_path / "events.jsonl"
+    valid = json.dumps(cdr())
+    for raw in (
+        valid.replace('"AccountCode": "t1"', '"AccountCode": "t10", "AccountCode": "t1"'),
+        valid.replace('"DestinationContext": "t1-internal"',
+                      '"DestinationContext": "t10-internal", "DestinationContext": "t1-internal"'),
+        valid.replace('"StartTime": "2026-10-22 12:00:00"', '"StartTime": NaN'),
+    ):
+        path.write_text(raw + "\n", encoding="utf-8")
+        with pytest.raises(ValueError, match="JSON"):
+            load_raw_cdr(path)
+    path.write_text(valid + "\n", encoding="utf-8")
+    assert load_raw_cdr(path) == [cdr()]
+
