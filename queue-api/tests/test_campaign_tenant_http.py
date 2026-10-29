@@ -353,3 +353,41 @@ def test_same_callback_only_claimed_once_under_concurrent_http(api, monkeypatch)
     scoped = [c for c in load_callbacks(callbacks) if c.get("tenant") == "t1"]
     assert len(scoped) == 1
     assert scoped[0]["attempts"] == 1
+
+
+
+@pytest.mark.parametrize("corrupt_json", [
+    '[{"id":"duplicate","tenant":"t1","status":"pendente"},'
+    '{"id":"duplicate","tenant":"t10","status":"pendente"}]',
+    '[{"id":"valid","tenant":"t1","status":"pendente",'
+    '"status":"discando","requested_at":1}]',
+    '[{"id":"valid","tenant":"t1","status":"pendente",'
+    '"requested_at":NaN}]',
+    '{"callbacks":[]}',
+])
+def test_invalid_callback_catalog_http_returns_503_without_originate(api, corrupt_json):
+    _, _, callbacks, ami, _ = api
+    callbacks.write_text(corrupt_json, encoding="utf-8")
+    before = callbacks.read_bytes()
+    for tenant in ("t1", "t2"):
+        list_result = own(api, "/api/callbacks", tenant)
+        dial_result = own(api, "/api/callbacks/dial-next", tenant, method="POST")
+        assert list_result[0] == 503
+        assert dial_result[0] == 503
+        assert list_result[2] == {"error": "catalogo de callbacks indisponivel"}
+        assert dial_result[2] == {"error": "catalogo de callbacks indisponivel"}
+    assert ami.actions == []
+    assert callbacks.read_bytes() == before
+
+
+def test_callback_http_does_not_follow_catalog_symlink(api, tmp_path):
+    _, _, callbacks, ami, _ = api
+    original = callbacks.read_bytes()
+    external = tmp_path / "external-callbacks.json"
+    external.write_bytes(original)
+    callbacks.unlink()
+    callbacks.symlink_to(external)
+    assert own(api, "/api/callbacks", "t1")[0] == 503
+    assert own(api, "/api/callbacks/dial-next", "t1", method="POST")[0] == 503
+    assert ami.actions == []
+    assert external.read_bytes() == original
