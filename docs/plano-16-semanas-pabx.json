@@ -183,5 +183,14 @@
       "requires_lab": true
     }
   ],
-  "operational_go_authorized": false
+  "operational_go_authorized": false,
+  "development_policy": {
+    "mode": "CONTINUE_WITH_OPERATIONAL_EVIDENCE_DEFERRED",
+    "registered_on": "2026-10-29",
+    "pending_registry": "docs/quality/provas-operacionais-diferidas.json",
+    "no_operational_proofs_executed_as_part_of_this_change": true,
+    "automated_code_and_security_ci_still_required": true,
+    "formal_milestone_statuses_unchanged_without_acceptance": true,
+    "operational_go_authorized": false
+  }
 }

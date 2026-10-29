@@ -1,0 +1,161 @@
+{
+  "schema_version": 1,
+  "project": "AXE PABX",
+  "registered_on": "2026-10-29",
+  "execution_mode": "DEVELOPMENT_ONLY_PROOFS_DEFERRED",
+  "operational_proofs_executed_in_this_change": false,
+  "operational_go_authorized": false,
+  "ci_security_gates_must_remain_enabled": true,
+  "pending_checks": [
+    {
+      "id": "PABX-OPS-08-VM-PIN",
+      "milestone_week": 8,
+      "description": "Autenticar *97 em Asterisk real usando PIN correto/incorreto; verificar limite de tentativas sem registrar segredos",
+      "status": "DEFERRED_NOT_EXECUTED",
+      "evidence": null,
+      "executed_at": null,
+      "approved_at": null,
+      "tracking_issue": 88
+    },
+    {
+      "id": "PABX-OPS-08-VM-MESSAGE",
+      "milestone_week": 8,
+      "description": "Provar leitura negada de mensagem e mailbox de outro tenant, incluindo t1 versus t10",
+      "status": "DEFERRED_NOT_EXECUTED",
+      "evidence": null,
+      "executed_at": null,
+      "approved_at": null,
+      "tracking_issue": 88
+    },
+    {
+      "id": "PABX-OPS-08-RECORDINGS",
+      "milestone_week": 8,
+      "description": "Gerar e consultar gravações reais de chamadas em volumes separados; negar acesso cruzado e validar CDR/proveniência",
+      "status": "DEFERRED_NOT_EXECUTED",
+      "evidence": null,
+      "executed_at": null,
+      "approved_at": null,
+      "tracking_issue": 30
+    },
+    {
+      "id": "PABX-OPS-08-IDENTITY",
+      "milestone_week": 8,
+      "description": "Integrar sessão e papéis reais SSO/API/HTTP e provar revogação no ambiente de destino",
+      "status": "DEFERRED_NOT_EXECUTED",
+      "evidence": null,
+      "executed_at": null,
+      "approved_at": null,
+      "tracking_issue": 30
+    },
+    {
+      "id": "PABX-OPS-09-URA",
+      "milestone_week": 9,
+      "description": "Executar URA de ponta a ponta com entrada, seleção e encaminhamento de fila no tenant correto",
+      "status": "DEFERRED_NOT_EXECUTED",
+      "evidence": null,
+      "executed_at": null,
+      "approved_at": null,
+      "tracking_issue": 30
+    },
+    {
+      "id": "PABX-OPS-09-CALLBACK",
+      "milestone_week": 9,
+      "description": "Executar callback ponta a ponta: espera, transbordo, OriginateResponse, DialEnd e resultado correlacionado",
+      "status": "DEFERRED_NOT_EXECUTED",
+      "evidence": null,
+      "executed_at": null,
+      "approved_at": null,
+      "tracking_issue": 30
+    },
+    {
+      "id": "PABX-OPS-09-SLA",
+      "milestone_week": 9,
+      "description": "Comparar SLA de chamadas reais com eventos AMI, CDR e relatório por tenant sem duplicidades",
+      "status": "DEFERRED_NOT_EXECUTED",
+      "evidence": null,
+      "executed_at": null,
+      "approved_at": null,
+      "tracking_issue": 30
+    },
+    {
+      "id": "PABX-OPS-10-TRANSFER",
+      "milestone_week": 10,
+      "description": "Exercitar transferência assistida, retorno e liberação de canais com chamada real",
+      "status": "DEFERRED_NOT_EXECUTED",
+      "evidence": null,
+      "executed_at": null,
+      "approved_at": null,
+      "tracking_issue": 30
+    },
+    {
+      "id": "PABX-OPS-10-RECORD",
+      "milestone_week": 10,
+      "description": "Validar gravação de chamada real, retenção e política de acesso por proprietário",
+      "status": "DEFERRED_NOT_EXECUTED",
+      "evidence": null,
+      "executed_at": null,
+      "approved_at": null,
+      "tracking_issue": 30
+    },
+    {
+      "id": "PABX-OPS-11-BACKUP",
+      "milestone_week": 11,
+      "description": "Executar backup/restauração de dados, AstDB, gravações e ramais com integridade verificada",
+      "status": "DEFERRED_NOT_EXECUTED",
+      "evidence": null,
+      "executed_at": null,
+      "approved_at": null,
+      "tracking_issue": 30
+    },
+    {
+      "id": "PABX-OPS-12-FAILOVER",
+      "milestone_week": 12,
+      "description": "Medir RTO/RPO e recuperação após falha de Asterisk, tronco e serviços em ambiente-alvo",
+      "status": "DEFERRED_NOT_EXECUTED",
+      "evidence": null,
+      "executed_at": null,
+      "approved_at": null,
+      "tracking_issue": 30
+    },
+    {
+      "id": "PABX-OPS-13-HARDENING",
+      "milestone_week": 13,
+      "description": "Auditar certificados TLS, controles SIP/SRTP, ACL, segredos e portas em infraestrutura-alvo",
+      "status": "DEFERRED_NOT_EXECUTED",
+      "evidence": null,
+      "executed_at": null,
+      "approved_at": null,
+      "tracking_issue": 30
+    },
+    {
+      "id": "PABX-OPS-14-LOAD",
+      "milestone_week": 14,
+      "description": "Executar carga e estabilidade prolongada com simultaneidade e medição de recursos",
+      "status": "DEFERRED_NOT_EXECUTED",
+      "evidence": null,
+      "executed_at": null,
+      "approved_at": null,
+      "tracking_issue": 30
+    },
+    {
+      "id": "PABX-OPS-15-RELEASE",
+      "milestone_week": 15,
+      "description": "Reunir e revisar evidências de 13 cenários, CI, commit SHA e runbook de release candidate",
+      "status": "DEFERRED_NOT_EXECUTED",
+      "evidence": null,
+      "executed_at": null,
+      "approved_at": null,
+      "tracking_issue": 30
+    },
+    {
+      "id": "PABX-OPS-16-GO",
+      "milestone_week": 16,
+      "description": "Obter revisão humana go/no-go, contingência e implantação apenas após homologação concluída",
+      "status": "DEFERRED_NOT_EXECUTED",
+      "evidence": null,
+      "executed_at": null,
+      "approved_at": null,
+      "tracking_issue": 30
+    }
+  ]
+}
