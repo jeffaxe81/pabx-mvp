@@ -150,3 +150,48 @@ def test_callback_store_fails_closed_before_writing_invalid_number(tmp_path):
     item = add_callback_request(path, "5511999998888", tenant="t10")
     assert item is not None and item["tenant"] == "t10"
     assert load_callbacks(path)[0]["caller_id_num"] == "5511999998888"
+
+
+# Registros persistidos não confiáveis: não originar a partir de FIFO corrupto.
+@pytest.mark.parametrize("bad", [
+    None, "10", False, float("nan"), float("inf"), -1, [],
+])
+def test_pending_callback_with_bad_timestamp_blocks_entire_fifo(bad):
+    good = {"id": "good", "status": "pendente", "requested_at": 200,
+            "caller_id_num": "5511999998888", "tenant": "t1"}
+    malformed = {**good, "id": "bad", "requested_at": bad}
+    assert next_pending_callback([good, malformed]) is None
+    assert next_pending_callback([malformed, good]) is None
+
+
+@pytest.mark.parametrize("malformed", [
+    None, "not-an-object", {"status": "pendente", "id": "", "requested_at": 1},
+    {"status": "pendente", "id": "bad", "requested_at": 1,
+     "caller_id_num": "evil"},
+    {"status": "pendente", "id": "bad", "requested_at": 1,
+     "caller_id_num": "5511999998888", "tenant": "t01"},
+])
+def test_malformed_persisted_callback_fails_closed(malformed):
+    valid = {"id": "good", "status": "pendente", "requested_at": 100,
+             "caller_id_num": "5511999998888", "tenant": "t10"}
+    assert next_pending_callback([malformed, valid]) is None
+
+
+def test_finite_timestamp_preserves_global_fifo_and_tenant_scoping():
+    records = [
+        {"id": "old-t10", "status": "pendente", "requested_at": 50,
+         "caller_id_num": "5511999998888", "tenant": "t10"},
+        {"id": "t1", "status": "pendente", "requested_at": 100,
+         "caller_id_num": "5511988877777", "tenant": "t1"},
+        {"id": "new-t10", "status": "pendente", "requested_at": 200,
+         "caller_id_num": "5511988877777", "tenant": "t10"},
+    ]
+    assert next_pending_callback(records)["id"] == "old-t10"
+    owned = [c for c in records if c["tenant"] == "t1"]
+    assert next_pending_callback(owned)["id"] == "t1"
+    assert next_pending_callback(records[2:])["id"] == "new-t10"
+
+
+def test_fifo_rejects_non_list_snapshot_without_crashing():
+    for malformed in ({}, "pending", None, False):
+        assert next_pending_callback(malformed) is None
