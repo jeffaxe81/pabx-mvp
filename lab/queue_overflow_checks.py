@@ -94,23 +94,33 @@ def active_queue(raw, endpoint, tenant):
     return row[0], queue
 
 
-def overflow_cdr_matches(raw, tenant):
+def overflow_cdr_matches(raw, tenant, prior_ids, channel):
+    """CDR exclusivamente NOVO, atrelado ao mesmo canal observado.
+
+    Goto(1000,1) pode alterar CDR(dst) de 9987 para 1000; nenhuma
+    coincidência com CDRs antigos ou outra chamada é admitida.
+    """
     from .call_checks import cdr_rows
-    if tenant not in TENANTS:
+    if (tenant not in TENANTS or not isinstance(prior_ids, set)
+            or any(not isinstance(value, str) for value in prior_ids)
+            or not isinstance(channel, str)
+            or re.fullmatch(r"PJSIP/" + tenant + r"-1001-[0-9a-f]+", channel) is None):
         return False
     rows = cdr_rows(raw)
     if rows is None:
         return False
+    fresh = [row for row in rows if row[8] not in prior_ids]
     matches = [
-        row for row in rows
-        if (row[0] == tenant and row[1] == "1001" and row[2] == EXTENSION
+        row for row in fresh
+        if (row[0] == tenant and row[1] == "1001"
+            and row[2] in {EXTENSION, "1000"}
             and row[3] == tenant + "-internal"
-            and re.fullmatch(r"PJSIP/" + tenant + r"-1001-[0-9a-f]+", row[4])
+            and row[4] == channel
             and row[5] == "" and row[6] == "ANSWERED"
             and row[7].isdigit() and int(row[7]) >= 2
             and re.fullmatch(r"[0-9]+\.[0-9]+", row[8]))
     ]
-    return len(matches) == 1
+    return len(matches) == 1 and len({row[8] for row in matches}) == 1
 
 
 def exercise_queue_overflow(container, prepared, report):
@@ -140,6 +150,15 @@ def exercise_queue_overflow(container, prepared, report):
             report["phase"] = ("queue-overflow-load:" + tenant + ":"
                                + "".join("1" if ok else "0" for ok in loaded_parts))
             raise ValueError("roteamento de transbordo não carregado")
+        # CDR anterior à ligação: nenhum registro pré-existente pode
+        # demonstrar o transbordo que ainda não aconteceu.
+        from .call_checks import cdr_rows
+        snapshot = command(["docker", "exec", container, "cat",
+                            "/var/log/asterisk/cdr-custom/Lab.csv"], check=False)
+        baseline = cdr_rows(snapshot.stdout) if snapshot.returncode == 0 else None
+        if baseline is None:
+            raise ValueError("histórico CDR inválido antes do teste de transbordo")
+        prior_ids = {row[8] for row in baseline}
         with ExitStack() as resources:
             peer = CallPeer("127.0.0.1", 5061, prepared["ca"],
                             endpoint, prepared["credentials"][endpoint])
@@ -210,7 +229,8 @@ def exercise_queue_overflow(container, prepared, report):
             cdr = command(["docker", "exec", container, "cat",
                            "/var/log/asterisk/cdr-custom/Lab.csv"], check=False)
             checks["overflow_cdr" + suffix] = (
-                cdr.returncode == 0 and overflow_cdr_matches(cdr.stdout, tenant)
+                cdr.returncode == 0
+                and overflow_cdr_matches(cdr.stdout, tenant, prior_ids, channel)
             )
             if (checks["overflow_channels_cleared" + suffix]
                     and checks["overflow_cdr" + suffix]):
