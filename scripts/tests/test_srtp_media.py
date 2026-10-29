@@ -90,3 +90,70 @@ def test_sdp_selects_pcmu_from_asterisk_codec_offer_and_preserves_crypto_tag():
     finally:
         local.close()
         remote.close()
+
+def test_rfc4733_srtp_negotiation_rejects_missing_or_spoofed_telephone_event():
+    from lab.srtp_media import SrtpMedia
+    caller, callee = SrtpMedia(dtmf=True), SrtpMedia(dtmf=True)
+    try:
+        assert b'RTP/SAVP 0 101' in caller.offer()
+        assert b'a=rtpmap:101 telephone-event/8000' in caller.offer()
+        with pytest.raises(ValueError, match='DTMF'):
+            caller.negotiate(SrtpMedia().offer())
+        spoofed = callee.offer().replace(
+            b'101 telephone-event/8000', b'101 PCMU/8000')
+        with pytest.raises(ValueError, match='DTMF'):
+            caller.negotiate(spoofed)
+        caller.negotiate(callee.offer())
+        callee.negotiate(caller.offer())
+    finally:
+        caller.close()
+        callee.close()
+
+
+def test_rfc4733_pin_digits_are_srtp_protected_and_never_echoed():
+    import struct
+    from lab.srtp_media import SrtpMedia
+    caller, callee = SrtpMedia(dtmf=True), SrtpMedia(dtmf=True)
+    try:
+        caller.negotiate(callee.offer())
+        callee.negotiate(caller.offer())
+        caller.send_dtmf('#')
+        packets = []
+        callee.socket.settimeout(2)
+        for _ in range(9):
+            packet, address = callee.socket.recvfrom(4096)
+            assert address == caller.socket.getsockname()
+            decrypted = callee.unprotect(packet)
+            packets.append(decrypted)
+        assert all((p[1] & 0x7f) == 101 for p in packets)
+        assert packets[0][1] & 0x80
+        assert all(p[12] == 11 for p in packets)  # codigo RFC4733 de '#'
+        assert all((p[13] & 0x80) == 0 for p in packets[:6])
+        assert all((p[13] & 0x80) != 0 for p in packets[6:])
+        assert len({struct.unpack('!I', p[4:8])[0] for p in packets}) == 1
+        assert [struct.unpack('!H', p[2:4])[0] for p in packets] == list(
+            range(struct.unpack('!H', packets[0][2:4])[0],
+                  struct.unpack('!H', packets[0][2:4])[0] + 9)
+        ) or (
+            len({struct.unpack('!H', p[2:4])[0] for p in packets}) == 9
+            and ((struct.unpack('!H', packets[-1][2:4])[0] -
+                  struct.unpack('!H', packets[0][2:4])[0]) & 65535) == 8
+        )
+    finally:
+        caller.close()
+        callee.close()
+
+
+@pytest.mark.parametrize('digit', ['', 'x', '99', None, 4, 'secret'])
+def test_rfc4733_rejects_unsupported_digit_without_emitting_payload(digit):
+    from lab.srtp_media import SrtpMedia
+    peer = SrtpMedia(dtmf=True)
+    try:
+        with pytest.raises(ValueError):
+            peer.protect_dtmf(digit, duration=160)
+        with pytest.raises(ValueError):
+            peer.protect_dtmf('1', duration=True)
+        with pytest.raises(ValueError):
+            peer.protect_dtmf('1', duration=65536)
+    finally:
+        peer.close()
