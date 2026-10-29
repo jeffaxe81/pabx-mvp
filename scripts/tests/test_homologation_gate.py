@@ -117,3 +117,15 @@ def test_cli_rejects_oversized_homologation_without_parsing(tmp_path, capsys):
     large.write_bytes(b"x" * (MAX_HOMOLOGATION_BYTES + 1))
     assert main(["--file", str(large)]) == 2
     assert "limite" in capsys.readouterr().err
+
+def test_duplicate_json_keys_cannot_forge_homologation_status(tmp_path, capsys):
+    path = tmp_path / "ambiguous.json"
+    valid = json.dumps(fixture_payload())
+    top_level = valid.replace('"schema_version": 1',
+                              '"schema_version": 1, "schema_version": 1', 1)
+    nested = valid.replace('"status": "pending"',
+                           '"status": "pending", "status": "passed"', 1)
+    for content in (top_level, nested):
+        path.write_text(content, encoding="utf-8")
+        assert main(["--file", str(path)]) == 2
+        assert "duplicada" in capsys.readouterr().err
