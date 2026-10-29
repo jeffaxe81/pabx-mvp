@@ -169,5 +169,10 @@ def exercise_calls(container, prepared, report):
             report['srtp_tested'] = True
     from .recording_checks import exercise_recordings
     exercise_recordings(container, prepared, report)
-    from .direct_route_recording_checks import exercise_direct_routes
+    from .direct_route_recording_checks import (
+        exercise_direct_routes, restore_direct_route_checks,
+    )
     exercise_direct_routes(container, prepared, report)
+    # O Chromium usa 1010/1011 COM atendentes WebRTC, nunca os substitutos
+    # SIP deste ensaio. Restaurar antes que exercise_webrtc seja chamado.
+    restore_direct_route_checks(container, prepared)
