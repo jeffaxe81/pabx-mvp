@@ -15,10 +15,12 @@ MAX_SECONDS = 600  # acima de 10 minutos não é mais "overflow", é só uma fil
 
 def validate_overflow_timeout_input(data: dict):
     """Retorna (ok, error_message, cleaned_seconds)."""
-    raw = data.get("seconds")
-    try:
+    raw = data.get("seconds") if isinstance(data, dict) else None
+    if type(raw) is int:
+        seconds = raw
+    elif isinstance(raw, str) and raw.isascii() and raw.isdecimal() and len(raw) <= 4:
         seconds = int(raw)
-    except (TypeError, ValueError):
+    else:
         return False, "tempo de overflow deve ser um número inteiro de segundos", None
 
     if not (MIN_SECONDS <= seconds <= MAX_SECONDS):
