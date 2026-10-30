@@ -56,6 +56,8 @@ def is_poor_quality(quality: dict, jitter_threshold_ms: float = 30.0, packet_los
     ausentes (None) são ignoradas, não contam como "ruim" nem "boa" -
     dado que não veio não pode virar alarme falso.
     """
+    if not isinstance(quality, dict):
+        return False
     jitter = quality.get("jitter_ms")
     packet_loss = quality.get("packet_loss_percent")
 
