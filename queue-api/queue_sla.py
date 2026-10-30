@@ -18,6 +18,7 @@ injetável, mesmo padrão de metrics.py.
 import json
 import re
 import time
+from datetime import date
 from pathlib import Path
 
 DEFAULT_SLA_THRESHOLD_SECONDS = 20
@@ -183,10 +184,37 @@ class SLAHistoryStore:
             line = line.strip()
             if not line:
                 continue
-            try:
-                records.append(json.loads(line))
-            except json.JSONDecodeError:
+            if len(line) > 4096:
                 continue
+            try:
+                record = json.loads(line)
+            except (ValueError, TypeError):
+                continue
+            if not isinstance(record, dict):
+                continue
+            day = record.get("date")
+            queue = record.get("queue")
+            offered = record.get("offered")
+            within = record.get("within_sla")
+            if (not isinstance(day, str)
+                    or re.fullmatch(r"\\d{4}-\\d{2}-\\d{2}", day) is None
+                    or not _valid_queue_name(queue)
+                    or type(offered) is not int or type(within) is not int
+                    or not (1 <= offered <= 10_000_000)
+                    or not (0 <= within <= offered)):
+                continue
+            try:
+                if date.fromisoformat(day).isoformat() != day:
+                    continue
+            except ValueError:
+                continue
+            # Dados históricos podem trazer percentual adulterado: sempre
+            # recalcular a partir dos contadores válidos, sem aceitar NaN.
+            records.append({
+                "date": day, "queue": queue,
+                "offered": offered, "within_sla": within,
+                "sla_percent": round(within / offered * 100, 1),
+            })
         return records
 
 
@@ -215,9 +243,11 @@ def summarize_sla_history_by_date(records: list) -> dict:
     """
     by_date = {}
     for r in records:
-        by_date.setdefault(r["date"], {})[r["queue"]] = {
-            "offered": r["offered"],
-            "within_sla": r["within_sla"],
-            "sla_percent": r["sla_percent"],
-        }
+        queues = by_date.setdefault(r["date"], {})
+        stats = queues.setdefault(r["queue"], {"offered": 0, "within_sla": 0})
+        stats["offered"] += r["offered"]
+        stats["within_sla"] += r["within_sla"]
+        stats["sla_percent"] = round(
+            stats["within_sla"] / stats["offered"] * 100, 1,
+        )
     return by_date
