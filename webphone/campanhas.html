@@ -311,6 +311,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     <h2 style="margin:0;">Retornos de chamada pendentes</h2>
     <button class="btn-ghost" id="refreshCallbacksBtn">Atualizar</button>
   </div>
+  <div id="callbackSummary" role="status" aria-live="polite" class="status-row" style="margin-top:12px;">Resumo indisponível.</div>
   <div id="callbacksList" style="margin-top:14px;"><div class="empty">Carregando...</div></div>
 </div>
 
@@ -434,10 +435,32 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     ocupado: 'Ocupado', sem_resposta: 'Sem resposta', cancelado: 'Cancelado', esgotado: 'Esgotado',
   };
 
+  function renderCallbackSummary(summary) {
+    const target = el('callbackSummary');
+    if (!summary || typeof summary.total !== 'number' || !summary.by_status) {
+      target.textContent = 'Resumo indisponível.';
+      return;
+    }
+    const categories = [
+      ['pendente', 'Pendentes'], ['discando', 'Discando'],
+      ['concluido', 'Concluídos'], ['cancelado', 'Cancelados'],
+      ['esgotado', 'Esgotados'],
+    ];
+    const count = (value) => Number.isSafeInteger(value) && value >= 0 ? value : 0;
+    target.textContent = 'Total: ' + count(summary.total) + ' | ' +
+      categories.map(([key, label]) => label + ': ' + count(summary.by_status[key])).join(' | ');
+  }
+
   function loadCallbacks() {
     apiFetch('/api/callbacks')
-      .then((data) => renderCallbacks(data.callbacks || []))
-      .catch((err) => { el('callbacksList').innerHTML = `<div class="error-msg">${safe(err.message)}</div>`; });
+      .then((data) => {
+        renderCallbackSummary(data.summary);
+        renderCallbacks(data.callbacks || []);
+      })
+      .catch((err) => {
+        el('callbackSummary').textContent = 'Resumo indisponível.';
+        el('callbacksList').innerHTML = `<div class="error-msg">${safe(err.message)}</div>`;
+      });
   }
 
   function renderCallbacks(callbacks) {
