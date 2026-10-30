@@ -14,8 +14,16 @@ import urllib.request
 from email.mime.text import MIMEText
 
 
+def _safe_notification_text(value):
+    return value if isinstance(value, str) and len(value) <= 160 and value.isprintable() else ""
+
+
 def _display_name(missed_call: dict) -> str:
-    return missed_call.get("caller_id_name") or missed_call.get("caller_id_num") or "desconhecido"
+    if not isinstance(missed_call, dict):
+        return "desconhecido"
+    return (_safe_notification_text(missed_call.get("caller_id_name"))
+            or _safe_notification_text(missed_call.get("caller_id_num"))
+            or "desconhecido")
 
 
 def build_email_message(missed_call: dict, config: dict):
@@ -88,7 +96,11 @@ def dispatch_notifications(missed_call: dict, notify_config: dict):
     Cada canal falha de forma isolada - um erro no WhatsApp não deve
     impedir o email de ser enviado, e vice-versa.
     """
+    if not isinstance(notify_config, dict) or not isinstance(missed_call, dict):
+        return ["configuração ou notificação inválida"]
     channels = notify_config.get("channels", [])
+    if not isinstance(channels, (list, tuple, set)):
+        return ["canais de notificação inválidos"]
     errors = []
 
     if "email" in channels and notify_config.get("smtp"):
