@@ -90,7 +90,7 @@ def validate_callback_catalog(records):
     have the exact correlation needed to authorize another Originate.
     """
     if not _catalog_has_unique_ids(records) or len(records) > _MAX_CALLBACKS:
-        raise ValueError("catalogo de callbacks invalido ou excessivo")
+        raise ValueError("catalogo de callbacks com ids invalidos ou duplicados; catalogo excessivo")
     active_attempts = set()
     source_claims = set()
     for item in records:
@@ -127,7 +127,7 @@ def validate_callback_catalog(records):
             source_claims.add(source_key)
         if status == "pendente":
             if attempts >= MAX_ATTEMPTS:
-                raise ValueError("callback pendente com limite esgotado")
+                raise ValueError("callback pendente inconsistente: limite esgotado")
             continue
         # A DialEnd event may safely finalize only a correlated in-flight
         # attempt, not a record with a stale/missing AMI identity.
@@ -138,7 +138,7 @@ def validate_callback_catalog(records):
                 or item.get("channel_id") != "axe-" + attempt
                 or type(started) not in (int, float)
                 or not math.isfinite(started) or started < 0):
-            raise ValueError("callback discando sem correlacao AMI valida")
+            raise ValueError("callback discando inconsistente: correlacao AMI invalida")
         if attempt in active_attempts:
             raise ValueError("callback com identificador de tentativa duplicado")
         active_attempts.add(attempt)
