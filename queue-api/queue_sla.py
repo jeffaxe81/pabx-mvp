@@ -22,6 +22,7 @@ from datetime import date
 from pathlib import Path
 
 DEFAULT_SLA_THRESHOLD_SECONDS = 20
+MAX_HOLD_SECONDS = 24 * 3600
 _AMI_UNIQUEID = re.compile(r"[A-Za-z0-9._-]{1,96}$")
 
 
@@ -36,9 +37,10 @@ def _hold_time_seconds(value):
     falsos. Asterisk AMI fornece segundos inteiros como texto.
     """
     if type(value) is int:
-        return value if value >= 0 else None
+        return value if 0 <= value <= MAX_HOLD_SECONDS else None
     if isinstance(value, str) and value.isascii() and value.isdecimal() and len(value) <= 9:
-        return int(value)
+        parsed = int(value)
+        return parsed if parsed <= MAX_HOLD_SECONDS else None
     return None
 
 
