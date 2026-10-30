@@ -6,6 +6,14 @@ QueueCallerLeave). Lógica pura - não depende de rede, 100% testável.
 import time
 
 
+def _safe_caller_field(value, max_length):
+    """Campos de identificação são texto não confiável do AMI."""
+    if (not isinstance(value, str) or len(value) > max_length
+            or not value.isprintable()):
+        return ""
+    return value
+
+
 class QueueStateTracker:
     def __init__(self):
         # channel -> {queue, caller_id_num, caller_id_name, joined_at}
@@ -31,8 +39,8 @@ class QueueStateTracker:
             self._waiting[channel] = {
                 "channel": channel,
                 "queue": queue,
-                "caller_id_num": event.get("CallerIDNum", ""),
-                "caller_id_name": event.get("CallerIDName", ""),
+                "caller_id_num": _safe_caller_field(event.get("CallerIDNum", ""), 64),
+                "caller_id_name": _safe_caller_field(event.get("CallerIDName", ""), 128),
                 "joined_at": time.time(),
             }
 
