@@ -38,8 +38,12 @@ def parse_quality_event(event: dict):
             or event.get("UserEvent") != "QualityStats"):
         return None
 
+    channel = event.get("Channel")
+    if (not isinstance(channel, str) or not 0 < len(channel) <= 160
+            or not channel.isprintable()):
+        return None
     return {
-        "channel": event.get("Channel", ""),
+        "channel": channel,
         "jitter_ms": _parse_float_or_none(event.get("Jitter")),
         "packet_loss_percent": _parse_loss_percent(event.get("PacketLoss")),
         "rtt_ms": _parse_float_or_none(event.get("RTT")),
