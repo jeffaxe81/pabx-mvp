@@ -114,3 +114,14 @@ def test_merge_handles_multiple_extensions_independently():
     merged = merge_presence_into_states(states, presence_map)
     assert merged[0]["manual_status"] == "ausente"
     assert merged[1]["manual_status"] is None
+
+
+def test_invalid_presence_catalog_is_not_overwritten(tmp_path):
+    import pytest
+    path = tmp_path / "presence.json"
+    for raw in ('[]', 'null', '{"t1-1001": []}',
+                '{"t1-1001": {"status": "invalid"}}'):
+        path.write_text(raw, encoding="utf-8")
+        with pytest.raises(ValueError):
+            set_presence(path, "t1-1001", "ferias")
+        assert path.read_text(encoding="utf-8") == raw
