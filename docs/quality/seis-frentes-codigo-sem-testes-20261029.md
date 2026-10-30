@@ -41,3 +41,24 @@ registrado permanece 51,3%, sem autorizar GO de produção.
 **Situação:** alterações persistidas em branch de código, sem executar
 testes, simulações, CI, laboratório ou deploy. Ainda não homologadas;
 requerem revisão especializada antes de incorporação na main.
+
+## Quarto incremento — 6 frentes de implementação (sem testes)
+
+1. **Multiempresa** — validação de integridade do registro: nenhum
+   tenant ou DID poderá aparecer duas vezes no cadastro já persistido.
+2. **Gravações** — política de autorização recusa a utilização de
+   um único identificador CDR/AMI para dois arquivos, mesmo tenant.
+3. **SLA** — leitura por descritor de arquivo com proteção contra
+   symlink e limite de tamanho do histórico.
+4. **Presença** — serialização das operações de alteração entre
+   threads e processos que compartilham o mesmo filesystem.
+5. **Relatórios** — persistência em arquivo regular, sem seguir
+   symlink final, com flush e fsync do histórico CDR.
+6. **Callbacks** — estados inválidos e tenants incorretos em registros
+   históricos deixam de ser aceitos no snapshot persistido.
+
+**Estado:** código registrado apenas na branch de desenvolvimento.
+Sem execução de testes, homologação, CI solicitada manualmente,
+deploy ou integração na `main`. A anotação `[skip ci]` foi usada
+nos commits, mas não substitui a checagem posterior dos workflows.
+Homologação e GO de produção continuam bloqueados.
