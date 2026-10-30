@@ -95,3 +95,10 @@ def test_issuance_rejects_invalid_clock_and_role_without_creating_token(tmp_path
             issue_credential(path, "t1", role, now=1000)
     assert path.read_bytes() == original
     assert issue_credential(path, "t1", "supervisor", now=1000)["expires_at"] == 4600
+
+
+def test_queue_catalog_rejects_duplicate_json_fields(tmp_path):
+    path = tmp_path / "queue-credentials.json"
+    path.write_text('{"credentials":[],"credentials":[]}', encoding="utf-8")
+    path.chmod(0o600)
+    assert load_queue_policy(path) is None
