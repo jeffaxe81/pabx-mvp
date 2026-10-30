@@ -366,6 +366,15 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 
   const el = (id) => document.getElementById(id);
 
+  // Dados de AMI/CallerID, nomes de filas e motivos de pausa não são HTML.
+  // Escapar todos os valores antes de interpolá-los em innerHTML.
+  function escapeHtml(value) {
+    return String(value ?? '').replace(/[&<>"']/g, (character) => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;',
+      '"': '&quot;', "'": '&#39;',
+    })[character]);
+  }
+
   const params = new URLSearchParams(window.location.search);
   const apiUrl = params.get('api') || 'http://pabx.local:8090';
 
@@ -489,10 +498,10 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     el('slaHistoryList').innerHTML = dates.map(([date, queues]) => {
       const queueRows = Object.entries(queues).map(([queueName, stats]) => `
         <div class="item-row">
-          <span style="padding-left:16px;">${queueName}</span>
-          <span class="mono">${stats.sla_percent}% (${stats.within_sla}/${stats.offered})</span>
+          <span style="padding-left:16px;">${escapeHtml(queueName)}</span>
+          <span class="mono">${escapeHtml(stats.sla_percent)}% (${escapeHtml(stats.within_sla)}/${escapeHtml(stats.offered)})</span>
         </div>`).join('');
-      return `<div class="item-row" style="font-weight:600;"><span>${date}</span><span></span></div>${queueRows}`;
+      return `<div class="item-row" style="font-weight:600;"><span>${escapeHtml(date)}</span><span></span></div>${queueRows}`;
     }).join('');
   }
 
@@ -508,7 +517,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
       .map(([reason, seconds]) => {
         const minutes = (seconds / 60).toFixed(1);
         return `<div class="item-row">
-          <span>${reason}</span>
+          <span>${escapeHtml(reason)}</span>
           <span class="mono">${minutes} min</span>
         </div>`;
       }).join('');
@@ -525,8 +534,8 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
       // só uma referência visual, a meta real de cada operação pode ser diferente.
       const dotClass = stats.sla_percent >= 80 ? 'livre' : 'em-espera';
       return `<div class="item-row">
-        <span><span class="dot ${dotClass}"></span>${queueName}</span>
-        <span class="mono">${stats.sla_percent}% em até ${sla.threshold_seconds}s (${stats.within_sla}/${stats.offered})</span>
+        <span><span class="dot ${dotClass}"></span>${escapeHtml(queueName)}</span>
+        <span class="mono">${escapeHtml(stats.sla_percent)}% em até ${escapeHtml(sla.threshold_seconds)}s (${escapeHtml(stats.within_sla)}/${escapeHtml(stats.offered)})</span>
       </div>`;
     }).join('');
   }
@@ -602,8 +611,8 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     ];
     el('metricsRow').innerHTML = cards.map((c) => `
       <div class="metric-card">
-        <div class="metric-value mono">${c.value}</div>
-        <div class="metric-label">${c.label}</div>
+        <div class="metric-value mono">${escapeHtml(c.value)}</div>
+        <div class="metric-label">${escapeHtml(c.label)}</div>
       </div>`).join('');
   }
 
@@ -621,8 +630,8 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
       // não agora mesmo), checado antes até da presença manual.
       if (e.pause_reason) {
         return `<div class="item-row">
-          <span><span class="dot ocupado"></span>Ramal ${e.exten}</span>
-          <span class="mono">Pausado — ${e.pause_reason}</span>
+          <span><span class="dot ocupado"></span>Ramal ${escapeHtml(e.exten)}</span>
+          <span class="mono">Pausado — ${escapeHtml(e.pause_reason)}</span>
         </div>`;
       }
       // Presença manual (ausente/reunião/férias) tem prioridade visual
@@ -630,16 +639,19 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
       // não só o telefone estar tocando ou não.
       if (e.manual_status) {
         const label = manualStatusLabel[e.manual_status] || e.manual_status;
-        const note = e.manual_note ? ` — ${e.manual_note}` : '';
+        const note = e.manual_note ? ` — ${escapeHtml(e.manual_note)}` : '';
         return `<div class="item-row">
-          <span><span class="dot em-espera"></span>Ramal ${e.exten}</span>
-          <span class="mono">${label}${note}</span>
+          <span><span class="dot em-espera"></span>Ramal ${escapeHtml(e.exten)}</span>
+          <span class="mono">${escapeHtml(label)}${note}</span>
         </div>`;
       }
-      const dotClass = e.status_label.replace(' ', '-');
+      const knownStates = ['livre', 'em uso', 'ocupado', 'indisponível',
+        'tocando', 'em espera', 'desconhecido'];
+      const dotClass = knownStates.includes(e.status_label)
+        ? e.status_label.replace(' ', '-') : 'desconhecido';
       return `<div class="item-row">
-        <span><span class="dot ${dotClass}"></span>Ramal ${e.exten}</span>
-        <span class="mono">${e.status_label}</span>
+        <span><span class="dot ${dotClass}"></span>Ramal ${escapeHtml(e.exten)}</span>
+        <span class="mono">${escapeHtml(e.status_label)}</span>
       </div>`;
     }).join('');
   }

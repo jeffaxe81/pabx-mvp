@@ -54,9 +54,10 @@ def test_extensions_display_prioritizes_manual_presence_over_automatic_blf():
     """
     html = load_panel_html()
     fn_start = html.index("function renderExtensions")
-    fn_end = html.index("}", html.index("dotClass = e.status_label", fn_start))
+    fn_end = html.index("function renderQueue", fn_start)
     body = html[fn_start:fn_end]
     assert "e.manual_status" in body
+    assert body.index("e.manual_status") < body.index("const knownStates")
 
 
 def test_pause_reason_has_highest_display_priority():
@@ -215,3 +216,18 @@ def test_clear_filter_buttons_reset_inputs_and_refetch():
     body = html[fn_start:fn_end]
     assert "fetchAll()" in body
     assert "start: ''" in body
+
+
+
+def test_untrusted_ami_data_are_escaped_before_html_interpolation():
+    html = load_panel_html()
+    script = html[html.index("function escapeHtml"):html.index("function renderQueue")]
+    assert "replace(/[&<>\"']/g" in script
+    for data in (
+        "queueName", "reason", "e.exten", "e.pause_reason",
+        "e.manual_note", "e.status_label", "stats.sla_percent",
+        "stats.within_sla", "stats.offered", "sla.threshold_seconds",
+        "c.value",
+    ):
+        assert "${escapeHtml(" + data + ")}" in script, data
+    assert "knownStates.includes(e.status_label)" in script

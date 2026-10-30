@@ -391,3 +391,48 @@ test('tenant selector loads a t3 wizard company and keeps scope per request', as
     assert.deepEqual(errors, []);
   } finally { await context.close(); }
 });
+
+
+test('operational panel renders hostile AMI fields as text, never HTML', async () => {
+  const { context, page, errors } = await openPage('webphone/painel-operacional.html');
+  try {
+    const attack = '<img src=x onerror="window.__axeOpsXss=true">';
+    const fixtures = {
+      '/api/queue': { waiting: [] },
+      '/api/metrics/today': { total_calls: attack, answered_calls: 1, missed_calls: 0,
+        average_talk_seconds: 0, missed_rate_percent: 0 },
+      '/api/extension-states': { extensions: [
+        { exten: attack, status_label: 'livre', pause_reason: attack },
+        { exten: 't1-recepcao', manual_status: 'reuniao', manual_note: attack },
+        { exten: 't1-1010', status_label: attack },
+      ] },
+      '/api/fraud-alerts': { alerts: [] },
+      '/api/quality': { quality_reports: [] },
+      '/api/metrics/sla': { threshold_seconds: 20,
+        queues: { [attack]: { offered: 2, within_sla: 1, sla_percent: 50 } } },
+      '/api/reports/pauses': { by_reason: { [attack]: 120 } },
+      '/api/metrics/sla/history': { by_date: { '2026-10-29': {
+        [attack]: { offered: 1, within_sla: 0, sla_percent: 0 },
+      } } },
+    };
+    await page.route('**/api/**', route => {
+      const endpoint = new URL(route.request().url()).pathname;
+      if (!Object.hasOwn(fixtures, endpoint)) return route.continue();
+      return route.fulfill({
+        status: 200, contentType: 'application/json',
+        body: JSON.stringify(fixtures[endpoint]),
+      });
+    });
+    await page.locator('#queueToken').fill('synthetic-t1-token');
+    await page.locator('#filterSlaHistoryBtn').click();
+    await page.waitForFunction((x) =>
+      document.querySelector('#extensionsList')?.textContent.includes(x), attack);
+    for (const id of ['extensionsList', 'metricsRow', 'slaList',
+      'pauseHistoryList', 'slaHistoryList']) {
+      assert.equal(await page.locator('#' + id + ' img').count(), 0, id);
+      assert.ok((await page.locator('#' + id).textContent()).includes(attack), id);
+    }
+    assert.equal(await page.evaluate(() => window.__axeOpsXss === true), false);
+    assert.deepEqual(errors, []);
+  } finally { await context.close(); }
+});
