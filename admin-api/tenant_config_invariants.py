@@ -81,15 +81,15 @@ def inspect_generated_tenant_files(contents, tenant):
         tid_ok and ("[" + endpoints[0] + "](endpoint-webrtc)") in p,
         tid_ok and ("[" + endpoints[1] + "](endpoint-webrtc)") in p,
         tid_ok and p.count("context=" + tenant + "-internal") >= 2,
-        tid_ok and all(("auth=" + name) in p and ("[" + name + "]\ntype=auth") in p
+        tid_ok and all(("\nauth=" + name + "\n") in p and ("[" + name + "]\ntype=auth") in p
                        for name in endpoints),
-        tid_ok and all(("aors=" + name) in p and ("[" + name + "]\ntype=aor") in p
+        tid_ok and all(("\naors=" + name + "\n") in p and ("[" + name + "]\ntype=aor") in p
                        for name in endpoints),
         tid_ok and all(("mailboxes=" + name + "@" + tenant) in p for name in endpoints),
         tid_ok and all(("[" + name + "]") in q
                        for name in ("fila-" + tenant, "fila-" + tenant + "-en",
                                     "fila-" + tenant + "-es")),
-        tid_ok and all(("member => PJSIP/" + name) in q for name in endpoints),
+        tid_ok and all(("\nmember => PJSIP/" + name + "\n") in q for name in endpoints),
         tid_ok and q.count("monitor-type = mixmonitor") >= 3,
         tid_ok and ("[" + tenant + "-internal]") in x
                        and ("[" + tenant + "-hints]") in x,
