@@ -48,8 +48,8 @@ def _sections(text):
     """Split PJSIP stanzas at exact blank-line boundaries."""
     if not isinstance(text, str):
         return []
-    return [block.splitlines() for block in text.split("\n\n")
-            if block.startswith("[")]
+    return [block.strip("\n").splitlines() for block in text.split("\n\n")
+            if block.strip("\n").startswith("[")]
 
 
 def _one(sections, heading, kind=None):
@@ -67,8 +67,8 @@ def _dial_chunk(text, number):
     if not isinstance(text, str):
         return ""
     prefix = f"exten => {number},1,"
-    matches = [entry for entry in text.split("\n\n")
-               if entry.startswith(prefix)]
+    matches = [entry.strip("\n") for entry in text.split("\n\n")
+               if entry.strip("\n").startswith(prefix)]
     return matches[0] if len(matches) == 1 else ""
 
 
