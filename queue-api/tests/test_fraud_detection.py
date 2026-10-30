@@ -116,3 +116,10 @@ def test_is_over_spending_limit_true_when_exceeded():
 def test_is_over_spending_limit_false_when_under():
     records = [{"disposition": "ANSWERED", "billable_seconds": 60}]  # 1 min
     assert is_over_spending_limit(records, cost_per_minute=1.0, daily_limit=50) is False
+
+
+def test_external_call_ignores_malformed_ami_headers():
+    for event in (None, [], {}, {"DestChannel": []}, {"DestChannel": 19},
+                  {"DestChannel": {"gateway-tdm": True}}):
+        assert is_external_call(event) is False
+    assert not is_external_call({"DestChannel": "PJSIP/gateway-tdm-recepcao-0001"})
