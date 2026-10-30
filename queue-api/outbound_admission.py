@@ -42,6 +42,7 @@ class OriginateAdmission:
         self._requests = OrderedDict()
         self._inflight = {}
         self._sequence = 0
+        self._last_time = None
 
     def _time(self):
         now = self.clock()
@@ -80,6 +81,9 @@ class OriginateAdmission:
         fingerprint = hashlib.sha256((tenant + "\0" + extension + "\0" + number).encode()).digest()
         key = (tenant, request_id) if request_id is not None else None
         with self._lock:
+            if self._last_time is not None and now < self._last_time:
+                return "unavailable", None
+            self._last_time = now
             self._cleanup(now)
             if key is not None and key in self._requests:
                 entry = self._requests[key]
