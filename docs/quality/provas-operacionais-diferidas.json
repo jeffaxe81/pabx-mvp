@@ -15,7 +15,9 @@
       "evidence": null,
       "executed_at": null,
       "approved_at": null,
-      "tracking_issue": 88
+      "tracking_issue": 88,
+      "homologation_required": true,
+      "target_environment": "REAL_ENVIRONMENT"
     },
     {
       "id": "PABX-OPS-08-VM-MESSAGE",
@@ -25,7 +27,9 @@
       "evidence": null,
       "executed_at": null,
       "approved_at": null,
-      "tracking_issue": 88
+      "tracking_issue": 88,
+      "homologation_required": true,
+      "target_environment": "REAL_ENVIRONMENT"
     },
     {
       "id": "PABX-OPS-08-RECORDINGS",
@@ -35,7 +39,9 @@
       "evidence": null,
       "executed_at": null,
       "approved_at": null,
-      "tracking_issue": 30
+      "tracking_issue": 30,
+      "homologation_required": true,
+      "target_environment": "REAL_ENVIRONMENT"
     },
     {
       "id": "PABX-OPS-08-IDENTITY",
@@ -45,7 +51,9 @@
       "evidence": null,
       "executed_at": null,
       "approved_at": null,
-      "tracking_issue": 30
+      "tracking_issue": 30,
+      "homologation_required": true,
+      "target_environment": "REAL_ENVIRONMENT"
     },
     {
       "id": "PABX-OPS-09-URA",
@@ -55,7 +63,9 @@
       "evidence": null,
       "executed_at": null,
       "approved_at": null,
-      "tracking_issue": 30
+      "tracking_issue": 30,
+      "homologation_required": true,
+      "target_environment": "REAL_ENVIRONMENT"
     },
     {
       "id": "PABX-OPS-09-CALLBACK",
@@ -65,7 +75,9 @@
       "evidence": null,
       "executed_at": null,
       "approved_at": null,
-      "tracking_issue": 30
+      "tracking_issue": 30,
+      "homologation_required": true,
+      "target_environment": "REAL_ENVIRONMENT"
     },
     {
       "id": "PABX-OPS-09-SLA",
@@ -75,7 +87,9 @@
       "evidence": null,
       "executed_at": null,
       "approved_at": null,
-      "tracking_issue": 30
+      "tracking_issue": 30,
+      "homologation_required": true,
+      "target_environment": "REAL_ENVIRONMENT"
     },
     {
       "id": "PABX-OPS-10-TRANSFER",
@@ -85,7 +99,9 @@
       "evidence": null,
       "executed_at": null,
       "approved_at": null,
-      "tracking_issue": 30
+      "tracking_issue": 30,
+      "homologation_required": true,
+      "target_environment": "REAL_ENVIRONMENT"
     },
     {
       "id": "PABX-OPS-10-RECORD",
@@ -95,7 +111,9 @@
       "evidence": null,
       "executed_at": null,
       "approved_at": null,
-      "tracking_issue": 30
+      "tracking_issue": 30,
+      "homologation_required": true,
+      "target_environment": "REAL_ENVIRONMENT"
     },
     {
       "id": "PABX-OPS-11-BACKUP",
@@ -105,7 +123,9 @@
       "evidence": null,
       "executed_at": null,
       "approved_at": null,
-      "tracking_issue": 30
+      "tracking_issue": 30,
+      "homologation_required": true,
+      "target_environment": "REAL_ENVIRONMENT"
     },
     {
       "id": "PABX-OPS-12-FAILOVER",
@@ -115,7 +135,9 @@
       "evidence": null,
       "executed_at": null,
       "approved_at": null,
-      "tracking_issue": 30
+      "tracking_issue": 30,
+      "homologation_required": true,
+      "target_environment": "REAL_ENVIRONMENT"
     },
     {
       "id": "PABX-OPS-13-HARDENING",
@@ -125,7 +147,9 @@
       "evidence": null,
       "executed_at": null,
       "approved_at": null,
-      "tracking_issue": 30
+      "tracking_issue": 30,
+      "homologation_required": true,
+      "target_environment": "REAL_ENVIRONMENT"
     },
     {
       "id": "PABX-OPS-14-LOAD",
@@ -135,7 +159,9 @@
       "evidence": null,
       "executed_at": null,
       "approved_at": null,
-      "tracking_issue": 30
+      "tracking_issue": 30,
+      "homologation_required": true,
+      "target_environment": "REAL_ENVIRONMENT"
     },
     {
       "id": "PABX-OPS-15-RELEASE",
@@ -145,7 +171,9 @@
       "evidence": null,
       "executed_at": null,
       "approved_at": null,
-      "tracking_issue": 30
+      "tracking_issue": 30,
+      "homologation_required": true,
+      "target_environment": "REAL_ENVIRONMENT"
     },
     {
       "id": "PABX-OPS-16-GO",
@@ -155,7 +183,17 @@
       "evidence": null,
       "executed_at": null,
       "approved_at": null,
-      "tracking_issue": 30
+      "tracking_issue": 30,
+      "homologation_required": true,
+      "target_environment": "REAL_ENVIRONMENT"
     }
-  ]
+  ],
+  "real_environment_policy": {
+    "controlled_application_allowed_for_homologation": true,
+    "unproven_code_status": "CODE_REGISTERED_PENDING_REAL_HOMOLOGATION",
+    "record_missing_evidence_without_claiming_approval": true,
+    "automated_code_and_security_ci_required": true,
+    "target_environment_preflight_and_rollback_required": true,
+    "production_go_requires_separate_explicit_acceptance": true
+  }
 }

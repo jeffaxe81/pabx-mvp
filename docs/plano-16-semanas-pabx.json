@@ -191,6 +191,10 @@
     "no_operational_proofs_executed_as_part_of_this_change": true,
     "automated_code_and_security_ci_still_required": true,
     "formal_milestone_statuses_unchanged_without_acceptance": true,
-    "operational_go_authorized": false
+    "operational_go_authorized": false,
+    "controlled_real_environment_homologation_permitted": true,
+    "unproven_implementation_code_status": "CODE_REGISTERED_PENDING_REAL_HOMOLOGATION",
+    "real_environment_validation_requires_target_checks_and_rollback": true,
+    "homologation_and_final_production_go_are_separate_decisions": true
   }
 }
