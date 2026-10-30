@@ -31,7 +31,7 @@ def validate_presence_input(data: dict):
         return False, f"status inválido - use um de: {', '.join(sorted(PRESENCE_STATES))}", None
 
     note = data.get("note", "")
-    if not isinstance(note, str) or len(note) > 256:
+    if not isinstance(note, str) or len(note) > 256 or not note.isprintable():
         return False, "nota invalida ou longa demais", None
     note = note.strip()
     return True, None, {"status": status, "note": note}
@@ -39,6 +39,8 @@ def validate_presence_input(data: dict):
 
 def load_presence(path) -> dict:
     path = Path(path)
+    if path.is_symlink():
+        raise ValueError("catálogo de presença por link simbólico não é permitido")
     if not path.exists():
         return {}
     data = json.loads(path.read_text(encoding="utf-8"))
@@ -48,7 +50,9 @@ def load_presence(path) -> dict:
         if (not isinstance(exten, str) or not exten
                 or not isinstance(entry, dict)
                 or entry.get("status") not in PRESENCE_STATES
-                or not isinstance(entry.get("note", ""), str)):
+                or not isinstance(entry.get("note", ""), str)
+                or len(entry.get("note", "")) > 256
+                or not entry.get("note", "").isprintable()):
             raise ValueError("registro de presença inválido")
     return data
 
