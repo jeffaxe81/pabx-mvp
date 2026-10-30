@@ -150,3 +150,13 @@ def test_group_by_uses_placeholder_for_missing_key():
     records = [{"disposition": "ANSWERED", "billable_seconds": 10, "operator": None}]
     grouped = group_by(records, "operator")
     assert "desconhecido" in grouped
+
+
+def test_report_cdr_rejects_invalid_data_and_duration():
+    for bad in (None, [], True, "Cdr"):
+        assert parse_cdr_for_report(bad) is None
+    for bad in (-10, "-2", True, 1.5, "1.5", [], {}, "999999999999"):
+        item = parse_cdr_for_report({"Event": "Cdr", "Disposition": "ANSWERED",
+                                     "BillableSeconds": bad})
+        assert item["billable_seconds"] == 0
+    assert extract_operator([]) is None
