@@ -30,13 +30,15 @@ def validate_pause_request(data: dict):
     extension = extension.strip()
     if not extension:
         return False, "ramal obrigatório", None
+    if re.fullmatch(r"[A-Za-z0-9-]{1,64}", extension) is None:
+        return False, "ramal invalido", None
 
     paused = data.get("paused")
     if not isinstance(paused, bool):
         return False, "campo 'paused' deve ser true ou false", None
 
     reason = data.get("reason", "")
-    if not isinstance(reason, str) or len(reason) > 256:
+    if not isinstance(reason, str) or len(reason) > 256 or not reason.isprintable():
         return False, "motivo invalido ou longo demais", None
     reason = reason.strip()
     if paused and not reason:
