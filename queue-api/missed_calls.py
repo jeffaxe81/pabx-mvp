@@ -75,6 +75,9 @@ class MissedCallsLog:
                     entry[name], "desconhecido" if name == "caller_id_num" else "",
                     maximum,
                 )
+        for name in ("reason", "source"):
+            if name in entry:
+                entry[name] = _safe_ami_text(entry[name], max_length=64)
         entry["timestamp"] = time.time()
         self._entries.append(entry)
         if len(self._entries) > self._max_size:
