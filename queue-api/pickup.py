@@ -14,8 +14,10 @@ def validate_pickup_request(data: dict, config: dict):
     Retorna (ok, error_message, channel, extension). Se ok=False,
     channel e extension vêm None.
     """
+    if not isinstance(data, dict) or not isinstance(config, dict):
+        return False, "requisição de pickup inválida", None, None
     channel = data.get("channel")
-    if not channel:
+    if not isinstance(channel, str) or not 0 < len(channel) <= 160 or not channel.isprintable():
         return False, "campo 'channel' obrigatório", None, None
 
     extension = data.get("extension")
