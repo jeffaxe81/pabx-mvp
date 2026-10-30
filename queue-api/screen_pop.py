@@ -42,6 +42,10 @@ def parse_dial_begin_event(event: dict):
 
 
 def build_webhook_payload(call_info: dict) -> dict:
+    if (not isinstance(call_info, dict)
+            or not isinstance(call_info.get("caller_id_num"), str)
+            or not call_info["caller_id_num"]):
+        raise ValueError("dados de screen-pop inválidos")
     return {
         "event": "incoming_call",
         "caller_number": call_info["caller_id_num"],
