@@ -390,31 +390,18 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     }
   }
 
-  function fetchTenantQueue() {
-    const token = el('queueToken').value.trim();
-    if (!token) {
-      el('queueList').textContent = 'Informe a credencial da empresa para ver sua fila.';
-      return Promise.resolve(null);
-    }
-    if (!secureQueueUrl(apiUrl)) {
-      el('queueList').textContent = 'A consulta de filas exige HTTPS fora de localhost.';
-      return Promise.resolve(null);
-    }
+  function fetchTenantQueue(token) {
+    if (!token || !secureQueueUrl(apiUrl)) return Promise.resolve(null);
     return fetch(`${apiUrl}/api/queue`, {
       headers: { Authorization: `Bearer ${token}` }, cache: 'no-store',
     }).then((response) => {
-      if (!response.ok) throw new Error('Sem permissão');
+      if (!response.ok) throw new Error('Acesso à fila negado');
       return response.json();
-    }).catch(() => {
-      el('queueList').textContent = 'Acesso à fila negado ou indisponível.';
-      return null;
-    });
+    }).catch(() => null);
   }
-  el('refreshQueueBtn').addEventListener('click', () => {
-    fetchTenantQueue().then((queue) => {
-      if (queue) renderQueue(queue.waiting || []);
-    });
-  });
+  // Atualizar pela mesma rotina que protege os demais indicadores;
+  // uma resposta atrasada não deve substituir dados de outra empresa.
+  el('refreshQueueBtn').addEventListener('click', fetchAll);
 
   el('reportsLink').href = `relatorios.html?api=${encodeURIComponent(apiUrl)}`;
 
@@ -432,8 +419,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     return query ? `?${query}` : '';
   }
 
-  function fetchScopedOperator(path) {
-    const token = el('queueToken').value.trim();
+  function fetchScopedOperator(path, token) {
     if (!token || !secureQueueUrl(apiUrl)) return Promise.resolve(null);
     return fetch(`${apiUrl}${path}`, {
       headers: { Authorization: `Bearer ${token}` }, cache: 'no-store',
@@ -443,26 +429,68 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     }).catch(() => null);
   }
 
+  const protectedPanels = [
+    'metricsRow', 'extensionsList', 'queueList', 'fraudAlertsList',
+    'qualityList', 'slaList', 'pauseHistoryList', 'slaHistoryList',
+  ];
+  let requestGeneration = 0;
+
+  function clearProtectedPanels(message) {
+    for (const id of protectedPanels) el(id).textContent = message;
+    el('lastUpdate').textContent = message;
+  }
+
+  // Mudar/apagar o Bearer invalida imediatamente a renderização anterior.
+  // Respostas que chegarem depois não podem repor os dados do antigo tenant.
+  el('queueToken').addEventListener('input', () => {
+    requestGeneration += 1;
+    clearProtectedPanels('Credencial alterada. Atualize para consultar os dados da empresa.');
+  });
+
   function fetchAll() {
+    const token = el('queueToken').value.trim();
+    const generation = ++requestGeneration;
+    if (!token) {
+      clearProtectedPanels('Informe a credencial da empresa para consultar os indicadores.');
+      return;
+    }
+    if (!secureQueueUrl(apiUrl)) {
+      clearProtectedPanels('A consulta exige HTTPS fora de localhost.');
+      return;
+    }
     Promise.all([
-      fetchScopedOperator('/api/metrics/today'),
-      fetchScopedOperator('/api/extension-states'),
-      fetchTenantQueue(),
-      fetchScopedOperator('/api/fraud-alerts'),
-      fetchScopedOperator('/api/quality?only_poor=true'),
-      fetchScopedOperator('/api/metrics/sla'),
-      fetchScopedOperator(`/api/reports/pauses${buildHistoryQuery(pauseHistoryFilter)}`),
-      fetchScopedOperator(`/api/metrics/sla/history${buildHistoryQuery(slaHistoryFilter)}`),
-    ]).then(([metrics, extensions, queue, fraud, quality, sla, pauses, slaHistory]) => {
-      if (metrics) renderMetrics(metrics);
-      if (extensions) renderExtensions(extensions.extensions || []);
-      if (queue) renderQueue(queue.waiting || []);
-      if (fraud) renderFraudAlerts(fraud.alerts || []);
-      if (quality) renderQuality(quality.quality_reports || []);
-      if (sla) renderSla(sla);
-      if (pauses) renderPauseHistory(pauses);
-      if (slaHistory) renderSlaHistory(slaHistory);
+      fetchScopedOperator('/api/metrics/today', token),
+      fetchScopedOperator('/api/extension-states', token),
+      fetchTenantQueue(token),
+      fetchScopedOperator('/api/fraud-alerts', token),
+      fetchScopedOperator('/api/quality?only_poor=true', token),
+      fetchScopedOperator('/api/metrics/sla', token),
+      fetchScopedOperator(`/api/reports/pauses${buildHistoryQuery(pauseHistoryFilter)}`, token),
+      fetchScopedOperator(`/api/metrics/sla/history${buildHistoryQuery(slaHistoryFilter)}`, token),
+    ]).then((results) => {
+      if (generation !== requestGeneration ||
+          token !== el('queueToken').value.trim()) return;
+      // Não deixar dados antigos de outra empresa visíveis quando uma
+      // consulta é negada, falha ou a credencial expira.
+      if (results.some((result) => result === null)) {
+        clearProtectedPanels('Indicadores indisponíveis ou credencial sem autorização.');
+        return;
+      }
+      const [metrics, extensions, queue, fraud, quality, sla, pauses, slaHistory] = results;
+      renderMetrics(metrics);
+      renderExtensions(extensions.extensions || []);
+      renderQueue(queue.waiting || []);
+      renderFraudAlerts(fraud.alerts || []);
+      renderQuality(quality.quality_reports || []);
+      renderSla(sla);
+      renderPauseHistory(pauses);
+      renderSlaHistory(slaHistory);
       el('lastUpdate').textContent = `Atualizado às ${new Date().toLocaleTimeString('pt-BR')}`;
+    }).catch(() => {
+      if (generation === requestGeneration &&
+          token === el('queueToken').value.trim()) {
+        clearProtectedPanels('Indicadores indisponíveis ou credencial sem autorização.');
+      }
     });
   }
 

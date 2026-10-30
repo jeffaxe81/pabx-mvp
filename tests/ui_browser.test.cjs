@@ -436,3 +436,80 @@ test('operational panel renders hostile AMI fields as text, never HTML', async (
     assert.deepEqual(errors, []);
   } finally { await context.close(); }
 });
+
+
+test('supervisor panel clears tenant data on token change and rejects stale HTTP responses', async () => {
+  const { context, page, errors } = await openPage('webphone/painel-operacional.html');
+  const alpha = 'PRIVATE-ALPHA';
+  const beta = 'PRIVATE-BETA';
+  let pauseAlpha = false;
+  let releaseAlpha;
+  let alphaStarted;
+  const alphaGate = new Promise(resolve => { releaseAlpha = resolve; });
+  const alphaRequestStarted = new Promise(resolve => { alphaStarted = resolve; });
+  let denyBeta = false;
+  try {
+    await page.route('**/api/**', async route => {
+      const endpoint = new URL(route.request().url()).pathname;
+      const token = String(route.request().headers().authorization || '').replace('Bearer ', '');
+      if (token === 'tenant-alpha' && endpoint === '/api/metrics/today' && pauseAlpha) {
+        alphaStarted();
+        await alphaGate;
+      }
+      if (denyBeta && token === 'tenant-beta') {
+        return route.fulfill({ status: 401, contentType: 'application/json',
+          body: JSON.stringify({ error: 'unauthorized' }) });
+      }
+      const name = token === 'tenant-alpha' ? alpha : beta;
+      const fixtures = {
+        '/api/metrics/today': { total_calls: name, answered_calls: 1, missed_calls: 0,
+          average_talk_seconds: 0, missed_rate_percent: 0 },
+        '/api/extension-states': { extensions: [{ exten: name, status_label: 'livre' }] },
+        '/api/queue': { waiting: [{ channel: name, caller_id_name: name, waiting_seconds: 0 }] },
+        '/api/fraud-alerts': { alerts: [] },
+        '/api/quality': { quality_reports: [] },
+        '/api/metrics/sla': { threshold_seconds: 20,
+          queues: { [name]: { offered: 1, within_sla: 1, sla_percent: 100 } } },
+        '/api/reports/pauses': { by_reason: { [name]: 60 } },
+        '/api/metrics/sla/history': { by_date: { '2026-10-29': {
+          [name]: { offered: 1, within_sla: 1, sla_percent: 100 },
+        } } },
+      };
+      if (!Object.hasOwn(fixtures, endpoint)) return route.continue();
+      return route.fulfill({ status: 200, contentType: 'application/json',
+        body: JSON.stringify(fixtures[endpoint]) });
+    });
+
+    await page.locator('#queueToken').fill('tenant-alpha');
+    await page.locator('#refreshQueueBtn').click();
+    await page.waitForFunction(x => document.querySelector('#metricsRow')?.textContent.includes(x), alpha);
+    assert.ok((await page.locator('#slaList').textContent()).includes(alpha));
+
+    pauseAlpha = true;
+    await page.locator('#filterPauseHistoryBtn').click();
+    await alphaRequestStarted;
+    await page.locator('#queueToken').fill('tenant-beta');
+    for (const id of ['metricsRow', 'extensionsList', 'queueList', 'slaList',
+      'pauseHistoryList', 'slaHistoryList']) {
+      assert.equal((await page.locator('#' + id).textContent()).includes(alpha), false, id);
+    }
+    await page.locator('#refreshQueueBtn').click();
+    await page.waitForFunction(x => document.querySelector('#metricsRow')?.textContent.includes(x), beta);
+    releaseAlpha();
+    await page.waitForTimeout(150);
+    assert.ok((await page.locator('#slaList').textContent()).includes(beta));
+    assert.equal((await page.locator('#metricsRow').textContent()).includes(alpha), false);
+
+    denyBeta = true;
+    await page.locator('#filterSlaHistoryBtn').click();
+    await page.waitForFunction(() => document.querySelector('#lastUpdate')?.textContent.includes('sem autorização'));
+    for (const id of ['metricsRow', 'extensionsList', 'queueList', 'slaList',
+      'pauseHistoryList', 'slaHistoryList']) {
+      assert.equal((await page.locator('#' + id).textContent()).includes(beta), false, id);
+    }
+    assert.deepEqual(errors, []);
+  } finally {
+    releaseAlpha();
+    await context.close();
+  }
+});

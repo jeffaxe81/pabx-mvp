@@ -37,5 +37,7 @@ def test_monitor_endpoints_require_credential_and_https():
     assert "recordingApiIsSecure(apiUrl)" in section
     assert "cache: 'no-store'" in section
     for resource in ("/api/fraud-alerts", "/api/quality?only_poor=true"):
-        assert "fetchScopedOperator('" + resource + "')" in ops
+        assert "fetchScopedOperator('" + resource + "', token)" in ops
+    assert "generation !== requestGeneration" in ops
+    assert "clearProtectedPanels(" in ops
     assert "localStorage.setItem('queueToken'" not in index
