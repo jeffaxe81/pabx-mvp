@@ -25,6 +25,10 @@ def test_registered_deferral_preserves_development_and_blocks_go():
     assert report["formal_milestones_done"] == 7
     assert report["formal_percent"] == 43.8
     assert report["development_can_continue"] is True
+    assert report["controlled_real_environment_homologation_allowed"] is True
+    assert report["unproven_code_status"] == "CODE_REGISTERED_PENDING_REAL_HOMOLOGATION"
+    assert report["pending_real_environment_homologations"] == 15
+    assert report["target_preflight_and_rollback_required"] is True
     assert report["automated_ci_still_required"] is True
     assert report["homologation_complete"] is False
     assert report["operational_go_authorized"] is False
@@ -94,3 +98,45 @@ def test_cli_reports_deferred_not_completed(capsys):
     result = json.loads(capsys.readouterr().out)
     assert not result["homologation_complete"]
     assert not result["operational_go_authorized"]
+
+
+@pytest.mark.parametrize("field,value", [
+    ("controlled_application_allowed_for_homologation", False),
+    ("unproven_code_status", "HOMOLOGATED"),
+    ("record_missing_evidence_without_claiming_approval", False),
+    ("automated_code_and_security_ci_required", False),
+    ("target_environment_preflight_and_rollback_required", False),
+    ("production_go_requires_separate_explicit_acceptance", False),
+])
+def test_real_homologation_policy_is_explicit_and_fail_closed(field, value):
+    register, plan = sources()
+    register["real_environment_policy"][field] = value
+    with pytest.raises(ValueError, match="politica"):
+        summarize(register, plan)
+
+
+def test_real_environment_candidate_never_grants_go_or_evidence():
+    register, plan = sources()
+    report = summarize(register, plan)
+    assert report["controlled_real_environment_homologation_allowed"] is True
+    assert report["executed_operational_proofs"] == 0
+    assert report["operational_go_authorized"] is False
+    assert report["homologation_complete"] is False
+
+
+@pytest.mark.parametrize("field,value", [
+    ("homologation_required", False),
+    ("target_environment", "PRODUCTION_APPROVED"),
+])
+def test_pending_checks_always_require_real_homologation(field, value):
+    register, plan = sources()
+    register["pending_checks"][0][field] = value
+    with pytest.raises(ValueError, match="homologacao"):
+        summarize(register, plan)
+
+
+def test_plan_must_match_real_homologation_classification():
+    register, plan = sources()
+    plan["development_policy"]["controlled_real_environment_homologation_permitted"] = False
+    with pytest.raises(ValueError, match="politica"):
+        summarize(register, plan)
