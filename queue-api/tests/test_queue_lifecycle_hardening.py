@@ -185,7 +185,7 @@ def test_invalid_clock_and_tenant_are_conservative():
 
 @pytest.mark.parametrize("max_waiting,max_per_queue,max_age", [
     (0, 1, 10), (True, 1, 10), (MAX_TRACKED_CALLS + 1, 1, 10),
-    (10, 11, 10), (10, 2, 0), (10, 2, float("inf")),
+    (10, MAX_TRACKED_CALLS + 1, 10), (10, 2, 0), (10, 2, float("inf")),
 ])
 def test_invalid_limits_rejected(max_waiting, max_per_queue, max_age):
     with pytest.raises(ValueError):
@@ -212,3 +212,20 @@ def test_bad_callerid_is_scrubbed_before_snapshot():
     tracker.apply_event(evt(CallerIDNum=["bad"], CallerIDName="bad\r\nHTTP-Injected"))
     view = tracker.waiting_list()[0]
     assert view["caller_id_num"] == "" and view["caller_id_name"] == ""
+
+
+def test_small_global_capacity_automatically_caps_per_queue():
+    tracker = QueueStateTracker(max_waiting=1)
+    tracker.apply_event(evt(channel="CH1", uid="one"))
+    tracker.apply_event(evt(channel="CH2", uid="two"))
+    assert tracker.health_snapshot("t1")["tracked_waiting"] == 1
+    assert tracker.health_snapshot("t1")["events_rejected_capacity"] == 1
+
+
+def test_malformed_event_type_is_ignored_without_crashing():
+    tracker = QueueStateTracker()
+    tracker.apply_event({"Event": ["QueueCallerJoin"], "Queue": "fila-t1",
+                         "Channel": "CH1"})
+    tracker.apply_event({"Event": {"untrusted": 1}, "Queue": "fila-t1",
+                         "Channel": "CH1"})
+    assert tracker.waiting_list() == []
