@@ -136,7 +136,7 @@ def test_30_missed_ignores_invalid_records_without_crashing():
 
 def test_30_missed_sanitizes_direct_inserts_without_control_chars():
     log = MissedCallsLog()
-    log.append({"caller_id_num": ["1"], "caller_id_name": "x\\nForged",
+    log.append({"caller_id_num": ["1"], "caller_id_name": "x" + chr(10) + "Forged",
                 "destination": {"x": "y"}, "reason": "BUSY", "source": "dial"})
     row = log.list()[0]
     assert row["caller_id_num"] == "desconhecido"
