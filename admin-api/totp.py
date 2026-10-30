@@ -10,6 +10,7 @@ Lógica 100% pura - nenhuma função aqui depende de rede, tempo real
 import base64
 import hashlib
 import hmac
+import math
 import os
 import struct
 import time
@@ -52,10 +53,13 @@ def verify_totp(secret_b32: str, code: str, timestamp: float = None, step: int =
     code = code.strip()
     if len(code) != DEFAULT_DIGITS or not code.isascii() or not code.isdecimal():
         return False
-    if not isinstance(step, int) or step <= 0 or not isinstance(window, int) or window < 0:
+    if (type(step) is not int or step <= 0 or type(window) is not int
+            or not 0 <= window <= 2):
         return False
 
     ts = timestamp if timestamp is not None else time.time()
+    if type(ts) not in (int, float) or not math.isfinite(ts) or ts < 0:
+        return False
     counter = int(ts // step)
 
     for offset in range(-window, window + 1):
