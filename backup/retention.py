@@ -17,14 +17,14 @@ def delete_old_backups(directory, retention_days: int, clock=time.time):
         return []
 
     path = Path(directory)
-    if not path.exists():
+    if path.is_symlink() or not path.exists() or not path.is_dir():
         return []
 
     cutoff = clock() - (retention_days * 86400)
     deleted = []
 
     for f in path.iterdir():
-        if not f.is_file() or not f.name.endswith(".tar.gz"):
+        if f.is_symlink() or not f.is_file() or not f.name.endswith(".tar.gz"):
             continue
         if f.stat().st_mtime < cutoff:
             f.unlink()
@@ -39,7 +39,7 @@ def list_backups(directory):
     if not path.exists():
         return []
 
-    files = [f for f in path.iterdir() if f.is_file() and f.name.endswith(".tar.gz")]
+    files = [f for f in path.iterdir() if not f.is_symlink() and f.is_file() and f.name.endswith(".tar.gz")]
     files.sort(key=lambda f: f.stat().st_mtime, reverse=True)
     return [f.name for f in files]
 
