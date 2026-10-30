@@ -197,4 +197,8 @@ def render_all(extensions: list, tenant_ids=None) -> dict:
         files[f"extensions_dynamic_dial-{tenant}.conf"] = render_extensions_dynamic_dial(tenant_extensions)
         files[f"extensions_dynamic_hints-{tenant}.conf"] = render_extensions_dynamic_hints(tenant_extensions)
         files[f"voicemail_dynamic_{tenant}.conf"] = render_voicemail_dynamic(tenant_extensions)
+    # Publicação segura: todas as relações cruzadas de ramais precisam
+    # passar pela checagem, mesmo após a validação do cadastro JSON.
+    from dynamic_extension_invariants import validate_dynamic_extensions
+    validate_dynamic_extensions(normalized, allowed, files)
     return files
