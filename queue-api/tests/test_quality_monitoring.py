@@ -127,6 +127,6 @@ def test_invalid_quality_numbers_do_not_create_false_alarm():
 
 
 def test_quality_requires_bounded_printable_ami_channel():
-    for bad in (None, False, [], {}, "", "X" * 161, "PJSIP/x\\r\\nInjected"):
+    for bad in (None, False, [], {}, "", "X" * 161, "PJSIP/x" + chr(13) + chr(10) + "Injected"):
         assert parse_quality_event({**SAMPLE_EVENT, "Channel": bad}) is None
     assert parse_quality_event(SAMPLE_EVENT)["channel"] == SAMPLE_EVENT["Channel"]
