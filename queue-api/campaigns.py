@@ -115,7 +115,8 @@ def validate_campaign_catalog(campaigns):
                 raise ValueError("numero de campanha invalido ou duplicado")
             seen_numbers.add(number)
             status, attempts = contact.get("status"), contact.get("attempts")
-            if (status not in _ALLOWED_STATES or type(attempts) is not int
+            if (not isinstance(status, str) or status not in _ALLOWED_STATES
+                    or type(attempts) is not int
                     or not 0 <= attempts <= MAX_ATTEMPTS
                     or status == "pendente" and attempts >= MAX_ATTEMPTS):
                 raise ValueError("estado de campanha inconsistente")
@@ -220,7 +221,15 @@ def create_campaign(path, data: dict):
         return False, error, None
 
     campaigns = load_campaigns(path)
+    existing_ids = {item["id"] for item in campaigns}
+    for _ in range(20):
+        if campaign["id"] not in existing_ids:
+            break
+        campaign["id"] = secrets.token_hex(6)
+    else:
+        return False, "nao foi possivel gerar ID unico", None
     campaigns.append(campaign)
+    validate_campaign_catalog(campaigns)
     save_campaigns(path, campaigns)
     return True, None, campaign
 
