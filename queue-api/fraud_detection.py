@@ -84,8 +84,10 @@ def is_external_call(event: dict) -> bool:
     um dos troncos (gateway-tdm ou gateway-tdm-2) - internas entre
     ramais não custam nada e não fazem sentido pra essa análise.
     """
+    if not isinstance(event, dict):
+        return False
     dest_channel = event.get("DestChannel", "")
-    return "gateway-tdm" in dest_channel
+    return isinstance(dest_channel, str) and "@gateway-tdm" in dest_channel and ("@gateway-tdm-" in dest_channel or dest_channel.endswith("@gateway-tdm"))
 
 
 def compute_daily_cost(records: list, cost_per_minute: float) -> float:
