@@ -146,7 +146,7 @@ def test_non_dict_cdr_does_not_crash_daily_metrics():
 # Programa 30 frentes — CDR: cinco regras de contabilização.
 def test_30_cdr_rejects_malformed_disposition_without_changing_totals():
     m = DailyMetrics(clock=lambda: DAY_1)
-    for value in (None, [], {}, False, 100, "", "   ", "ANSWERED\\r\\nInjected", "X"*49):
+    for value in (None, [], {}, False, 100, "", "   ", "ANSWERED" + chr(13) + chr(10) + "Injected", "X"*49):
         m.apply_cdr_event({"Event": "Cdr", "Disposition": value,
                            "BillableSeconds": "200"})
     assert m.snapshot()["total_calls"] == 0
