@@ -297,6 +297,11 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   <h2>Resumo da supervisão — 20 indicadores por empresa</h2>
   <p class="empty">Visão restrita a supervisor/administrador. Fontes em memória; alertas não são histórico completo e 80% é referência ilustrativa.</p>
   <div id="supervisionSummary" class="grid" aria-live="polite"><div class="empty">Informe a credencial do supervisor para consultar.</div></div>
+  <div class="panel" style="margin-top: 16px;">
+    <h2>Verificações operacionais — 20 regras</h2>
+    <p class="empty">Limites indicativos, não contratuais. "Sem dados" não significa normalidade; nenhum alerta altera chamadas.</p>
+    <div id="supervisionDiagnostics" aria-live="polite">Informe a credencial do supervisor para consultar.</div>
+  </div>
 </div>
 
 <div class="panel" style="margin-bottom: 16px;">
@@ -469,9 +474,65 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     ]],
   ];
 
+  const operationalRuleLabels = [
+    'Volume elevado de espera',
+    'Muitas filas com chamadas aguardando',
+    'Chamadas acima do limiar de espera',
+    'Chamadas aguardando mais de 60 segundos',
+    'Tempo máximo de espera acima de 180 segundos',
+    'Sem ramais monitorados pelo BLF',
+    'Nenhum ramal livre entre os monitorados',
+    'Muitos ramais tocando',
+    'Ocupação elevada dos ramais monitorados',
+    'Muitos ramais indisponíveis',
+    'Existência de amostra de SLA',
+    'SLA abaixo da referência de 80% (mínimo 10 chamadas)',
+    'Muitas chamadas fora do SLA',
+    'Duas ou mais filas abaixo da referência',
+    'Percentual fora do SLA igual ou superior a 30%',
+    'Muitos eventos de chamadas perdidas no buffer',
+    'Existência de alerta de fraude no buffer',
+    'Amostras recorrentes de qualidade ruim',
+    'Muitos agentes pausados',
+    'Muitas presenças manuais ausentes',
+  ];
+
+  function renderSupervisionDiagnostics(diagnostics) {
+    const target = el('supervisionDiagnostics');
+    target.replaceChildren();
+    if (!diagnostics || diagnostics.rule_count !== 20 ||
+        !Array.isArray(diagnostics.rules) || diagnostics.rules.length !== 20 ||
+        diagnostics.evaluation !== 'reference_only_not_automatic_remediation') {
+      target.textContent = 'Diagnósticos indisponíveis ou incompatíveis.';
+      return;
+    }
+    const heading = document.createElement('p');
+    heading.textContent = `${diagnostics.attention_count} atenção · ${diagnostics.normal_count} normais · ${diagnostics.unknown_count} sem dados suficientes`;
+    target.appendChild(heading);
+    const labels = { attention: 'Atenção', normal: 'Normal', unknown: 'Sem dados' };
+    for (let i = 0; i < 20; i += 1) {
+      const rule = diagnostics.rules[i];
+      const expected = `OP-${String(i + 1).padStart(2, '0')}`;
+      if (!rule || rule.rule_id !== expected || !Object.hasOwn(labels, rule.status)) {
+        target.textContent = 'Diagnósticos com estrutura inválida.';
+        return;
+      }
+      const line = document.createElement('div');
+      line.className = 'item-row';
+      const name = document.createElement('span');
+      name.textContent = `${expected} — ${operationalRuleLabels[i]}`;
+      const status = document.createElement('strong');
+      status.className = 'mono';
+      status.textContent = labels[rule.status];
+      line.append(name, status);
+      target.appendChild(line);
+    }
+  }
+
   function renderSupervisionSummary(summary) {
     if (!summary || summary.metric_count !== 20 || summary.scope !== 'memory_snapshot_tenant_only') {
       el('supervisionSummary').textContent = 'Resumo indisponível ou incompatível.';
+      el('supervisionDiagnostics').textContent = 'Diagnósticos indisponíveis ou incompatíveis.';
       return;
     }
     el('supervisionSummary').innerHTML = supervisionGroups.map(([key, title, metrics]) => {
@@ -484,6 +545,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
         </div>`).join('')}
       </section>`;
     }).join('');
+    renderSupervisionDiagnostics(summary.diagnostics);
   }
 
   function refreshSupervision(token, generation) {
@@ -491,6 +553,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
       if (generation !== requestGeneration || token !== el('queueToken').value.trim()) return;
       if (summary === null) {
         el('supervisionSummary').textContent = 'Resumo disponível apenas para supervisor ou administrador autorizado.';
+        el('supervisionDiagnostics').textContent = 'Diagnósticos restritos a supervisor ou administrador autorizado.';
         return;
       }
       renderSupervisionSummary(summary);
@@ -499,7 +562,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 
   const protectedPanels = [
     'metricsRow', 'extensionsList', 'queueList', 'queueSummaryRow', 'fraudAlertsList',
-    'qualityList', 'slaList', 'pauseHistoryList', 'slaHistoryList', 'supervisionSummary',
+    'qualityList', 'slaList', 'pauseHistoryList', 'slaHistoryList', 'supervisionSummary', 'supervisionDiagnostics',
   ];
   let requestGeneration = 0;
 
