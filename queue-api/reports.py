@@ -12,22 +12,24 @@ import re
 import time
 from pathlib import Path
 
-OPERATOR_RE = re.compile(r"^PJSIP/([a-zA-Z0-9-]+)-[0-9a-fA-F]+$")
-TENANT_RE = re.compile(r"^(t\d+)-")
+OPERATOR_RE = re.compile(r"^PJSIP/([a-zA-Z0-9_-]+)-[0-9a-fA-F]+$")
+TENANT_RE = re.compile(r"^(t[1-9][0-9]*)-")
+_CDR_ID = re.compile(r"^[A-Za-z0-9._-]{1,96}$")
+_MAX_REPORT_LINE = 16384
 
 
 def extract_operator(channel: str):
     """'PJSIP/t1-recepcao-00000003' -> 't1-recepcao'. None se não bater o padrão."""
-    if not channel:
+    if not isinstance(channel, str):
         return None
-    match = OPERATOR_RE.match(channel)
+    match = OPERATOR_RE.fullmatch(channel)
     return match.group(1) if match else None
 
 
 def extract_tenant(operator: str, context: str):
     """Tenta primeiro pelo prefixo do operador, depois pelo contexto."""
     for candidate in (operator, context):
-        if candidate:
+        if isinstance(candidate, str):
             match = TENANT_RE.match(candidate)
             if match:
                 return match.group(1)
@@ -43,7 +45,14 @@ def parse_cdr_for_report(event: dict):
         return None
 
     disposition = event.get("Disposition")
-    if not disposition:
+    if (not isinstance(disposition, str) or not disposition.isprintable()
+            or not 1 <= len(disposition) <= 32):
+        return None
+    identifiers = [event[key] for key in ("UniqueID", "Uniqueid") if key in event]
+    if identifiers and (
+            any(not isinstance(identifier, str)
+                or _CDR_ID.fullmatch(identifier) is None for identifier in identifiers)
+            or len(set(identifiers)) != 1):
         return None
 
     channel = event.get("DestinationChannel") or event.get("Channel") or ""
@@ -78,14 +87,20 @@ def parse_cdr_for_report(event: dict):
 
     date = _extract_date(event.get("EndTime") or event.get("StartTime"))
 
-    return {
+    caller = event.get("CallerIDNum", "")
+    if not isinstance(caller, str) or len(caller) > 40 or not caller.isprintable():
+        caller = ""
+    record = {
         "date": date,
         "disposition": disposition,
         "operator": operator,
         "tenant": tenant,
         "billable_seconds": billable_seconds,
-        "caller_id_num": event.get("CallerIDNum", ""),
+        "caller_id_num": caller,
     }
+    if identifiers:
+        record["cdr_uniqueid"] = identifiers[0]
+    return record
 
 
 def _extract_date(timestamp_str):
@@ -111,14 +126,35 @@ class CallLogStore:
         if not self.path.exists():
             return []
         records = []
-        for line in self.path.read_text(encoding="utf-8").splitlines():
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                records.append(json.loads(line))
-            except json.JSONDecodeError:
-                continue  # linha corrompida não derruba o resto do relatório
+        seen_ids = set()
+        # Leitura em fluxo; entradas inválidas jamais derrubam a consulta.
+        with self.path.open("r", encoding="utf-8") as history:
+            for line in history:
+                if len(line) > _MAX_REPORT_LINE:
+                    continue
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    row = json.loads(line)
+                except (ValueError, TypeError):
+                    continue
+                if (not isinstance(row, dict)
+                        or not isinstance(row.get("date"), str)
+                        or re.fullmatch(r"\d{4}-\d{2}-\d{2}", row["date"]) is None
+                        or not isinstance(row.get("disposition"), str)
+                        or type(row.get("billable_seconds")) is not int
+                        or row["billable_seconds"] < 0):
+                    continue
+                uniqueid = row.get("cdr_uniqueid")
+                if uniqueid is not None:
+                    if not isinstance(uniqueid, str) or _CDR_ID.fullmatch(uniqueid) is None:
+                        continue
+                    dedup_key = (row.get("tenant"), uniqueid)
+                    if dedup_key in seen_ids:
+                        continue
+                    seen_ids.add(dedup_key)
+                records.append(row)
         return records
 
     def query(self, start=None, end=None, operator=None, tenant=None):

@@ -15,6 +15,10 @@ import time
 from pathlib import Path
 
 from outbound_safety import atomic_write_json
+from recording_access import read_regular_file_secure
+
+MAX_CALLBACK_CATALOG_BYTES = 4 * 1024 * 1024
+MAX_CALLBACK_RECORDS = 20000
 
 MAX_ATTEMPTS = 2  # menos tentativas que campanha - é o cliente esperando, não uma lista fria
 
@@ -74,17 +78,21 @@ def load_callbacks(path) -> list:
     isso esconderia chamadas pendentes ou permitiria perda de dados.
     """
     path = Path(path)
-    if path.is_symlink():
-        raise ValueError("catalogo de callbacks em link simbolico")
-    if not path.exists():
+    try:
+        path.lstat()
+    except FileNotFoundError:
         return []
+    # read_regular_file_secure ancora os ancestrais em descritores
+    # e recusa symlink, FIFO, dispositivo e arquivo excessivo.
+    raw = read_regular_file_secure(path, MAX_CALLBACK_CATALOG_BYTES)
     records = json.loads(
-        path.read_text(encoding="utf-8"),
+        raw,
         object_pairs_hook=_reject_duplicate_json_keys,
         parse_constant=_reject_nonfinite_json_constant,
     )
-    if not _catalog_has_unique_ids(records):
-        raise ValueError("catalogo de callbacks com ids invalidos ou duplicados")
+    if (not _catalog_has_unique_ids(records)
+            or len(records) > MAX_CALLBACK_RECORDS):
+        raise ValueError("catalogo de callbacks com ids inválidos ou volume excessivo")
     for record in records:
         if record.get("status") != "pendente":
             continue
@@ -105,6 +113,15 @@ def load_callbacks(path) -> list:
 
 
 def save_callbacks(path, callbacks: list):
+    if (not _catalog_has_unique_ids(callbacks)
+            or len(callbacks) > MAX_CALLBACK_RECORDS):
+        raise ValueError("catálogo de callbacks inválido ou volumoso")
+    try:
+        encoded = json.dumps(callbacks, ensure_ascii=False, allow_nan=False).encode("utf-8")
+    except (TypeError, ValueError) as exc:
+        raise ValueError("catálogo de callbacks não serializável") from exc
+    if len(encoded) > MAX_CALLBACK_CATALOG_BYTES:
+        raise ValueError("catálogo de callbacks ultrapassa limite de armazenamento")
     atomic_write_json(path, callbacks)
 
 

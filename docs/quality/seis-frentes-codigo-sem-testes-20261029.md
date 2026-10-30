@@ -22,3 +22,22 @@ Limitações: código criado, NÃO testado e NÃO homologado. Revisão, CI e
 provas operacionais continuam obrigatórias antes de incorporação à main.
 O progresso formal permanece 7/16 (43,8%) e o indicador ponderado
 registrado permanece 51,3%, sem autorizar GO de produção.
+
+## Continuidade — segundo incremento das seis frentes
+
+- **Voicemail:** PINs numéricos não podem repetir o número da própria caixa
+  na abertura/final do segredo; gerador aplica também essa regra.
+- **Callbacks:** leitura por descritor ancorado, limite de 4 MiB e
+  20 mil registros; escrita é recusada quando excede limite.
+- **Gravações:** uma mesma evidência de CDR não é reutilizável em
+  múltiplos arquivos, inclusive entre lotes diferentes.
+- **SLA:** atualizações e leituras protegidas por RLock, alias de
+  UniqueID reconciliado e teto diário de IDs para deduplicação.
+- **Presença:** rejeição de chaves JSON duplicadas, valores não finitos
+  e concorrência entre requisições HTTP dentro do mesmo processo.
+- **Relatórios:** identificação estrita do canal, deduplicação de CDR
+  por tenant/UniqueID na consulta e leitura de linhas em fluxo.
+
+**Situação:** alterações persistidas em branch de código, sem executar
+testes, simulações, CI, laboratório ou deploy. Ainda não homologadas;
+requerem revisão especializada antes de incorporação na main.

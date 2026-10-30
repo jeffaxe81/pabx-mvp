@@ -16,12 +16,27 @@ import os
 import re
 import stat
 import tempfile
+import threading
 import time
 from pathlib import Path
 
 PRESENCE_STATES = {"disponivel", "ausente", "reuniao", "ferias"}
 MAX_PRESENCE_BYTES = 1024 * 1024
 _EXTENSION_RE = re.compile(r"^t[1-9][0-9]*-[A-Za-z0-9_-]{1,80}$")
+_PRESENCE_WRITE_LOCK = threading.RLock()
+
+
+def _no_duplicate_keys(pairs):
+    fields = {}
+    for key, value in pairs:
+        if key in fields:
+            raise ValueError("JSON de presença com chave duplicada")
+        fields[key] = value
+    return fields
+
+
+def _no_nonfinite(value):
+    raise ValueError("JSON de presença com número não finito")
 
 
 def validate_presence_input(data: dict):
@@ -62,7 +77,8 @@ def load_presence(path) -> dict:
             os.close(fd)
     if len(raw) > MAX_PRESENCE_BYTES:
         raise ValueError("catálogo de presença excede o limite")
-    data = json.loads(raw)
+    data = json.loads(raw, object_pairs_hook=_no_duplicate_keys,
+                      parse_constant=_no_nonfinite)
     if not isinstance(data, dict):
         raise ValueError("catálogo de presença não é objeto")
     for extension, entry in data.items():
@@ -82,7 +98,7 @@ def save_presence(path, data: dict):
     """Evita corromper o mapa de presença em escritas interrompidas."""
     destination = Path(path)
     destination.parent.mkdir(parents=True, exist_ok=True)
-    encoded = json.dumps(data, indent=2, ensure_ascii=False)
+    encoded = json.dumps(data, indent=2, ensure_ascii=False, allow_nan=False)
     if len(encoded.encode("utf-8")) > MAX_PRESENCE_BYTES:
         raise ValueError("catálogo de presença excede o limite")
     temporary = None
@@ -96,16 +112,28 @@ def save_presence(path, data: dict):
             handle.flush()
             os.fsync(handle.fileno())
         os.replace(temporary, destination)
+        directory_fd = os.open(destination.parent, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
+        try:
+            os.fsync(directory_fd)
+        finally:
+            os.close(directory_fd)
     finally:
         if temporary is not None and os.path.exists(temporary):
             os.unlink(temporary)
 
 
 def set_presence(path, extension: str, status: str, note: str = ""):
-    data = load_presence(path)
-    data[extension] = {"status": status, "note": note, "updated_at": time.time()}
-    save_presence(path, data)
-    return data[extension]
+    if (_EXTENSION_RE.fullmatch(extension or "") is None
+            or status not in PRESENCE_STATES or not isinstance(note, str)
+            or len(note) > 256):
+        raise ValueError("presença inválida")
+    # Protege o ciclo ler-modificar-salvar sob HTTP threaded.
+    # Escala multi-processo exige lock distribuído adicional.
+    with _PRESENCE_WRITE_LOCK:
+        data = load_presence(path)
+        data[extension] = {"status": status, "note": note, "updated_at": time.time()}
+        save_presence(path, data)
+        return data[extension]
 
 
 def clear_presence(path, extension: str) -> bool:
@@ -114,12 +142,15 @@ def clear_presence(path, extension: str) -> bool:
     automático do BLF (equivalente a "disponível", mas sem manter um
     registro de override desnecessário).
     """
-    data = load_presence(path)
-    if extension not in data:
+    if not isinstance(extension, str) or _EXTENSION_RE.fullmatch(extension) is None:
         return False
-    del data[extension]
-    save_presence(path, data)
-    return True
+    with _PRESENCE_WRITE_LOCK:
+        data = load_presence(path)
+        if extension not in data:
+            return False
+        del data[extension]
+        save_presence(path, data)
+        return True
 
 
 def merge_presence_into_states(extension_states: list, presence_map: dict) -> list:

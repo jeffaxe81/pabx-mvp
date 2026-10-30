@@ -37,6 +37,7 @@ def load_manifest(path):
     records = []
     seen = set()
     ref_tenants = {}
+    ref_files = {}
     for number, line in enumerate(lines, start=1):
         try:
             row = json.loads(
@@ -66,6 +67,9 @@ def load_manifest(path):
         if ref in ref_tenants and ref_tenants[ref] != tenant:
             raise ValueError(f"referência de origem compartilhada entre empresas, linha {number}")
         ref_tenants[ref] = tenant
+        if ref in ref_files and ref_files[ref] != filename:
+            raise ValueError(f"evidência compartilhada por gravações distintas, linha {number}")
+        ref_files[ref] = filename
         if filename in seen:
             raise ValueError(f"arquivo repetido no manifesto, linha {number}")
         seen.add(filename)
@@ -112,19 +116,26 @@ def preview_batch(policy, rows, directory):
     # Provas de origem são globais ao catálogo, não apenas ao lote de
     # importação. Evita associar a mesma chamada a t1 e t10 em lotes diferentes.
     ref_tenants = {}
-    for metadata in recordings.values():
+    ref_files = {}
+    for existing_filename, metadata in recordings.items():
         ref = metadata.get("source_ref")
         if ref is None:
             continue
         prior = ref_tenants.setdefault(ref, metadata["tenant"])
         if prior != metadata["tenant"]:
             raise ValueError("catálogo com origem compartilhada entre empresas")
+        if ref in ref_files and ref_files[ref] != existing_filename:
+            raise ValueError("origem compartilhada por mais de uma gravação")
+        ref_files[ref] = existing_filename
     created = unchanged = 0
     for row in rows:
         filename = row["filename"]
         previous_tenant = ref_tenants.setdefault(row["source_ref"], row["tenant"])
         if previous_tenant != row["tenant"]:
             raise ValueError("origem compartilhada entre empresas em lotes distintos")
+        if row["source_ref"] in ref_files and ref_files[row["source_ref"]] != filename:
+            raise ValueError("mesma prova de origem usada em arquivos distintos")
+        ref_files[row["source_ref"]] = filename
         metadata = {
             "tenant": row["tenant"],
             "source_ref": row["source_ref"],

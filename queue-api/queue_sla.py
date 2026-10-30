@@ -19,11 +19,13 @@ import json
 import os
 import re
 import stat
+import threading
 import time
 from pathlib import Path
 
 DEFAULT_SLA_THRESHOLD_SECONDS = 20
 _AMI_UNIQUEID = re.compile(r"[A-Za-z0-9._-]{1,96}$")
+MAX_SLA_SEEN_IDS_PER_DAY = 250000
 
 
 def _day_key(timestamp: float) -> str:
@@ -87,6 +89,7 @@ class QueueSLATracker:
         self.threshold_seconds = threshold_seconds
         self._clock = clock
         self._history_store = history_store
+        self._lock = threading.RLock()
         self._day = None
         self._reset_if_new_day()
 
@@ -131,37 +134,39 @@ class QueueSLATracker:
         if not outcome:
             return
 
-        # AMI pode reenviar eventos após reconexão. Uniqueid identifica
-        # a chamada; sem ele mantemos compatibilidade com eventos legados.
-        # Quando fornecido, porém, deve ser válido para não falsificar
-        # deduplicação com IDs incompletos ou tipos inesperados.
-        raw_id = event.get("Uniqueid")
-        if raw_id is not None and (
-                not isinstance(raw_id, str) or not _AMI_UNIQUEID.fullmatch(raw_id)):
+        # Variantes AMI UniqueID/Uniqueid precisam concordar. Sem ID
+        # permanece o fluxo legado; ID inválido jamais entra no SLA.
+        raw_ids = [event[key] for key in ("Uniqueid", "UniqueID") if key in event]
+        if (raw_ids and
+                (any(not isinstance(item, str) or not _AMI_UNIQUEID.fullmatch(item)
+                     for item in raw_ids) or len(set(raw_ids)) != 1)):
             return
-        self._reset_if_new_day()
-        key = (outcome["queue"], raw_id) if raw_id is not None else None
-        if key is not None and key in self._seen_ami_calls:
-            return
-        self._record(outcome["queue"], outcome["hold_time"], outcome["outcome"])
-        if key is not None:
-            self._seen_ami_calls.add(key)
+        raw_id = raw_ids[0] if raw_ids else None
+        with self._lock:
+            self._reset_if_new_day()
+            key = (outcome["queue"], raw_id) if raw_id is not None else None
+            if key is not None:
+                if key in self._seen_ami_calls:
+                    return
+                if len(self._seen_ami_calls) >= MAX_SLA_SEEN_IDS_PER_DAY:
+                    return
+            self._record(outcome["queue"], outcome["hold_time"], outcome["outcome"])
+            if key is not None:
+                self._seen_ami_calls.add(key)
 
     def snapshot(self) -> dict:
-        """
-        {fila: {offered, within_sla, sla_percent}} - fila sem nenhuma
-        chamada ainda não aparece no resultado (nada pra dividir).
-        """
-        self._reset_if_new_day()
-        result = {}
-        for queue, stats in self._queues.items():
-            sla_percent = round(stats["within_sla"] / stats["offered"] * 100, 1) if stats["offered"] else 0
-            result[queue] = {
-                "offered": stats["offered"],
-                "within_sla": stats["within_sla"],
-                "sla_percent": sla_percent,
-            }
-        return result
+        """Retrato consistente de todas as filas, sem mutação durante leitura."""
+        with self._lock:
+            self._reset_if_new_day()
+            result = {}
+            for queue, stats in self._queues.items():
+                sla_percent = round(stats["within_sla"] / stats["offered"] * 100, 1) if stats["offered"] else 0
+                result[queue] = {
+                    "offered": stats["offered"],
+                    "within_sla": stats["within_sla"],
+                    "sla_percent": sla_percent,
+                }
+            return result
 
 
 class SLAHistoryStore:

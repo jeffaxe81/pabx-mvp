@@ -346,6 +346,14 @@ def _strong_voicemail_pin(pin):
             and pin not in "98765432109876543210")
 
 
+def _voicemail_pin_matches_mailbox(name, pin):
+    """PIN com o número da caixa no começo/fim é previsível pelo usuário."""
+    mailbox_number = name.rsplit("-", 1)[-1]
+    return (mailbox_number.isascii() and mailbox_number.isdecimal()
+            and len(mailbox_number) >= 3
+            and (pin.startswith(mailbox_number) or pin.endswith(mailbox_number)))
+
+
 def generate_tenant_voicemail_pins(tenant_id: str) -> dict:
     """Gera PINs numéricos independentes para caixas de voz de um tenant."""
     if not isinstance(tenant_id, str) or not TENANT_ID_RE.fullmatch(tenant_id):
@@ -360,7 +368,8 @@ def generate_tenant_voicemail_pins(tenant_id: str) -> dict:
         # Limitar tentativas impede laço infinito se a fonte de entropia falhar.
         for _ in range(64):
             pin = str(secrets.randbelow(90_000_000) + 10_000_000)
-            if pin not in used and _strong_voicemail_pin(pin):
+            if (pin not in used and _strong_voicemail_pin(pin)
+                    and not _voicemail_pin_matches_mailbox(name, pin)):
                 break
         else:
             raise ValueError("não foi possível gerar PIN de voicemail seguro")
@@ -383,8 +392,8 @@ def render_tenant_voicemail(tenant_id: str, pins=None) -> str:
         raise ValueError("conjunto de caixas postais do tenant incompleto")
     for name in names:
         pin = pins[name]
-        if not _strong_voicemail_pin(pin):
-            raise ValueError("PIN de caixa postal inseguro")
+        if not _strong_voicemail_pin(pin) or _voicemail_pin_matches_mailbox(name, pin):
+            raise ValueError("PIN de caixa postal inseguro ou derivado da caixa")
     if len(set(pins.values())) != len(names):
         raise ValueError("caixas postais não podem compartilhar PIN")
     return f"""{AUTO_GENERATED_HEADER}[{tenant_id}]
