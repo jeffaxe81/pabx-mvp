@@ -13,6 +13,7 @@ import re
 import stat
 import time
 from pathlib import Path
+from recording_access import _open_policy_file
 
 OPERATOR_RE = re.compile(r"^PJSIP/([a-zA-Z0-9_-]+)-[0-9a-fA-F]+$")
 TENANT_RE = re.compile(r"^(t[1-9][0-9]*)-")
@@ -138,12 +139,20 @@ class CallLogStore:
                 os.close(fd)
 
     def load_all(self):
-        if not self.path.exists():
+        try:
+            self.path.lstat()
+        except FileNotFoundError:
             return []
+        fd = _open_policy_file(self.path)
+        if fd is None:
+            raise ValueError("arquivo histórico CDR com caminho inseguro")
+        if not stat.S_ISREG(os.fstat(fd).st_mode):
+            os.close(fd)
+            raise ValueError("arquivo histórico CDR não regular")
         records = []
         seen_ids = set()
-        # Leitura em fluxo; entradas inválidas jamais derrubam a consulta.
-        with self.path.open("r", encoding="utf-8") as history:
+        # Um FD ancorado protege a leitura contra troca por symlink.
+        with os.fdopen(fd, "r", encoding="utf-8") as history:
             for line in history:
                 if len(line) > _MAX_REPORT_LINE:
                     continue
@@ -160,6 +169,16 @@ class CallLogStore:
                         or not isinstance(row.get("disposition"), str)
                         or type(row.get("billable_seconds")) is not int
                         or row["billable_seconds"] < 0):
+                    continue
+                tenant = row.get("tenant")
+                if tenant is not None and (
+                        not isinstance(tenant, str)
+                        or re.fullmatch(r"t[1-9][0-9]*", tenant) is None):
+                    continue
+                operator = row.get("operator")
+                if operator is not None and not isinstance(operator, str):
+                    continue
+                if tenant and operator and extract_tenant(operator, None) not in (None, tenant):
                     continue
                 uniqueid = row.get("cdr_uniqueid")
                 if uniqueid is not None:
