@@ -120,3 +120,19 @@ def test_summarize_by_operator_uses_placeholder_for_missing_operator():
     records = [{"score": 5, "operator": None}]
     summary = summarize_by_operator(records)
     assert "desconhecido" in summary
+
+
+def test_survey_ignores_invalid_ami_payloads():
+    for bad in (None, [], False, "Survey", 5):
+        assert parse_survey_event(bad) is None
+    for bad in (True, 5, 5.0, " 5", "5 ", "05", "5\\r\\n", {}, []):
+        assert parse_survey_event({**SAMPLE_EVENT, "Nota": bad}) is None
+    assert parse_survey_event(SAMPLE_EVENT)["score"] == 5
+
+
+def test_survey_operator_channel_rejects_invalid_types():
+    for bad in ([], {}, 1, True):
+        assert extract_operator_from_channel(bad) is None
+        item = parse_survey_event({**SAMPLE_EVENT, "Operator": bad})
+        assert item["operator"] is None
+        assert item["tenant"] is None
