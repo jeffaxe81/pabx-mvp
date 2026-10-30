@@ -19,12 +19,12 @@ def _day_key(timestamp: float) -> str:
 
 MAX_BILLABLE_SECONDS = 30 * 24 * 3600
 MAX_CDR_DEDUPE_IDS = 10000
+VALID_CDR_DISPOSITIONS = frozenset({"ANSWERED", "NO ANSWER", "BUSY", "FAILED", "CONGESTION"})
 _CDR_UNIQUEID = re.compile(r"[A-Za-z0-9._-]{1,96}$")
 
 
 def _valid_disposition(value):
-    return (isinstance(value, str) and 0 < len(value) <= 32
-            and value.isprintable() and not value.isspace())
+    return isinstance(value, str) and value in VALID_CDR_DISPOSITIONS
 
 
 def _billable_seconds(value):
