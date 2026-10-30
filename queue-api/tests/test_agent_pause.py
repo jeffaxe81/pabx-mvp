@@ -371,3 +371,26 @@ def test_clock_rollback_cannot_create_negative_pause_duration():
     store.apply_event({"Event": "QueueMemberPause", "Interface": "PJSIP/t1-recepcao",
                        "Paused": "0"})
     assert history.items[0]["duration_seconds"] == 0.0
+
+
+def test_invalid_pause_events_cannot_unpause_agent():
+    store = AgentPauseStore()
+    start = {"Event": "QueueMemberPause", "Interface": "PJSIP/t1-recepcao",
+             "Paused": "1", "Reason": "Reunião"}
+    store.apply_event(start)
+    initial = store.get("t1-recepcao")
+    for bad in (None, [], False, "QueueMemberPause"):
+        assert parse_queue_member_pause_event(bad) is None
+        store.apply_event(bad)
+    for bad in ("", "off", 0, False, [], None):
+        store.apply_event({**start, "Paused": bad})
+    for bad in ([], {}, 9, "x" * 257, "mal\\r\\nheader"):
+        store.apply_event({**start, "Paused": "0", "Reason": bad})
+    assert store.get("t1-recepcao") == initial
+    store.apply_event({**start, "Paused": "0", "Reason": ""})
+    assert store.get("t1-recepcao")["paused"] is False
+
+
+def test_malformed_pause_interface_never_raises():
+    for bad in ([], {}, True, 3, None, "PJSIP/" + "t" * 200):
+        assert extract_extension_from_interface(bad) is None
