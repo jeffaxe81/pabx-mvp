@@ -130,3 +130,8 @@ def test_quality_requires_bounded_printable_ami_channel():
     for bad in (None, False, [], {}, "", "X" * 161, "PJSIP/x" + chr(13) + chr(10) + "Injected"):
         assert parse_quality_event({**SAMPLE_EVENT, "Channel": bad}) is None
     assert parse_quality_event(SAMPLE_EVENT)["channel"] == SAMPLE_EVENT["Channel"]
+
+
+def test_poor_quality_ignores_non_object_measurements():
+    for data in (None, [], {}, False, "jitter", 12):
+        assert is_poor_quality(data) is False

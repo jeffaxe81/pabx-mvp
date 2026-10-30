@@ -51,7 +51,8 @@ class DailyMetrics:
         self._reset_if_new_day()
 
         disposition = event.get("Disposition")
-        if not disposition:
+        if (not isinstance(disposition, str) or not disposition
+                or len(disposition) > 32 or not disposition.isprintable()):
             return
 
         self.total_calls += 1

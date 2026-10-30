@@ -14,6 +14,8 @@ def parse_ami_blocks(raw_text: str):
     respostas/eventos recebidos de uma vez do socket) e retorna uma
     lista de dicts, um por bloco.
     """
+    if not isinstance(raw_text, str):
+        return []
     raw_text = raw_text.replace("\r\n", "\n")
     blocks_text = raw_text.split("\n\n")
 

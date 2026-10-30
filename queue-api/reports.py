@@ -18,7 +18,7 @@ TENANT_RE = re.compile(r"^(t\d+)-")
 
 def extract_operator(channel: str):
     """'PJSIP/t1-recepcao-00000003' -> 't1-recepcao'. None se não bater o padrão."""
-    if not channel:
+    if not isinstance(channel, str) or len(channel) > 160:
         return None
     match = OPERATOR_RE.match(channel)
     return match.group(1) if match else None
@@ -39,7 +39,7 @@ def parse_cdr_for_report(event: dict):
     Transforma um evento AMI 'Cdr' num registro de relatório, ou
     retorna None se o evento não servir (não é Cdr, ou sem disposition).
     """
-    if event.get("Event") != "Cdr":
+    if not isinstance(event, dict) or event.get("Event") != "Cdr":
         return None
 
     disposition = event.get("Disposition")
@@ -50,10 +50,9 @@ def parse_cdr_for_report(event: dict):
     operator = extract_operator(channel)
     tenant = extract_tenant(operator, event.get("DestinationContext") or event.get("Context"))
 
-    try:
-        billable_seconds = int(event.get("BillableSeconds") or 0)
-    except (TypeError, ValueError):
-        billable_seconds = 0
+    from metrics import _billable_seconds
+    raw_duration = _billable_seconds(event.get("BillableSeconds"))
+    billable_seconds = raw_duration if raw_duration is not None and disposition == "ANSWERED" else 0
 
     date = _extract_date(event.get("EndTime") or event.get("StartTime"))
 
