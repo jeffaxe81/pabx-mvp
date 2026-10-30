@@ -22,7 +22,9 @@ import stat
 import threading
 import time
 from pathlib import Path
+from recording_access import _open_policy_file
 
+MAX_SLA_HISTORY_BYTES = 256 * 1024 * 1024
 DEFAULT_SLA_THRESHOLD_SECONDS = 20
 _AMI_UNIQUEID = re.compile(r"[A-Za-z0-9._-]{1,96}$")
 MAX_SLA_SEEN_IDS_PER_DAY = 250000
@@ -199,7 +201,14 @@ class SLAHistoryStore:
         records = []
         # Leitura em fluxo: arquivo histórico não é carregado inteiro
         # apenas para consultar um período.
-        with open(self.path, "r", encoding="utf-8") as history:
+        fd = _open_policy_file(self.path)
+        if fd is None:
+            raise ValueError("histórico SLA com caminho inseguro")
+        info = os.fstat(fd)
+        if not stat.S_ISREG(info.st_mode) or info.st_size > MAX_SLA_HISTORY_BYTES:
+            os.close(fd)
+            raise ValueError("histórico SLA não regular ou excessivo")
+        with os.fdopen(fd, "r", encoding="utf-8") as history:
             for line in history:
                 if len(line) > 16384:
                     continue
