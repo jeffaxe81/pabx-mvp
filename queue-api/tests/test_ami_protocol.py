@@ -47,3 +47,8 @@ def test_build_action_roundtrip_with_parser():
     blocks = parse_ami_blocks(action)
     assert blocks[0]["Action"] == "Redirect"
     assert blocks[0]["Channel"] == "PJSIP/abc-0001"
+
+
+def test_parse_ami_blocks_rejects_non_text_frames():
+    for raw in (None, [], {}, b"Action: Login", False, 1):
+        assert parse_ami_blocks(raw) == []
