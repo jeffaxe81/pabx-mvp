@@ -105,6 +105,8 @@ def corroborate_cdr(event):
 
 def propose_candidates(recordings_dir, cdr_events):
     """Retorna (manifesto, resumo). Ambiguidades são sempre descartadas."""
+    if not isinstance(cdr_events, (list, tuple)) or len(cdr_events) > CDR_LIMIT_ROWS:
+        raise ValueError("lote CDR inválido ou excede limite de registros")
     directory_fd = _recording_directory_fd(recordings_dir)
     if directory_fd is None:
         raise ValueError("diretório de gravações inválido")
