@@ -19,7 +19,7 @@ OPERATOR_RE = re.compile(r"^PJSIP/([a-zA-Z0-9-]+)-[0-9a-fA-F]+$")
 
 def extract_operator_from_channel(channel: str):
     """Mesmo padrão já usado em reports.py - 'PJSIP/t1-recepcao-00000003' -> 't1-recepcao'."""
-    if not channel:
+    if not isinstance(channel, str) or len(channel) > 160:
         return None
     match = OPERATOR_RE.match(channel)
     return match.group(1) if match else None
@@ -32,16 +32,16 @@ def parse_survey_event(event: dict):
     se o evento não servir ou a nota for inválida (ex: cliente digitou
     "6" ou "0" por engano, ou não veio nota nenhuma).
     """
-    if event.get("Event") != "UserEvent" or event.get("UserEvent") != "SatisfactionSurvey":
+    if (not isinstance(event, dict) or event.get("Event") != "UserEvent"
+            or event.get("UserEvent") != "SatisfactionSurvey"):
         return None
 
-    try:
-        score = int(event.get("Nota", ""))
-    except (TypeError, ValueError):
+    # AMI envia o digito como texto; não converter bool, float,
+    # números concatenados ou strings com espaços em nota válida.
+    raw_score = event.get("Nota")
+    if not isinstance(raw_score, str) or re.fullmatch(r"[1-5]", raw_score) is None:
         return None
-
-    if score < 1 or score > 5:
-        return None
+    score = int(raw_score)
 
     operator = extract_operator_from_channel(event.get("Operator", ""))
     from monitoring_access import extension_tenant
