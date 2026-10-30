@@ -183,3 +183,14 @@ def test_extract_dialed_number_falls_back_to_dest_exten():
 
 def test_extract_dialed_number_returns_none_when_absent():
     assert extract_dialed_number({"Event": "DialEnd"}) is None
+
+
+def test_campaign_rejects_invalid_shapes_and_oversized_contacts():
+    for bad in (None, [], True, "campaign"):
+        assert validate_campaign_input(bad)[0] is False
+    base = {"name": "Campanha", "agent_extension": "t1-1001",
+            "contacts": ["11999998888"]}
+    for field, bad in (("name", []), ("agent_extension", {}),
+                       ("contacts", "11999998888"), ("contacts", ["11999998888"] * 1001)):
+        assert validate_campaign_input({**base, field: bad})[0] is False
+    assert validate_campaign_input(base)[0] is True
