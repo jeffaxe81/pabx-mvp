@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
-"""CLI para 80 relatórios locais por tenant, sem chamadas ou APIs externas.
+"""CLI para 90 relatórios locais por tenant, sem chamadas ou APIs externas.
 
 Uso:
  python3 queue-api/insights_cli.py --area calls --tenant t1 --file caminho/call_log.jsonl
  Áreas originais: calls, survey, pauses, campaigns.
  Áreas adicionais: calls_advanced, calls_trends, calls_audit,
  survey_advanced, pauses_advanced, campaigns_advanced,
- sla_history, quality_export, callbacks, unanswered, callback_aging e sla_capacity.
+ sla_history, quality_export, callbacks, unanswered, callback_aging,
+ sla_capacity, presence e agent_efficiency.
 Apenas leitura, filtra por empresa e omite dados de clientes no JSON.
 Não faz validação de identidade ou permissão: execute no host autorizado.
 """
@@ -86,6 +87,15 @@ from insights_sla_capacity import (
     sla_latest_recorded_day,
 )
 
+from insights_presence import (
+    presence_total_overrides, presence_by_status, presence_updated_by_day,
+    presence_older_than_week, presence_missing_valid_timestamp,
+)
+from insights_agent_efficiency import (
+    agent_answer_rate, agent_nonanswered_volume, agent_mean_talk_seconds,
+    agent_median_talk_seconds, agent_over_five_minutes,
+)
+
 FUNCTIONS = {
     "calls": (
         call_volume_by_day, call_answer_rate, call_missed_rate, call_talk_time,
@@ -154,6 +164,14 @@ FUNCTIONS = {
         sla_most_loaded_queue, sla_weekday_weighted_rate,
         sla_latest_recorded_day,
     ),
+    "presence": (
+        presence_total_overrides, presence_by_status, presence_updated_by_day,
+        presence_older_than_week, presence_missing_valid_timestamp,
+    ),
+    "agent_efficiency": (
+        agent_answer_rate, agent_nonanswered_volume, agent_mean_talk_seconds,
+        agent_median_talk_seconds, agent_over_five_minutes,
+    ),
 }
 
 
@@ -178,10 +196,14 @@ def main(argv=None):
     parser.add_argument("--area", required=True, choices=sorted(FUNCTIONS))
     parser.add_argument("--tenant", required=True)
     parser.add_argument("--file", required=True,
-                        help="JSONL: chamadas/satisfacao/pausas/SLA; JSON array: campanhas/qualidade/callbacks")
+                        help="JSONL: chamadas/satisfacao/pausas/SLA; JSON array: campanhas/qualidade/callbacks; mapa JSON: presenca")
     args = parser.parse_args(argv)
     try:
-        rows = read_local_records(args.file, collection=args.area in {"campaigns", "campaigns_advanced", "quality_export", "callbacks", "callback_aging"})
+        rows = read_local_records(
+            args.file,
+            collection=args.area in {"campaigns", "campaigns_advanced", "quality_export", "callbacks", "callback_aging"},
+            keyed_entries=args.area == "presence",
+        )
         report = generate_report(args.area, args.tenant, rows)
     except (OSError, ValueError, TypeError, UnicodeError, json.JSONDecodeError):
         # Nunca imprimir dados de registros ou caminhos sensíveis.
