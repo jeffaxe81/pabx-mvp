@@ -30,6 +30,14 @@ DIAL_STRING_RE = re.compile(r"PJSIP/(\d+)@gateway-tdm")
 
 
 _CALLBACK_PHONE = re.compile(r"[+]?[0-9]{8,20}$")
+_CALLBACK_ID = re.compile(r"[0-9a-f]{12}\\Z")
+_ATTEMPT_ID = re.compile(r"[0-9a-f]{32}\\Z")
+_SOURCE_UNIQUEID = re.compile(r"[A-Za-z0-9._-]{1,96}\\Z")
+_TENANT = re.compile(r"t[1-9][0-9]*\\Z")
+_MAX_CATALOG_BYTES = 8 * 1024 * 1024
+_MAX_CALLBACKS = 20000
+_ACTIVE_STATUSES = frozenset({"pendente", "discando"})
+_RESPONSE_STATUSES = frozenset({"Success", "Failure"})
 
 
 def _callback_contact(number, name=""):
@@ -49,8 +57,16 @@ def parse_callback_request_event(event: dict):
     if (not isinstance(event, dict) or event.get("Event") != "UserEvent"
             or event.get("UserEvent") != "CallbackRequest"):
         return None
-    return _callback_contact(event.get("CallerIDNum"),
-                             event.get("CallerIDName", ""))
+    contact = _callback_contact(event.get("CallerIDNum"),
+                                event.get("CallerIDName", ""))
+    if contact is None:
+        return None
+    source = event.get("Uniqueid")
+    if source is not None:
+        if not isinstance(source, str) or _SOURCE_UNIQUEID.fullmatch(source) is None:
+            return None
+        contact["source_uniqueid"] = source
+    return contact
 
 
 def _reject_duplicate_json_keys(pairs):
