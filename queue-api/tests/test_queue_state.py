@@ -107,7 +107,7 @@ def test_late_leave_from_old_queue_cannot_remove_requeued_channel():
 def test_invalid_ami_channels_and_queues_are_ignored_without_pollution():
     tracker = QueueStateTracker()
     for channel, queue in (([], "fila-t1"), ({}, "fila-t1"), ("CH1", {}),
-                           ("CH1", "fila-t1\\r\\nInjected"), ("", "fila-t1"),
+                           ("CH1", "fila-t1\r\nInjected"), ("", "fila-t1"),
                            ("CH1", ""), ("X" * 161, "fila-t1")):
         tracker.apply_event({"Event": "QueueCallerJoin", "Channel": channel,
                              "Queue": queue})
