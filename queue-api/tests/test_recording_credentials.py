@@ -111,3 +111,11 @@ def test_revocation_only_removes_matching_hash_not_other_tenant(tmp_path):
     assert authenticate_recordings("Bearer " + first["token"], current, now=1100) is None
     assert authenticate_recordings("Bearer " + second["token"], current, now=1100)["tenant"] == "t2"
     assert current["recordings"] == {"t1.wav": {"tenant": "t1"}}
+
+
+def test_recording_credential_issuance_rejects_invalid_clock(tmp_path):
+    import math
+    path = tmp_path / "recording.json"
+    for bad in (True, float("nan"), float("inf"), float("-inf"), -1, [], "100"):
+        with pytest.raises(ValueError):
+            issue_credential(path, "t1", "supervisor", now=bad)
