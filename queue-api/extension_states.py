@@ -10,6 +10,8 @@ Lógica pura, sem rede - 100% testável.
 
 # Códigos de status do Asterisk (AMI ExtensionStatus / app_queue.h).
 # Nem todo código aparece na prática, mas mapeamos os mais comuns.
+MAX_TRACKED_EXTENSIONS = 10000
+
 STATUS_LABELS = {
     "-1": "desconhecido",
     "0": "livre",
@@ -42,7 +44,10 @@ class ExtensionStateTracker:
                 or not isinstance(status_code, str) or len(status_code) > 12
                 or not status_code.isprintable()):
             return
-        self._states[(context, exten)] = {
+        key = (context, exten)
+        if key not in self._states and len(self._states) >= MAX_TRACKED_EXTENSIONS:
+            return
+        self._states[key] = {
             "exten": exten,
             "context": context,
             "status_code": status_code,

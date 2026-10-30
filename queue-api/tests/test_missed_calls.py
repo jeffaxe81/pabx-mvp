@@ -109,3 +109,12 @@ def test_oversized_ami_data_does_not_enter_missed_call_history():
     assert normalized["caller_id_num"] == "desconhecido"
     assert normalized["caller_id_name"] == ""
     assert normalized["destination"] == "fila-t1"
+
+
+def test_missed_calls_log_ignores_non_object_ami_data():
+    log = MissedCallsLog()
+    for raw in (None, [], False, "missed"):
+        assert log.append(raw) is False
+    assert log.list() == []
+    log.append({"caller_id_num": "123", "reason": "NOANSWER"})
+    assert len(log.list()) == 1

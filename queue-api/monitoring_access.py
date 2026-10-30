@@ -13,14 +13,14 @@ _CHANNEL = re.compile(r"^PJSIP/(t[1-9][0-9]*-[a-zA-Z0-9][a-zA-Z0-9-]*)-[0-9a-fA-
 
 
 def extension_tenant(extension):
-    if not isinstance(extension, str):
+    if not isinstance(extension, str) or len(extension) > 96:
         return None
     match = _EXTENSION.fullmatch(extension)
     return match.group(1) if match else None
 
 
 def channel_tenant(channel):
-    if not isinstance(channel, str):
+    if not isinstance(channel, str) or len(channel) > 192:
         return None
     match = _CHANNEL.fullmatch(channel)
     return extension_tenant(match.group(1)) if match else None

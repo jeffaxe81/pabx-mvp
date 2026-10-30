@@ -61,6 +61,8 @@ class MissedCallsLog:
         self._max_size = max_size
 
     def append(self, missed_call: dict):
+        if not isinstance(missed_call, dict):
+            return False
         entry = dict(missed_call)
         entry["timestamp"] = time.time()
         self._entries.append(entry)

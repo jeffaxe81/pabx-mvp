@@ -235,3 +235,10 @@ def test_legacy_global_notification_targets_deny_other_tenants(monkeypatch):
                              "Queue": "fila-t1", "CallerIDNum": "PRIVATE-t1"})
     assert len(log.list()) == 2
     assert outgoing == []
+
+
+def test_monitoring_tenant_parser_rejects_oversized_identifiers():
+    from monitoring_access import extension_tenant, channel_tenant
+    for invalid in (None, [], "t1-" + "a" * 100000):
+        assert extension_tenant(invalid) is None
+    assert channel_tenant("PJSIP/t1-" + "x" * 100000 + "-00000001") is None
