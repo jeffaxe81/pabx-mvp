@@ -19,6 +19,7 @@ import tempfile
 import threading
 import time
 from pathlib import Path
+from outbound_safety import outbound_lock
 
 PRESENCE_STATES = {"disponivel", "ausente", "reuniao", "ferias"}
 MAX_PRESENCE_BYTES = 1024 * 1024
@@ -127,9 +128,9 @@ def set_presence(path, extension: str, status: str, note: str = ""):
             or status not in PRESENCE_STATES or not isinstance(note, str)
             or len(note) > 256):
         raise ValueError("presença inválida")
-    # Protege o ciclo ler-modificar-salvar sob HTTP threaded.
-    # Escala multi-processo exige lock distribuído adicional.
-    with _PRESENCE_WRITE_LOCK:
+    # RLock protege threads; flock protege processos no mesmo volume.
+    # Não substitui coordenação distribuída entre hosts diferentes.
+    with _PRESENCE_WRITE_LOCK, outbound_lock(path):
         data = load_presence(path)
         data[extension] = {"status": status, "note": note, "updated_at": time.time()}
         save_presence(path, data)
@@ -144,7 +145,7 @@ def clear_presence(path, extension: str) -> bool:
     """
     if not isinstance(extension, str) or _EXTENSION_RE.fullmatch(extension) is None:
         return False
-    with _PRESENCE_WRITE_LOCK:
+    with _PRESENCE_WRITE_LOCK, outbound_lock(path):
         data = load_presence(path)
         if extension not in data:
             return False
