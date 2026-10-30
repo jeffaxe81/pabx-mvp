@@ -4,6 +4,8 @@ transcrição, via LLM local. Mesmo padrão de summarizer.py: prompt e
 parsing são puros, a chamada de rede fica em llm_client.py.
 """
 
+import re
+
 VALID_SENTIMENTS = {"positivo", "neutro", "negativo"}
 
 
@@ -27,8 +29,8 @@ def parse_sentiment_response(raw_response: str) -> str:
     formato, e fingir uma classificação seria pior que admitir que não
     deu pra classificar.
     """
+    if not isinstance(raw_response, str):
+        return "indefinido"
     normalized = raw_response.strip().lower()
-    for sentiment in VALID_SENTIMENTS:
-        if sentiment in normalized:
-            return sentiment
-    return "indefinido"
+    match = re.search(r"\b(positivo|neutro|negativo)\b", normalized)
+    return match.group(1) if match else "indefinido"
