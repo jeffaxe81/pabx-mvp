@@ -148,3 +148,62 @@ def test_cdr_disposition_malformed_never_inflates_totals():
     for bad in ([], {}, True, 1, "", "X" * 33, "ANSWERED" + chr(10)):
         metrics.apply_cdr_event({"Event": "Cdr", "Disposition": bad})
     assert metrics.snapshot()["total_calls"] == 0
+
+# Programa 30 frentes — CDR: cinco regras de contabilização.
+def test_30_cdr_rejects_malformed_disposition_without_changing_totals():
+    m = DailyMetrics(clock=lambda: DAY_1)
+    for value in (None, [], {}, False, 100, "", "   ", "ANSWERED" + chr(13) + chr(10) + "Injected", "X"*49):
+        m.apply_cdr_event({"Event": "Cdr", "Disposition": value,
+                           "BillableSeconds": "200"})
+    assert m.snapshot()["total_calls"] == 0
+
+
+def test_30_cdr_replayed_uniqueid_does_not_inflate_counts():
+    m = DailyMetrics(clock=lambda: DAY_1)
+    event = {"Event": "Cdr", "Disposition": "ANSWERED",
+             "BillableSeconds": "120", "Uniqueid": "1792670400.123",
+             "StartTime": "2026-10-29 10:00:00", "Destination": "1010"}
+    m.apply_cdr_event(event)
+    m.apply_cdr_event(dict(event))
+    assert m.snapshot()["total_calls"] == 1
+    assert m.snapshot()["average_talk_seconds"] == 120
+
+
+def test_30_cdr_same_uniqueid_different_leg_counts_independently():
+    m = DailyMetrics(clock=lambda: DAY_1)
+    event = {"Event": "Cdr", "Disposition": "ANSWERED",
+             "BillableSeconds": "40", "Uniqueid": "1792670400.123",
+             "StartTime": "2026-10-29 10:00:00", "Destination": "1010"}
+    m.apply_cdr_event(event)
+    m.apply_cdr_event({**event, "Destination": "1011", "BillableSeconds": "60"})
+    assert m.snapshot()["total_calls"] == 2
+    assert m.snapshot()["average_talk_seconds"] == 50
+
+
+def test_30_cdr_invalid_uniqueid_does_not_pollute_metrics():
+    m = DailyMetrics(clock=lambda: DAY_1)
+    for value in ([], None, "\\n", "bad/id", "x"*97, False):
+        if value is None:
+            continue
+        m.apply_cdr_event({"Event": "Cdr", "Disposition": "ANSWERED",
+                           "Uniqueid": value, "BillableSeconds": "30"})
+    assert m.snapshot()["total_calls"] == 0
+    m.apply_cdr_event({"Event": "Cdr", "Disposition": "ANSWERED",
+                       "BillableSeconds": "30"})
+    assert m.snapshot()["total_calls"] == 1
+
+
+def test_30_cdr_dedupe_window_bounded_and_resets_daily(monkeypatch):
+    import metrics
+    monkeypatch.setattr(metrics, "MAX_CDR_DEDUPE_IDS", 2)
+    now = [DAY_1]
+    m = DailyMetrics(clock=lambda: now[0])
+    for uid in ("one", "two", "three"):
+        m.apply_cdr_event({"Event": "Cdr", "Disposition": "BUSY", "Uniqueid": uid})
+    assert len(m._seen_cdr_ids) == 2
+    assert m.snapshot()["total_calls"] == 3
+    now[0] = DAY_2
+    assert m.snapshot()["total_calls"] == 0
+    assert len(m._seen_cdr_ids) == 0
+    m.apply_cdr_event({"Event": "Cdr", "Disposition": "BUSY", "Uniqueid": "three"})
+    assert m.snapshot()["total_calls"] == 1
