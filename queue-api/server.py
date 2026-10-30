@@ -58,6 +58,7 @@ from quality_monitoring import parse_quality_event, is_poor_quality, QualityLog
 from monitoring_access import extension_tenant, channel_tenant
 from monitoring_access import monitoring_event_tenant, scoped_monitoring_entries
 from supervision_summary import build_supervision_summary
+from supervision_diagnostics import evaluate_supervision_diagnostics
 from outbound_safety import outbound_lock, atomic_write_json
 from outbound_correlation import matches_dial_event, matches_originate_response
 
@@ -651,6 +652,9 @@ class Handler(BaseHTTPRequestHandler):
                 presence=load_presence(PRESENCE_PATH),
                 threshold_seconds=SLA_THRESHOLD_SECONDS,
             )
+            # Diagnósticos não herdam dados pessoais das fontes. Somente
+            # supervisor/admin autenticado pode ler as 20 regras.
+            result["diagnostics"] = evaluate_supervision_diagnostics(result)
         except (OSError, ValueError, TypeError, KeyError):
             # Se uma fonte local estiver corrompida, falhar fechado sem
             # imprimir nomes de arquivos ou conteúdo sensível no HTTP.
