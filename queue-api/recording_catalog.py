@@ -107,8 +107,10 @@ def preview_batch(policy, rows, directory):
                 info = os.stat(filename, dir_fd=directory_fd, follow_symlinks=False)
             except (OSError, TypeError, ValueError) as exc:
                 raise ValueError("gravação não encontrada ou link simbólico") from exc
-            if not stat.S_ISREG(info.st_mode):
-                raise ValueError("gravação não encontrada ou link simbólico")
+            if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
+                # Hardlinks permitem que dois nomes apontem para a mesma
+                # mídia, tornando ambígua a classificação por arquivo.
+                raise ValueError("gravação não regular ou com múltiplos links")
     finally:
         os.close(directory_fd)
     updated = dict(policy)
@@ -161,12 +163,14 @@ def preview_batch(policy, rows, directory):
 def policy_lock(path):
     """Lock em inode estável, inclusive entre processos CLI concorrentes."""
     lock = str(path) + ".lock"
-    flags = os.O_CREAT | os.O_RDWR | getattr(os, "O_NOFOLLOW", 0)
+    flags = (os.O_CREAT | os.O_RDWR | getattr(os, "O_NOFOLLOW", 0)
+             | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NONBLOCK", 0))
     fd = os.open(lock, flags, 0o600)
     try:
         info = os.fstat(fd)
-        if not stat.S_ISREG(info.st_mode) or stat.S_IMODE(info.st_mode) & 0o077:
-            raise ValueError("lock do catálogo possui permissões inseguras")
+        if (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1
+                or stat.S_IMODE(info.st_mode) & 0o077):
+            raise ValueError("lock do catálogo possui inode ou permissões inseguras")
         with os.fdopen(fd, "r+b") as handle:
             fd = -1
             fcntl.flock(handle, fcntl.LOCK_EX)
