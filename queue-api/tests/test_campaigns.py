@@ -145,16 +145,18 @@ def test_mark_contact_result_no_answer_retries_until_max_attempts(tmp_path):
     assert contact["status"] == "esgotado"
 
 
-def test_mark_contact_result_unknown_disposition_defaults_to_falha(tmp_path):
+def test_mark_contact_result_unknown_disposition_keeps_claim_awaiting_review(tmp_path):
     path = tmp_path / "campaigns.json"
     _, _, campaign = create_campaign(path, VALID_INPUT)
     number = campaign["contacts"][0]["number"]
     mark_contact_calling(path, campaign["id"], number)
 
-    mark_contact_result(path, campaign["id"], number, "TIPO-DESCONHECIDO")
+    # Evento AMI não reconhecido nunca libera rediscagem.
+    ok, error = mark_contact_result(path, campaign["id"], number, "TIPO-DESCONHECIDO")
+    assert ok is False and "desconhecido" in error
     updated = find_campaign(load_campaigns(path), campaign["id"])
     contact = next(c for c in updated["contacts"] if c["number"] == number)
-    assert contact["status"] == "pendente"  # falha com tentativas < MAX ainda tenta de novo
+    assert contact["status"] == "discando"
 
 
 # ---------- campaign_summary ----------
