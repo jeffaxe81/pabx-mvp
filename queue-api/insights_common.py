@@ -80,7 +80,7 @@ def _parse(line):
     )
 
 
-def read_local_records(filename, *, collection=False):
+def read_local_records(filename, *, collection=False, keyed_entries=False):
     """Entrada local regular, pequena, sem symlink e sem executar comandos."""
     path = Path(filename)
     metadata = path.lstat()
@@ -89,13 +89,25 @@ def read_local_records(filename, *, collection=False):
     if any(part.is_symlink() for part in path.parents):
         raise ValueError("diretório com link simbólico não permitido")
     raw = path.read_text(encoding="utf-8")
-    if collection:
+    if collection or keyed_entries:
         data = _parse(raw)
     else:
         lines = raw.splitlines()
         if len(lines) > MAX_RECORDS:
             raise ValueError("arquivo excede limite de registros")
         data = [_parse(line) for line in lines if line.strip()]
+    if keyed_entries:
+        if not isinstance(data, dict) or len(data) > MAX_RECORDS:
+            raise ValueError("mapa de presenca invalido")
+        result = []
+        for key, entry in data.items():
+            if not isinstance(key, str) or not isinstance(entry, dict):
+                raise ValueError("registro de presenca invalido")
+            # Somente dados técnicos. Nunca carregar notas livres, que
+            # podem conter dados pessoais, para o pipeline de métricas.
+            result.append({"extension": key, "status": entry.get("status"),
+                           "updated_at": entry.get("updated_at")})
+        return result
     if not isinstance(data, list) or len(data) > MAX_RECORDS:
         raise ValueError("entrada precisa conter lista de registros")
     return data
