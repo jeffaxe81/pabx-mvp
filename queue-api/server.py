@@ -57,6 +57,7 @@ from fraud_detection import CallRateTracker, FraudAlertsLog, is_external_call, i
 from quality_monitoring import parse_quality_event, is_poor_quality, QualityLog
 from monitoring_access import extension_tenant, channel_tenant
 from monitoring_access import monitoring_event_tenant, scoped_monitoring_entries
+from supervision_summary import build_supervision_summary
 from outbound_safety import outbound_lock, atomic_write_json
 from outbound_correlation import matches_dial_event, matches_originate_response
 
@@ -383,6 +384,7 @@ class Handler(BaseHTTPRequestHandler):
         return (
             path in {
                 "/api/queue", "/api/queue/pickup", "/api/queue/pause",
+                "/api/supervision/summary",
                 "/api/presence", "/api/reports/pauses", "/api/reports",
                 "/api/metrics/today", "/api/metrics/sla", "/api/metrics/sla/history",
                 "/api/missed-calls", "/api/fraud-alerts", "/api/quality",
@@ -512,7 +514,9 @@ class Handler(BaseHTTPRequestHandler):
         self._send_json(404, {"error": "not found"})
 
     def do_GET(self):
-        if urlparse(self.path).path == "/api/queue":
+        if urlparse(self.path).path == "/api/supervision/summary":
+            self._handle_supervision_summary()
+        elif urlparse(self.path).path == "/api/queue":
             identity = self._require_queue_identity()
             if identity is None:
                 return
@@ -623,6 +627,36 @@ class Handler(BaseHTTPRequestHandler):
             self._serve_recording_file()
         else:
             self._send_json(404, {"error": "not found"})
+
+    def _handle_supervision_summary(self):
+        # Nunca confiar em tenant informado na query, payload ou rota.
+        # A mesma política Bearer/Origin das filas é obrigatória.
+        identity = self._require_queue_identity()
+        if identity is None:
+            return
+        if identity.get("role") not in {"supervisor", "admin"}:
+            self._send_queue_json(403, {"error": "supervisao restrita"})
+            return
+        tenant = identity["tenant"]
+        try:
+            result = build_supervision_summary(
+                tenant,
+                waiting=state.waiting_list(),
+                extensions=extension_states.snapshot(),
+                sla=queue_sla_tracker.snapshot(),
+                missed=missed_calls_log.list(limit=100),
+                fraud=fraud_alerts_log.list(limit=100),
+                quality=quality_log.list(limit=100, only_poor=True),
+                pauses=agent_pause_store.snapshot(),
+                presence=load_presence(PRESENCE_PATH),
+                threshold_seconds=SLA_THRESHOLD_SECONDS,
+            )
+        except (OSError, ValueError, TypeError, KeyError):
+            # Se uma fonte local estiver corrompida, falhar fechado sem
+            # imprimir nomes de arquivos ou conteúdo sensível no HTTP.
+            self._send_queue_json(503, {"error": "supervisao indisponivel"})
+            return
+        self._send_queue_json(200, result)
 
     def _handle_quality_query(self):
         identity = self._require_queue_identity()
