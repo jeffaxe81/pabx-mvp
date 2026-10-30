@@ -74,3 +74,24 @@ def test_same_extension_number_in_two_tenant_hint_contexts_is_not_overwritten():
     assert {row["context"]: row["status_label"] for row in tracker.snapshot()} == {
         "t1-hints": "em uso", "t2-hints": "tocando",
     }
+
+
+def test_malformed_extension_events_do_not_crash_or_corrupt_tenants():
+    tracker = ExtensionStateTracker()
+    safe = {"Event": "ExtensionStatus", "Exten": "1010",
+            "Context": "t1-hints", "Status": "1"}
+    tracker.apply_event(safe)
+    for bad in (None, [], True, "ExtensionStatus"):
+        tracker.apply_event(bad)
+    for bad in ([], {}, True, 9, "", "1" * 100, "10" + chr(10) + "xx"):
+        tracker.apply_event({**safe, "Exten": bad})
+    for bad in ([], {}, True, 1, "x" * 97, "t2" + chr(13) + "hints"):
+        tracker.apply_event({**safe, "Context": bad})
+    for bad in ([], {}, False, 1, "x" * 30, "0" + chr(10) + "Injected"):
+        tracker.apply_event({**safe, "Status": bad})
+    assert tracker.snapshot() == [{
+        "exten": "1010", "context": "t1-hints",
+        "status_code": "1", "status_label": "em uso",
+    }]
+    tracker.apply_event({**safe, "Context": "t2-hints", "Status": "8"})
+    assert len(tracker.snapshot()) == 2
