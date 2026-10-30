@@ -36,9 +36,22 @@ Data-base: 2026-10-29 (America/Sao_Paulo).
 
 Rastreabilidade e check-list de aceite: [issue #173](https://github.com/jeffaxe81/pabx-mvp/issues/173).
 
-## Política para próximas integrações
+## Política de aplicação em ambiente real e homologação
 
-- **Código em `main`**: merge apenas com todos os checks disponíveis para o HEAD da PR aprovados.
-- **Release candidate**: congelar SHA, registrar matriz de CI/lab, configurar segredos/TLS de destino e executar `scripts/verify_deployment.py` no host correto.
-- **Produção**: exige execução/aceite humano das 15 provas, plano de rollback e GO explícito; não pode ser inferida da CI ou deste documento.
-- O presente documento **não** altera indicadores, executa telefonia real, habilita deployment ou autoriza GO.
+**Regra adotada:** recursos desenvolvidos e aprovados na CI podem ser considerados para aplicação em **ambiente real sob homologação controlada**. A falta de uma prova operacional anterior não impede o registro e a integração do código. Onde não houver comprovação, a classificação passa a ser `CODE_REGISTERED_PENDING_REAL_HOMOLOGATION` (**código registrado — homologação real pendente**). Isso **não afirma** que todos os requisitos estão implementados nem que estão homologados.
+
+Há duas decisões distintas:
+
+1. **Aplicar para homologar:** a equipe responsável pode selecionar um build com SHA identificado e aplicar em infraestrutura real de homologação, ou em janela controlada do ambiente-alvo, com preflight, credenciais próprias, proteção aos dados, backup e plano de rollback. A instalação real não é executada por esta documentação.
+2. **Aceitar para operação definitiva:** somente depois de registrar provas reais verificáveis, riscos residuais, aprovação operacional e GO explícito. Não alterar `operational_go_authorized=false` ou os marcos formais por mera aprovação de CI.
+
+A denominação histórica `DEVELOPMENT_ONLY_PROOFS_DEFERRED` no registro informa que as **provas não foram executadas naquela mudança**, e não constitui proibição de homologar em ambiente real depois.
+
+### Política para próximas integrações
+
+- **Código em `main`:** merge apenas com CI de código/segurança aprovada no HEAD exato da PR.
+- **Sem evidência operacional:** registrar a implementação como *pendente de homologação*, mantendo evidência/execução/aceite como nulos.
+- **Release candidate para homologação:** congelar SHA, verificar segredos e TLS no alvo, checar dependências, monitoramento, backup e rollback; executar `scripts/verify_deployment.py` no host real, quando disponível.
+- **Uso definitivo em produção:** registrar aceite separado e decisão go/no-go conforme o escopo e os riscos do ambiente real.
+- Este documento não comprova uma implantação executada, não muda indicadores e não autoriza GO automático.
+
