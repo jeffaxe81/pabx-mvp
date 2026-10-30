@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
-"""CLI para 20 relatórios locais por tenant, sem chamadas ou APIs externas.
+"""CLI para 60 relatórios locais por tenant, sem chamadas ou APIs externas.
 
 Uso:
  python3 queue-api/insights_cli.py --area calls --tenant t1 --file caminho/call_log.jsonl
- Áreas: calls, survey, pauses, campaigns.
+ Áreas originais: calls, survey, pauses, campaigns.
+ Áreas adicionais: calls_advanced, calls_trends, calls_audit,
+ survey_advanced, pauses_advanced, campaigns_advanced,
+ sla_history e quality_export.
 Apenas leitura, filtra por empresa e omite dados de clientes no JSON.
 Não faz validação de identidade ou permissão: execute no host autorizado.
 """
@@ -29,6 +32,40 @@ from insights_campaigns import (
     campaign_attempts_summary, campaign_agent_workload,
 )
 
+from insights_calls_advanced import (
+    calls_disposition_breakdown, calls_volume_by_agent, calls_answered_by_agent,
+    calls_talk_time_by_agent, calls_duration_bands,
+)
+from insights_calls_trends import (
+    calls_weekday_volume, calls_weekly_volume, calls_monthly_volume,
+    calls_monthly_answer_rate, calls_daily_answer_rate,
+)
+from insights_calls_audit import (
+    calls_invalid_date_count, calls_missing_answered_duration,
+    calls_unknown_disposition_count, calls_missing_operator_count,
+    calls_negative_duration_conflicts,
+)
+from insights_survey_advanced import (
+    survey_median_score, survey_score_by_agent, survey_neutral_rate,
+    survey_weekly_response_count, survey_monthly_average,
+)
+from insights_pauses_advanced import (
+    pause_average_duration, pause_median_duration, pause_duration_bands,
+    pause_weekday_seconds, pause_active_agent_count,
+)
+from insights_campaigns_advanced import (
+    campaigns_answered_share, campaigns_busy_share, campaigns_no_answer_share,
+    campaigns_in_progress_count, campaigns_answered_by_agent,
+)
+from insights_sla_history import (
+    sla_weighted_rate, sla_offered_by_day, sla_rate_by_queue,
+    sla_days_below_eighty, sla_worst_day,
+)
+from insights_quality_export import (
+    quality_average_jitter, quality_jitter_high_rate,
+    quality_average_packet_loss, quality_average_rtt, quality_poor_by_agent,
+)
+
 FUNCTIONS = {
     "calls": (
         call_volume_by_day, call_answer_rate, call_missed_rate, call_talk_time,
@@ -45,6 +82,39 @@ FUNCTIONS = {
     "campaigns": (
         campaign_status_breakdown, campaign_completion_rate, campaign_retry_pool,
         campaign_attempts_summary, campaign_agent_workload,
+    ),
+    "calls_advanced": (
+        calls_disposition_breakdown, calls_volume_by_agent, calls_answered_by_agent,
+        calls_talk_time_by_agent, calls_duration_bands,
+    ),
+    "calls_trends": (
+        calls_weekday_volume, calls_weekly_volume, calls_monthly_volume,
+        calls_monthly_answer_rate, calls_daily_answer_rate,
+    ),
+    "calls_audit": (
+        calls_invalid_date_count, calls_missing_answered_duration,
+        calls_unknown_disposition_count, calls_missing_operator_count,
+        calls_negative_duration_conflicts,
+    ),
+    "survey_advanced": (
+        survey_median_score, survey_score_by_agent, survey_neutral_rate,
+        survey_weekly_response_count, survey_monthly_average,
+    ),
+    "pauses_advanced": (
+        pause_average_duration, pause_median_duration, pause_duration_bands,
+        pause_weekday_seconds, pause_active_agent_count,
+    ),
+    "campaigns_advanced": (
+        campaigns_answered_share, campaigns_busy_share, campaigns_no_answer_share,
+        campaigns_in_progress_count, campaigns_answered_by_agent,
+    ),
+    "sla_history": (
+        sla_weighted_rate, sla_offered_by_day, sla_rate_by_queue,
+        sla_days_below_eighty, sla_worst_day,
+    ),
+    "quality_export": (
+        quality_average_jitter, quality_jitter_high_rate,
+        quality_average_packet_loss, quality_average_rtt, quality_poor_by_agent,
     ),
 }
 
@@ -70,10 +140,10 @@ def main(argv=None):
     parser.add_argument("--area", required=True, choices=sorted(FUNCTIONS))
     parser.add_argument("--tenant", required=True)
     parser.add_argument("--file", required=True,
-                        help="calls/survey/pauses: JSONL local; campaigns: array JSON")
+                        help="JSONL: calls/survey/pauses/sla_history; array JSON: campaigns/quality_export")
     args = parser.parse_args(argv)
     try:
-        rows = read_local_records(args.file, collection=args.area == "campaigns")
+        rows = read_local_records(args.file, collection=args.area in {"campaigns", "campaigns_advanced", "quality_export"})
         report = generate_report(args.area, args.tenant, rows)
     except (OSError, ValueError, TypeError, UnicodeError, json.JSONDecodeError):
         # Nunca imprimir dados de registros ou caminhos sensíveis.
