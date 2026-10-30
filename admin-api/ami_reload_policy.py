@@ -13,6 +13,8 @@ _NEGATIVE_CLI_PATTERNS = (
     re.compile(r"^\s*Failed to (?:reload|load)\b", re.I),
     re.compile(r"^\s*Unable to (?:reload|load)\b", re.I),
     re.compile(r"^\s*Error (?:loading|reloading)\b", re.I),
+    re.compile(r"^\s*Error executing command\b", re.I),
+    re.compile(r"^\s*Module\s+.+\s+reload failed\b", re.I),
 )
 
 
