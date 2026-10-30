@@ -15,26 +15,37 @@ import time
 MISSED_DIAL_STATUSES = {"NOANSWER", "BUSY", "CANCEL", "CONGESTION"}
 
 
+def _safe_ami_text(value, fallback="", max_length=100):
+    """Não propagar estruturas ou CR/LF de cabeçalhos AMI para relatórios."""
+    if (not isinstance(value, str) or not value or len(value) > max_length
+            or not value.isprintable()):
+        return fallback
+    return value
+
+
 def parse_missed_call_event(event: dict):
+    if not isinstance(event, dict):
+        return None
     event_name = event.get("Event")
 
     if event_name == "DialEnd":
         status = event.get("DialStatus")
-        if status not in MISSED_DIAL_STATUSES:
+        if not isinstance(status, str) or status not in MISSED_DIAL_STATUSES:
             return None
         return {
-            "caller_id_num": event.get("CallerIDNum") or "desconhecido",
-            "caller_id_name": event.get("CallerIDName") or "",
-            "destination": event.get("DestCallerIDNum") or event.get("Exten") or "",
+            "caller_id_num": _safe_ami_text(event.get("CallerIDNum"), "desconhecido", 64),
+            "caller_id_name": _safe_ami_text(event.get("CallerIDName"), max_length=100),
+            "destination": _safe_ami_text(
+                event.get("DestCallerIDNum") or event.get("Exten"), max_length=96),
             "reason": status,
             "source": "dial",
         }
 
     if event_name == "QueueCallerAbandon":
         return {
-            "caller_id_num": event.get("CallerIDNum") or "desconhecido",
-            "caller_id_name": event.get("CallerIDName") or "",
-            "destination": event.get("Queue") or "",
+            "caller_id_num": _safe_ami_text(event.get("CallerIDNum"), "desconhecido", 64),
+            "caller_id_name": _safe_ami_text(event.get("CallerIDName"), max_length=100),
+            "destination": _safe_ami_text(event.get("Queue"), max_length=96),
             "reason": "ABANDONED",
             "source": "queue",
         }
