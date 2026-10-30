@@ -76,3 +76,36 @@ def test_missed_calls_log_respects_limit_param():
         log.append({"caller_id_num": str(i), "reason": "NOANSWER", "source": "dial", "caller_id_name": "", "destination": ""})
 
     assert len(log.list(limit=3)) == 3
+
+
+def test_malformed_ami_records_are_ignored_without_type_errors():
+    for source in (None, [], True, "not-event"):
+        assert parse_missed_call_event(source) is None
+    for status in ([], {}, None, 5):
+        assert parse_missed_call_event({"Event": "DialEnd",
+                                        "DialStatus": status}) is None
+
+
+def test_missed_call_ami_fields_never_return_control_chars_or_objects():
+    event = {"Event": "DialEnd", "DialStatus": "NOANSWER",
+             "CallerIDNum": ["5511999998888"],
+             "CallerIDName": "bad\\r\\nInjected: yes",
+             "DestCallerIDNum": {"unsafe": "value"},
+             "Exten": ["t1-1001"]}
+    item = parse_missed_call_event(event)
+    assert item["caller_id_num"] == "desconhecido"
+    assert item["caller_id_name"] == ""
+    assert item["destination"] == ""
+    assert parse_missed_call_event({
+        "Event": "QueueCallerAbandon", "Queue": "fila-t1\\nFake",
+        "CallerIDNum": "5511999998888", "CallerIDName": "ok",
+    })["destination"] == ""
+
+
+def test_oversized_ami_data_does_not_enter_missed_call_history():
+    event = {"Event": "QueueCallerAbandon", "Queue": "fila-t1",
+             "CallerIDNum": "1" * 200, "CallerIDName": "A" * 1000}
+    normalized = parse_missed_call_event(event)
+    assert normalized["caller_id_num"] == "desconhecido"
+    assert normalized["caller_id_name"] == ""
+    assert normalized["destination"] == "fila-t1"
