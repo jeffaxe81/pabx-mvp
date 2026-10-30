@@ -692,3 +692,33 @@ def test_campaign_http_catalog_symlink_not_followed(api, tmp_path):
     path.symlink_to(safe)
     assert own(api, "/api/campaigns")[0] == 503
     assert ami.actions == []
+
+
+@pytest.mark.parametrize("corruption", [
+    "attempt_id", "channel_id", "attempts", "started", "response",
+])
+def test_callback_dialing_corruption_returns_503_without_ami(api, corruption):
+    """An invalid in-flight callback blocks both tenants, not only its owner."""
+    _, _, callbacks, ami, _ = api
+    records = load_callbacks(callbacks)
+    t2 = next(c for c in records if c.get("tenant") == "t2")
+    assert mark_callback_calling(callbacks, t2["id"])[0]
+    records = load_callbacks(callbacks)
+    t2 = next(c for c in records if c.get("tenant") == "t2")
+    if corruption == "attempt_id":
+        t2["attempt_id"] = "wrong"
+    elif corruption == "channel_id":
+        t2["channel_id"] = "axe-wrong"
+    elif corruption == "attempts":
+        t2["attempts"] = 0
+    elif corruption == "started":
+        t2["last_attempt_at"] = "invalid"
+    elif corruption == "response":
+        t2["originate_response"] = {"Response": "Success"}
+    raw = json.dumps(records).encode()
+    callbacks.write_bytes(raw)
+    for tenant in ("t1", "t2"):
+        assert own(api, "/api/callbacks", tenant)[0] == 503
+        assert own(api, "/api/callbacks/dial-next", tenant, method="POST")[0] == 503
+    assert ami.actions == []
+    assert callbacks.read_bytes() == raw
