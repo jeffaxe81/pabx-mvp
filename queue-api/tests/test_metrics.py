@@ -114,3 +114,30 @@ def test_does_not_reset_within_the_same_day():
     snapshot = metrics.snapshot()
     assert snapshot["total_calls"] == 2
     assert snapshot["average_talk_seconds"] == 75
+
+
+def test_billable_seconds_never_credits_negative_fractional_or_huge_values():
+    metrics = DailyMetrics(clock=lambda: DAY_1)
+    for value in ("-30", -1, True, 3.5, "1.2", "1e9", "99999999999", [], {}):
+        metrics.apply_cdr_event({"Event": "Cdr", "Disposition": "ANSWERED",
+                                 "BillableSeconds": value})
+    metrics.apply_cdr_event({"Event": "Cdr", "Disposition": "ANSWERED",
+                             "BillableSeconds": "120"})
+    report = metrics.snapshot()
+    assert report["answered_calls"] == 10
+    assert report["average_talk_seconds"] == 12.0
+
+
+def test_valid_seconds_accept_zero_and_integer_without_truncation():
+    metrics = DailyMetrics(clock=lambda: DAY_1)
+    for value in (0, 2, "3"):
+        metrics.apply_cdr_event({"Event": "Cdr", "Disposition": "ANSWERED",
+                                 "BillableSeconds": value})
+    assert metrics.snapshot()["average_talk_seconds"] == 1.7
+
+
+def test_non_dict_cdr_does_not_crash_daily_metrics():
+    metrics = DailyMetrics(clock=lambda: DAY_1)
+    for event in (None, [], False, "Cdr"):
+        metrics.apply_cdr_event(event)
+    assert metrics.snapshot()["total_calls"] == 0
