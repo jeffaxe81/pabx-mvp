@@ -107,9 +107,9 @@ def test_backward_clock_clears_windows_conservatively():
     g = guard(per_extension_per_minute=1, clock=lambda: clock[0])
     assert reserve(g)[0] == "reserved"
     clock[0] = 900.0
-    # Clocks regressing are considered invalid for old state; avoid
-    # auto-approving as a duplicate completed in the future.
-    assert reserve(g)[0] == "reserved"
+    # Um relógio regressivo bloqueia novas originações, sem limpar
+    # contadores para permitir burst indevido.
+    assert reserve(g)[0] == "unavailable"
 
 
 def test_tenant_rate_limit_blocks_burst():
