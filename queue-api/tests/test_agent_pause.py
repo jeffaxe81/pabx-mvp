@@ -384,7 +384,7 @@ def test_invalid_pause_events_cannot_unpause_agent():
         store.apply_event(bad)
     for bad in ("", "off", 0, False, [], None):
         store.apply_event({**start, "Paused": bad})
-    for bad in ([], {}, 9, "x" * 257, "mal\\r\\nheader"):
+    for bad in ([], {}, 9, "x" * 257, "mal" + chr(13) + chr(10) + "header"):
         store.apply_event({**start, "Paused": "0", "Reason": bad})
     assert store.get("t1-recepcao") == initial
     store.apply_event({**start, "Paused": "0", "Reason": ""})
