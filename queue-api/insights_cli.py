@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""CLI para 60 relatórios locais por tenant, sem chamadas ou APIs externas.
+"""CLI para 70 relatórios locais por tenant, sem chamadas ou APIs externas.
 
 Uso:
  python3 queue-api/insights_cli.py --area calls --tenant t1 --file caminho/call_log.jsonl
  Áreas originais: calls, survey, pauses, campaigns.
  Áreas adicionais: calls_advanced, calls_trends, calls_audit,
  survey_advanced, pauses_advanced, campaigns_advanced,
- sla_history e quality_export.
+ sla_history, quality_export, callbacks e unanswered.
 Apenas leitura, filtra por empresa e omite dados de clientes no JSON.
 Não faz validação de identidade ou permissão: execute no host autorizado.
 """
@@ -66,6 +66,15 @@ from insights_quality_export import (
     quality_average_packet_loss, quality_average_rtt, quality_poor_by_agent,
 )
 
+from insights_callbacks import (
+    callback_status_counts, callback_completion_rate, callback_attempt_distribution,
+    callback_pending_per_day, callback_pending_retry_pool,
+)
+from insights_unanswered import (
+    unanswered_reason_counts, unanswered_daily_volume, unanswered_by_agent,
+    unanswered_monthly_volume, unanswered_daily_rate,
+)
+
 FUNCTIONS = {
     "calls": (
         call_volume_by_day, call_answer_rate, call_missed_rate, call_talk_time,
@@ -116,6 +125,14 @@ FUNCTIONS = {
         quality_average_jitter, quality_jitter_high_rate,
         quality_average_packet_loss, quality_average_rtt, quality_poor_by_agent,
     ),
+    "callbacks": (
+        callback_status_counts, callback_completion_rate, callback_attempt_distribution,
+        callback_pending_per_day, callback_pending_retry_pool,
+    ),
+    "unanswered": (
+        unanswered_reason_counts, unanswered_daily_volume, unanswered_by_agent,
+        unanswered_monthly_volume, unanswered_daily_rate,
+    ),
 }
 
 
@@ -140,10 +157,10 @@ def main(argv=None):
     parser.add_argument("--area", required=True, choices=sorted(FUNCTIONS))
     parser.add_argument("--tenant", required=True)
     parser.add_argument("--file", required=True,
-                        help="JSONL: calls/survey/pauses/sla_history; array JSON: campaigns/quality_export")
+                        help="JSONL: chamadas/satisfacao/pausas/SLA; JSON array: campanhas/qualidade/callbacks")
     args = parser.parse_args(argv)
     try:
-        rows = read_local_records(args.file, collection=args.area in {"campaigns", "campaigns_advanced", "quality_export"})
+        rows = read_local_records(args.file, collection=args.area in {"campaigns", "campaigns_advanced", "quality_export", "callbacks"})
         report = generate_report(args.area, args.tenant, rows)
     except (OSError, ValueError, TypeError, UnicodeError, json.JSONDecodeError):
         # Nunca imprimir dados de registros ou caminhos sensíveis.
