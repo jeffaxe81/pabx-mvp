@@ -26,16 +26,21 @@ class ExtensionStateTracker:
         self._states = {}  # (context, exten) -> {status_code, status_text, context}
 
     def apply_event(self, event: dict):
-        if event.get("Event") != "ExtensionStatus":
+        if not isinstance(event, dict) or event.get("Event") != "ExtensionStatus":
             return
 
         exten = event.get("Exten")
-        if not exten:
-            return
-
-        status_code = event.get("Status", "-1")
         context = event.get("Context", "")
-        if not isinstance(context, str):
+        status_code = event.get("Status", "-1")
+        # IDs são usados como chaves e exibidos na supervisão. Nunca
+        # deixar estruturas AMI ou caracteres de controle contaminar
+        # o mapa (inclusive quando o mesmo ramal existe em duas empresas).
+        if (not isinstance(exten, str) or not 0 < len(exten) <= 64
+                or not exten.isprintable()
+                or not isinstance(context, str) or len(context) > 96
+                or not context.isprintable()
+                or not isinstance(status_code, str) or len(status_code) > 12
+                or not status_code.isprintable()):
             return
         self._states[(context, exten)] = {
             "exten": exten,
