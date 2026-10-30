@@ -126,7 +126,9 @@ def save_callbacks(path, callbacks: list):
             or len(callbacks) > MAX_CALLBACK_RECORDS):
         raise ValueError("catálogo de callbacks inválido ou volumoso")
     try:
-        encoded = json.dumps(callbacks, ensure_ascii=False, allow_nan=False).encode("utf-8")
+        # Deve contar a indentação real usada por atomic_write_json.
+        encoded = (json.dumps(callbacks, ensure_ascii=False, indent=2,
+                              allow_nan=False) + "\n").encode("utf-8")
     except (TypeError, ValueError) as exc:
         raise ValueError("catálogo de callbacks não serializável") from exc
     if len(encoded) > MAX_CALLBACK_CATALOG_BYTES:
@@ -201,7 +203,14 @@ def next_pending_callback(callbacks: list):
         return None
     pending = []
     for item in callbacks:
-        if not isinstance(item, dict):
+        if not isinstance(item, dict) or item.get("status") not in _VALID_CALLBACK_STATES:
+            return None
+        # O catálogo é global: identidade inválida de um registro
+        # histórico também torna ambíguo o snapshot inteiro.
+        tenant = item.get("tenant")
+        if tenant is not None and (
+                not isinstance(tenant, str)
+                or re.fullmatch(r"t[1-9][0-9]*", tenant) is None):
             return None
         if item.get("status") != "pendente":
             continue
