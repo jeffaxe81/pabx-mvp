@@ -116,3 +116,15 @@ def test_invalid_ami_channels_and_queues_are_ignored_without_pollution():
     tracker.apply_event({"Event": "QueueCallerLeave", "Channel": {}})
     tracker.remove([])
     assert tracker.waiting_list() == []
+
+
+def test_clock_rollback_never_reports_negative_wait(monkeypatch):
+    import queue_state
+    now = [1000.0]
+    monkeypatch.setattr(queue_state.time, "time", lambda: now[0])
+    tracker = QueueStateTracker()
+    tracker.apply_event({"Event": "QueueCallerJoin", "Queue": "fila-t1", "Channel": "CH1"})
+    now[0] = 990.0
+    assert tracker.waiting_list()[0]["waiting_seconds"] == 0
+    now[0] = 1015.0
+    assert tracker.waiting_list()[0]["waiting_seconds"] == 15
