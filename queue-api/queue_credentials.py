@@ -97,6 +97,17 @@ def revoke_credential(path, sha256):
     return {"revoked": True, "sha256": sha256}
 
 
+def list_credential_metadata(path):
+    """Só metadados administrativos; nunca retorna Bearer em claro."""
+    data = _validate_catalog_file(path)
+    return [
+        {"sha256": row["token_sha256"], "tenant": row["tenant"],
+         "role": row["role"], "expires_at": row["expires_at"],
+         **({"extension": row["extension"]} if "extension" in row else {})}
+        for row in data["credentials"]
+    ]
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description="Credenciais locais das filas AXE PABX")
     parser.add_argument("--policy", required=True, help="arquivo em volume privado, fora do Git")
@@ -107,6 +118,7 @@ def main(argv=None):
     issue.add_argument("--role", choices=sorted(ROLES), required=True)
     issue.add_argument("--extension")
     issue.add_argument("--ttl", type=int, default=3600)
+    subs.add_parser("list", help="lista apenas metadados; nunca tokens")
     revoke = subs.add_parser("revoke", help="revoga por hash SHA-256")
     revoke.add_argument("--sha256", required=True)
     args = parser.parse_args(argv)
@@ -116,8 +128,10 @@ def main(argv=None):
         elif args.command == "issue":
             result = issue_credential(args.policy, args.tenant, args.role,
                                       extension=args.extension, ttl=args.ttl)
-        else:
+        elif args.command == "revoke":
             result = revoke_credential(args.policy, args.sha256)
+        else:
+            result = {"credentials": list_credential_metadata(args.policy)}
     except (OSError, ValueError) as exc:
         parser.exit(2, "Operação negada: " + str(exc) + "\n")
     print(json.dumps(result, sort_keys=True))
