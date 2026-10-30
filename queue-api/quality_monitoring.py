@@ -56,6 +56,14 @@ def is_poor_quality(quality: dict, jitter_threshold_ms: float = 30.0, packet_los
     ausentes (None) são ignoradas, não contam como "ruim" nem "boa" -
     dado que não veio não pode virar alarme falso.
     """
+    if not isinstance(quality, dict):
+        return False
+    if (type(jitter_threshold_ms) not in (int, float)
+            or not math.isfinite(jitter_threshold_ms) or jitter_threshold_ms < 0
+            or type(packet_loss_threshold_percent) not in (int, float)
+            or not math.isfinite(packet_loss_threshold_percent)
+            or not 0 <= packet_loss_threshold_percent <= 100):
+        return False
     jitter = quality.get("jitter_ms")
     packet_loss = quality.get("packet_loss_percent")
 
@@ -72,17 +80,24 @@ class QualityLog:
     """Histórico de relatórios de qualidade, mesmo padrão do FraudAlertsLog."""
 
     def __init__(self, max_size=100):
+        if type(max_size) is not int or not 1 <= max_size <= 10000:
+            raise ValueError("limite de qualidade invalido")
         self._entries = []
         self._max_size = max_size
 
     def append(self, quality: dict, poor: bool):
+        if not isinstance(quality, dict) or type(poor) is not bool:
+            return False
         entry = {**quality, "poor": poor, "timestamp": time.time()}
         self._entries.append(entry)
         if len(self._entries) > self._max_size:
             self._entries.pop(0)
+        return True
 
     def list(self, limit=20, only_poor=False):
+        if type(limit) is not int or limit <= 0:
+            return []
         entries = list(reversed(self._entries))
         if only_poor:
             entries = [e for e in entries if e["poor"]]
-        return entries[:limit]
+        return [dict(e) for e in entries[:min(limit, self._max_size)]]
