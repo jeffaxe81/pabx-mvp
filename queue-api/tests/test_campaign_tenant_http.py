@@ -555,3 +555,22 @@ def test_callback_cancel_parallel_retries_only_one_mutation(api):
     assert after["status"] == "cancelado"
     assert after["attempts"] == 0
     assert ami.actions == []
+
+
+def test_callback_http_summary_counts_only_authenticated_tenant(api):
+    _, _, callbacks, _, _ = api
+    first = own(api, "/api/callbacks?tenant=t2", "t1")
+    second = own(api, "/api/callbacks?tenant=t1", "t2")
+    assert first[0] == second[0] == 200
+    assert first[2]["summary"]["total"] == 1
+    assert second[2]["summary"]["total"] == 1
+    assert first[2]["summary"]["by_status"]["pendente"] == 1
+    assert all("caller_id_num" not in str(first[2]["summary"]) for _ in [0])
+    assert first[2]["callbacks"][0]["tenant"] == "t1"
+    assert second[2]["callbacks"][0]["tenant"] == "t2"
+    own_callback = first[2]["callbacks"][0]
+    assert own(api, "/api/callbacks/" + own_callback["id"] + "/cancel",
+               method="POST")[0] == 200
+    refreshed = own(api, "/api/callbacks", "t1")[2]["summary"]
+    assert refreshed["by_status"]["cancelado"] == 1
+    assert refreshed["by_status"]["pendente"] == 0

@@ -163,6 +163,34 @@ def add_callback_request(path, caller_id_num: str, caller_id_name: str = "", ten
     return entry
 
 
+
+CALLBACK_SUMMARY_STATUSES = (
+    "pendente", "discando", "concluido", "cancelado", "esgotado",
+)
+
+
+def summarize_callbacks(callbacks, tenant):
+    """Resumo gerencial sem dados pessoais, estritamente por empresa.
+
+    Os registros legados sem tenant não são atribuídos por semelhança
+    de número ou prefixo. Corrupção de ID torna o resultado indisponível.
+    """
+    if not _catalog_has_unique_ids(callbacks):
+        raise ValueError("catalogo ambiguo")
+    if not isinstance(tenant, str) or re.fullmatch(r"t[1-9][0-9]*", tenant) is None:
+        raise ValueError("tenant invalido")
+    scoped = [item for item in callbacks if item.get("tenant") == tenant]
+    by_status = {status: 0 for status in CALLBACK_SUMMARY_STATUSES}
+    by_status["outros"] = 0
+    for item in scoped:
+        status = item.get("status")
+        if status in CALLBACK_SUMMARY_STATUSES:
+            by_status[status] += 1
+        else:
+            by_status["outros"] += 1
+    return {"total": len(scoped), "by_status": by_status}
+
+
 def next_pending_callback(callbacks: list):
     """Seleciona FIFO somente com snapshot íntegro; corrupção nega discagem.
 

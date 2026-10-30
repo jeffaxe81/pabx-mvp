@@ -457,3 +457,24 @@ def test_cancel_invalid_tenant_never_rewrites(tmp_path, tenant):
     before = path.read_bytes()
     assert cancel_pending_callback(path, entry["id"], tenant) == (False, "not_found")
     assert path.read_bytes() == before
+
+
+def test_callback_summary_groups_by_tenant_without_personal_data(tmp_path):
+    from callbacks import summarize_callbacks
+    path = tmp_path / "callbacks.json"
+    t1 = add_callback_request(path, "5511999998888", tenant="t1")
+    t10 = add_callback_request(path, "5511999997777", tenant="t10")
+    add_callback_request(path, "5511999996666")
+    assert cancel_pending_callback(path, t1["id"], "t1")[0]
+    records = load_callbacks(path)
+    summary = summarize_callbacks(records, "t1")
+    assert summary["total"] == 1
+    assert summary["by_status"]["cancelado"] == 1
+    assert summary["by_status"]["pendente"] == 0
+    assert "551199" not in str(summary)
+    assert summarize_callbacks(records, "t10")["by_status"]["pendente"] == 1
+    assert summarize_callbacks(records, "t2")["total"] == 0
+    with pytest.raises(ValueError, match="tenant"):
+        summarize_callbacks(records, "t01")
+    with pytest.raises(ValueError, match="ambiguo"):
+        summarize_callbacks(records + [records[0]], "t1")

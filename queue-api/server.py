@@ -40,7 +40,7 @@ from campaigns import (
 from callbacks import (
     parse_callback_request_event, add_callback_request, load_callbacks,
     find_callback, next_pending_callback, mark_callback_calling, mark_callback_result,
-    cancel_pending_callback,
+    cancel_pending_callback, summarize_callbacks,
     DISPOSITION_TO_STATUS as CALLBACK_DISPOSITIONS,
 )
 from survey import parse_survey_event, SurveyStore, average_score, score_distribution, summarize_by_operator
@@ -1100,7 +1100,10 @@ class Handler(BaseHTTPRequestHandler):
             return
         callbacks = [c for c in records
                      if c.get("tenant") == identity["tenant"]]
-        self._send_queue_json(200, {"callbacks": callbacks})
+        self._send_queue_json(200, {
+            "callbacks": callbacks,
+            "summary": summarize_callbacks(records, identity["tenant"]),
+        })
 
     def _handle_cancel_callback(self):
         """Cancela pedido pendente, nunca chamada iniciada ou de outro tenant."""
