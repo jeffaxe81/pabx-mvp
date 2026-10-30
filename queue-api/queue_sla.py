@@ -197,7 +197,7 @@ class SLAHistoryStore:
             offered = record.get("offered")
             within = record.get("within_sla")
             if (not isinstance(day, str)
-                    or re.fullmatch(r"\\d{4}-\\d{2}-\\d{2}", day) is None
+                    or re.fullmatch(r"\d{4}-\d{2}-\d{2}", day) is None
                     or not _valid_queue_name(queue)
                     or type(offered) is not int or type(within) is not int
                     or not (1 <= offered <= 10_000_000)
