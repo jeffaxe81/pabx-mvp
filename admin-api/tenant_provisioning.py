@@ -10,6 +10,7 @@ import tempfile
 import threading
 
 from conf_generator import render_all
+from tenant_config_invariants import validate_generated_tenant_files
 from tenant_registry_recovery import snapshot_registry, restore_registry
 from tenants import (
     render_tenant_pjsip, render_tenant_queues, render_tenant_extensions,
@@ -42,6 +43,8 @@ def build_tenant_files(root, tenant_id, sip_credentials, voicemail_pins):
         f"voicemail_dynamic_{tenant_id}.conf",
     ):
         contents[root / "generated" / suffix] = empty_files[suffix]
+    # Falhar antes de criar arquivos/registrar DID no AstDB.
+    validate_generated_tenant_files(contents, tenant_id)
     return contents
 
 
