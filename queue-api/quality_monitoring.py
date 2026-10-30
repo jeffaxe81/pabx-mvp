@@ -50,7 +50,9 @@ def parse_quality_event(event: dict):
     }
 
 
-def is_poor_quality(quality: dict, jitter_threshold_ms: float = 30.0, packet_loss_threshold_percent: float = 3.0) -> bool:
+def is_poor_quality(quality: dict, jitter_threshold_ms: float = 30.0,
+                    packet_loss_threshold_percent: float = 3.0,
+                    rtt_threshold_ms: float = 300.0) -> bool:
     """
     True se qualquer métrica disponível passar do limiar. Métricas
     ausentes (None) são ignoradas, não contam como "ruim" nem "boa" -
@@ -62,16 +64,22 @@ def is_poor_quality(quality: dict, jitter_threshold_ms: float = 30.0, packet_los
             or not math.isfinite(jitter_threshold_ms) or jitter_threshold_ms < 0
             or type(packet_loss_threshold_percent) not in (int, float)
             or not math.isfinite(packet_loss_threshold_percent)
-            or not 0 <= packet_loss_threshold_percent <= 100):
+            or not 0 <= packet_loss_threshold_percent <= 100
+            or type(rtt_threshold_ms) not in (int, float)
+            or not math.isfinite(rtt_threshold_ms) or rtt_threshold_ms < 0):
         return False
     jitter = quality.get("jitter_ms")
     packet_loss = quality.get("packet_loss_percent")
+    rtt = quality.get("rtt_ms")
 
     if (type(jitter) in (int, float) and math.isfinite(jitter)
             and jitter >= 0 and jitter > jitter_threshold_ms):
         return True
     if (type(packet_loss) in (int, float) and math.isfinite(packet_loss)
             and 0 <= packet_loss <= 100 and packet_loss > packet_loss_threshold_percent):
+        return True
+    if (type(rtt) in (int, float) and math.isfinite(rtt)
+            and rtt >= 0 and rtt > rtt_threshold_ms):
         return True
     return False
 
