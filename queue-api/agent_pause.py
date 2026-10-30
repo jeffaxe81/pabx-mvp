@@ -27,6 +27,8 @@ def validate_pause_request(data: dict):
     extension = data.get("extension", "")
     if not isinstance(extension, str):
         return False, "ramal invalido", None
+    if any(ord(ch) < 32 or ord(ch) == 127 for ch in extension):
+        return False, "ramal invalido", None
     extension = extension.strip()
     if not extension:
         return False, "ramal obrigatório", None
