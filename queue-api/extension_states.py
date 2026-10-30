@@ -55,4 +55,6 @@ class ExtensionStateTracker:
         }
 
     def snapshot(self):
-        return sorted(self._states.values(), key=lambda s: (s["exten"], s["context"]))
+        # Cópias impedem que o painel externo altere o cache AMI interno.
+        return sorted((dict(value) for value in self._states.values()),
+                      key=lambda s: (s["exten"], s["context"]))
