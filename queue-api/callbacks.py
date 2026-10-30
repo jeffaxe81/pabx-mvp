@@ -83,40 +83,87 @@ def _reject_nonfinite_json_constant(value):
     raise ValueError("catalogo de callbacks com numero JSON nao finito")
 
 
-def load_callbacks(path) -> list:
-    """Recusa snapshots ambíguos sem os reinterpretar nem os corrigir.
+def validate_callback_catalog(records):
+    """Fail-closed for actionable callbacks; preserve completed legacy rows.
 
-    Nunca considerar um arquivo existente e corrompido como fila vazia:
-    isso esconderia chamadas pendentes ou permitiria perda de dados.
+    Historical records may lack modern fields. Only actionable rows must
+    have the exact correlation needed to authorize another Originate.
     """
+    if not _catalog_has_unique_ids(records) or len(records) > _MAX_CALLBACKS:
+        raise ValueError("catalogo de callbacks invalido ou excessivo")
+    active_attempts = set()
+    source_claims = set()
+    for item in records:
+        status = item.get("status")
+        if status not in _ACTIVE_STATUSES:
+            continue  # Retained history is not a dial authorization.
+        cid = item.get("id")
+        phone = item.get("caller_id_num")
+        tenant = item.get("tenant")
+        name = item.get("caller_id_name", "")
+        when = item.get("requested_at")
+        attempts = item.get("attempts")
+        if (not isinstance(cid, str) or _CALLBACK_ID.fullmatch(cid) is None
+                or not isinstance(phone, str) or _CALLBACK_PHONE.fullmatch(phone) is None
+                or phone.startswith("+")
+                or not isinstance(name, str) or len(name) > 80 or not name.isprintable()
+                or tenant is not None and (
+                    not isinstance(tenant, str) or _TENANT.fullmatch(tenant) is None)
+                or type(when) not in (int, float) or not math.isfinite(when) or when < 0
+                or type(attempts) is not int or not 0 <= attempts <= MAX_ATTEMPTS):
+            raise ValueError("catalogo de callbacks com pedido ativo inconsistente")
+        source = item.get("source_uniqueid")
+        if source is not None:
+            if (not isinstance(source, str)
+                    or _SOURCE_UNIQUEID.fullmatch(source) is None):
+                raise ValueError("callback com identificador de origem invalido")
+            source_key = (tenant, source)
+            if source_key in source_claims:
+                raise ValueError("callback com origem AMI duplicada")
+            source_claims.add(source_key)
+        if status == "pendente":
+            if attempts >= MAX_ATTEMPTS:
+                raise ValueError("callback pendente com limite esgotado")
+            continue
+        # A DialEnd event may safely finalize only a correlated in-flight
+        # attempt, not a record with a stale/missing AMI identity.
+        attempt = item.get("attempt_id")
+        started = item.get("last_attempt_at")
+        if (attempts < 1 or not isinstance(attempt, str)
+                or _ATTEMPT_ID.fullmatch(attempt) is None
+                or item.get("channel_id") != "axe-" + attempt
+                or type(started) not in (int, float)
+                or not math.isfinite(started) or started < 0):
+            raise ValueError("callback discando sem correlacao AMI valida")
+        if attempt in active_attempts:
+            raise ValueError("callback com identificador de tentativa duplicado")
+        active_attempts.add(attempt)
+        response = item.get("originate_response")
+        if response is not None and response not in _RESPONSE_STATUSES:
+            raise ValueError("callback com resposta AMI inconsistente")
+        response_at = item.get("originate_response_at")
+        if response_at is not None and (
+                type(response_at) not in (int, float)
+                or not math.isfinite(response_at) or response_at < 0):
+            raise ValueError("callback com timestamp AMI inconsistente")
+    return True
+
+
+def load_callbacks(path) -> list:
+    """Never treat an invalid outbound catalog as an empty callback queue."""
     path = Path(path)
     if path.is_symlink():
         raise ValueError("catalogo de callbacks em link simbolico")
     if not path.exists():
         return []
+    if not path.is_file() or path.stat().st_size > _MAX_CATALOG_BYTES:
+        raise ValueError("catalogo de callbacks nao regular ou excessivo")
     records = json.loads(
         path.read_text(encoding="utf-8"),
         object_pairs_hook=_reject_duplicate_json_keys,
         parse_constant=_reject_nonfinite_json_constant,
     )
-    if not _catalog_has_unique_ids(records):
-        raise ValueError("catalogo de callbacks com ids invalidos ou duplicados")
-    for record in records:
-        if record.get("status") != "pendente":
-            continue
-        number = record.get("caller_id_num")
-        contact = _callback_contact(number)
-        when = record.get("requested_at")
-        attempts = record.get("attempts")
-        tenant = record.get("tenant")
-        if (contact is None or contact["caller_id_num"] != number
-                or type(when) not in (int, float) or not math.isfinite(when)
-                or when < 0
-                or type(attempts) is not int or not 0 <= attempts < MAX_ATTEMPTS
-                or (tenant is not None
-                    and (not isinstance(tenant, str)
-                         or re.fullmatch(r"t[1-9][0-9]*", tenant) is None))):
-            raise ValueError("catalogo de callbacks com pedido pendente inconsistente")
+    validate_callback_catalog(records)
     return records
 
 
@@ -144,7 +191,8 @@ def find_callback(callbacks: list, callback_id: str):
     return next((item for item in callbacks if item["id"] == callback_id), None)
 
 
-def add_callback_request(path, caller_id_num: str, caller_id_name: str = "", tenant=None):
+def add_callback_request(path, caller_id_num: str, caller_id_name: str = "",
+                         tenant=None, source_uniqueid=None):
     contact = _callback_contact(caller_id_num, caller_id_name)
     if contact is None:
         return None
@@ -152,8 +200,22 @@ def add_callback_request(path, caller_id_num: str, caller_id_name: str = "", ten
         from monitoring_access import extension_tenant
         if not isinstance(tenant, str) or extension_tenant(tenant + "-recepcao") != tenant:
             return None
+    if source_uniqueid is not None and (
+            not isinstance(source_uniqueid, str)
+            or _SOURCE_UNIQUEID.fullmatch(source_uniqueid) is None):
+        return None
     callbacks = load_callbacks(path)
-    if not _catalog_has_unique_ids(callbacks):
+    # Asterisk may resend the SAME UserEvent after a reconnect. Its unique
+    # source ID is a durable idempotency key inside one tenant, not a phone.
+    if source_uniqueid is not None:
+        matched = [item for item in callbacks
+                   if item.get("tenant") == tenant
+                   and item.get("source_uniqueid") == source_uniqueid]
+        if matched:
+            # Contradictory source reuse must never create another call.
+            existing = matched[0]
+            return existing if existing.get("caller_id_num") == contact["caller_id_num"] else None
+    if len(callbacks) >= _MAX_CALLBACKS:
         return None
     existing_ids = {item["id"] for item in callbacks}
     callback_id = None
@@ -174,6 +236,8 @@ def add_callback_request(path, caller_id_num: str, caller_id_name: str = "", ten
     }
     if tenant is not None:
         entry["tenant"] = tenant
+    if source_uniqueid is not None:
+        entry["source_uniqueid"] = source_uniqueid
     callbacks.append(entry)
     save_callbacks(path, callbacks)
     return entry
