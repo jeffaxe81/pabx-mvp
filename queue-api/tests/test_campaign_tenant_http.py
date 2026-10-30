@@ -80,7 +80,7 @@ def api(tmp_path, monkeypatch):
         thread.join(timeout=3)
 
 
-def request(base, path, token=None, key=None, method="GET", payload=None, origin=None):
+def request(base, path, token=None, key=None, method="GET", payload=None, origin=None, request_id=None):
     headers = {}
     if token is not None:
         headers["Authorization"] = "Bearer " + token
@@ -88,6 +88,8 @@ def request(base, path, token=None, key=None, method="GET", payload=None, origin
         headers["X-Click-To-Call-Key"] = key
     if origin is not None:
         headers["Origin"] = origin
+    if request_id is not None:
+        headers["X-Idempotency-Key"] = request_id
     data = None
     if payload is not None:
         data = json.dumps(payload).encode()
@@ -574,3 +576,79 @@ def test_callback_http_summary_counts_only_authenticated_tenant(api):
     refreshed = own(api, "/api/callbacks", "t1")[2]["summary"]
     assert refreshed["by_status"]["cancelado"] == 1
     assert refreshed["by_status"]["pendente"] == 0
+
+
+def test_click_to_call_idempotency_and_tenant_partition_http(api, monkeypatch):
+    from outbound_admission import OriginateAdmission
+    monkeypatch.setattr(server, "CTI_ADMISSION", OriginateAdmission())
+    base, _, _, ami, _ = api
+    body = {"extension": "t1-recepcao", "number": "11999998888"}
+    ident = "crm-request-000000001"
+    first = request(base, "/api/click-to-call", TOKENS["t1"], KEY, "POST",
+                    body, request_id=ident)
+    assert first[0] == 200 and first[2]["duplicate"] is False
+    again = request(base, "/api/click-to-call", TOKENS["t1"], KEY, "POST",
+                    body, request_id=ident)
+    assert again[0] == 200 and again[2]["duplicate"] is True
+    assert len(ami.actions) == 1
+    conflict = request(base, "/api/click-to-call", TOKENS["t1"], KEY, "POST",
+                       {**body, "number": "11988887777"}, request_id=ident)
+    assert conflict[0] == 409
+    other = request(base, "/api/click-to-call", TOKENS["t2"], KEY, "POST",
+                    {"extension": "t2-recepcao", "number": "11999998888"},
+                    request_id=ident)
+    assert other[0] == 200 and other[2]["duplicate"] is False
+    assert len(ami.actions) == 2
+    opts = request(base, "/api/click-to-call", method="OPTIONS",
+                   origin="http://localhost:8082")
+    assert "X-Idempotency-Key" in opts[1]["Access-Control-Allow-Headers"]
+
+
+def test_click_to_call_rate_limit_precedes_ami_originate_http(api, monkeypatch):
+    from outbound_admission import OriginateAdmission
+    monkeypatch.setattr(server, "CTI_ADMISSION",
+                        OriginateAdmission(per_tenant_per_minute=2,
+                                           per_extension_per_minute=2))
+    base, _, _, ami, _ = api
+    body = {"extension": "t1-recepcao", "number": "11999998888"}
+    assert request(base, "/api/click-to-call", TOKENS["t1"], KEY,
+                   "POST", body)[0] == 200
+    assert request(base, "/api/click-to-call", TOKENS["t1"], KEY,
+                   "POST", body)[0] == 200
+    blocked = request(base, "/api/click-to-call", TOKENS["t1"], KEY,
+                      "POST", body)
+    assert blocked[0] == 429 and len(ami.actions) == 2
+    assert request(base, "/api/click-to-call", TOKENS["t2"], KEY,
+                   "POST", {"extension": "t2-recepcao", "number": "11999998888"})[0] == 200
+
+
+def test_click_to_call_ami_unknown_never_replays_idempotency_http(api, monkeypatch):
+    from outbound_admission import OriginateAdmission
+    monkeypatch.setattr(server, "CTI_ADMISSION", OriginateAdmission())
+    base, _, _, ami, _ = api
+    attempts = []
+    def interrupted(action):
+        attempts.append(action)
+        raise TimeoutError("unknown")
+    monkeypatch.setattr(ami, "send_action", interrupted)
+    body = {"extension": "t1-recepcao", "number": "11999998888"}
+    first = request(base, "/api/click-to-call", TOKENS["t1"], KEY,
+                    "POST", body, request_id="crm-failure-0000001")
+    again = request(base, "/api/click-to-call", TOKENS["t1"], KEY,
+                    "POST", body, request_id="crm-failure-0000001")
+    assert first[0] == 502 and again[0] == 409
+    assert len(attempts) == 1
+
+
+def test_click_to_call_incorrect_key_and_text_phone_do_not_ami_http(api, monkeypatch):
+    from outbound_admission import OriginateAdmission
+    monkeypatch.setattr(server, "CTI_ADMISSION", OriginateAdmission())
+    base, _, _, ami, _ = api
+    assert request(base, "/api/click-to-call", TOKENS["t1"], KEY+"-wrong",
+                   "POST", {"extension": "t1-recepcao",
+                            "number": "11999998888"})[0] == 403
+    for number in ("ligar 11999998888", "+55+11999998888",
+                   "11999998888;drop", "11999998888@trunk"):
+        assert request(base, "/api/click-to-call", TOKENS["t1"], KEY,
+                       "POST", {"extension": "t1-recepcao", "number": number})[0] == 400
+    assert ami.actions == []
