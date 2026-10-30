@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""CLI para 90 relatórios locais por tenant, sem chamadas ou APIs externas.
+"""CLI para 110 relatórios locais por tenant, sem chamadas ou APIs externas.
 
 Uso:
  python3 queue-api/insights_cli.py --area calls --tenant t1 --file caminho/call_log.jsonl
@@ -7,7 +7,8 @@ Uso:
  Áreas adicionais: calls_advanced, calls_trends, calls_audit,
  survey_advanced, pauses_advanced, campaigns_advanced,
  sla_history, quality_export, callbacks, unanswered, callback_aging,
- sla_capacity, presence e agent_efficiency.
+ sla_capacity, presence, agent_efficiency, quality_advanced,
+ cdr_integrity, callback_health e sla_risk.
 Apenas leitura, filtra por empresa e omite dados de clientes no JSON.
 Não faz validação de identidade ou permissão: execute no host autorizado.
 """
@@ -96,6 +97,25 @@ from insights_agent_efficiency import (
     agent_median_talk_seconds, agent_over_five_minutes,
 )
 
+from insights_quality_advanced import (
+    quality_p95_jitter, quality_p95_rtt, quality_high_loss_rate,
+    quality_metric_coverage, quality_worst_agent_sample_rate,
+)
+from insights_cdr_integrity import (
+    cdr_unknown_status_by_day, cdr_answered_zero_duration,
+    cdr_nonanswered_with_billable, cdr_answered_missing_operator_rate,
+    cdr_invalid_disposition_structure,
+)
+from insights_callback_health import (
+    callback_pending_over_24h, callback_pending_over_48h,
+    callback_pending_exhausted_attempts, callback_completed_by_attempts,
+    callback_pending_share,
+)
+from insights_sla_risk import (
+    sla_consecutive_days_below_eighty, sla_monthly_outside_target_count,
+    sla_queue_traffic_share, sla_lowest_rate_queue_min_ten, sla_best_day,
+)
+
 FUNCTIONS = {
     "calls": (
         call_volume_by_day, call_answer_rate, call_missed_rate, call_talk_time,
@@ -172,6 +192,24 @@ FUNCTIONS = {
         agent_answer_rate, agent_nonanswered_volume, agent_mean_talk_seconds,
         agent_median_talk_seconds, agent_over_five_minutes,
     ),
+    "quality_advanced": (
+        quality_p95_jitter, quality_p95_rtt, quality_high_loss_rate,
+        quality_metric_coverage, quality_worst_agent_sample_rate,
+    ),
+    "cdr_integrity": (
+        cdr_unknown_status_by_day, cdr_answered_zero_duration,
+        cdr_nonanswered_with_billable, cdr_answered_missing_operator_rate,
+        cdr_invalid_disposition_structure,
+    ),
+    "callback_health": (
+        callback_pending_over_24h, callback_pending_over_48h,
+        callback_pending_exhausted_attempts, callback_completed_by_attempts,
+        callback_pending_share,
+    ),
+    "sla_risk": (
+        sla_consecutive_days_below_eighty, sla_monthly_outside_target_count,
+        sla_queue_traffic_share, sla_lowest_rate_queue_min_ten, sla_best_day,
+    ),
 }
 
 
@@ -201,7 +239,7 @@ def main(argv=None):
     try:
         rows = read_local_records(
             args.file,
-            collection=args.area in {"campaigns", "campaigns_advanced", "quality_export", "callbacks", "callback_aging"},
+            collection=args.area in {"campaigns", "campaigns_advanced", "quality_export", "quality_advanced", "callbacks", "callback_aging", "callback_health"},
             keyed_entries=args.area == "presence",
         )
         report = generate_report(args.area, args.tenant, rows)
