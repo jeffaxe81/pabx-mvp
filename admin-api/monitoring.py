@@ -26,6 +26,8 @@ def validate_monitoring_pin_input(data: dict):
     if not isinstance(pin, str):
         return False, "PIN deve ter de 4 a 10 dígitos numéricos", None
     pin = pin.strip()
-    if not PIN_RE.match(pin):
+    if not PIN_RE.fullmatch(pin):
         return False, "PIN deve ter de 4 a 10 dígitos numéricos", None
+    if len(set(pin)) == 1 or pin in {"1234", "4321", "123456", "654321"}:
+        return False, "PIN de monitoramento previsível; escolha outro", None
     return True, None, pin
