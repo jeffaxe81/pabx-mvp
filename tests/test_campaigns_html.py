@@ -81,3 +81,14 @@ def test_pending_callback_cancellation_button_and_endpoint():
     assert "/api/callbacks/${id}/cancel" in body
     assert "window.confirm" in body
     assert "button.disabled = true" in body
+
+
+def test_callback_supervisor_summary_displays_all_counts_safely():
+    html = load_html()
+    assert 'id="callbackSummary"' in html
+    assert "function renderCallbackSummary(summary)" in html
+    assert "renderCallbackSummary(data.summary)" in html
+    assert "target.textContent" in html
+    for status in ("pendente", "discando", "concluido", "cancelado", "esgotado"):
+        assert f"['{status}'," in html
+    assert "Resumo indisponível." in html
