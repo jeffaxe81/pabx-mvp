@@ -102,3 +102,11 @@ def test_validate_accepts_correct_request():
     assert error is None
     assert ext == "t1-recepcao"
     assert number == "11999998888"
+
+
+def test_click_to_call_rejects_non_object_request_and_config():
+    config = {"api_key": "secret", "allowed_extensions": ["t1-recepcao"]}
+    valid = {"extension": "t1-recepcao", "number": "11999998888"}
+    for bad in (None, [], False, "body"):
+        assert validate_click_to_call_request(bad, "secret", config)[0] is False
+        assert validate_click_to_call_request(valid, "secret", bad)[0] is False

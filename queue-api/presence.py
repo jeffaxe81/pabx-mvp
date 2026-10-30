@@ -41,7 +41,16 @@ def load_presence(path) -> dict:
     path = Path(path)
     if not path.exists():
         return {}
-    return json.loads(path.read_text(encoding="utf-8"))
+    data = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(data, dict):
+        raise ValueError("catálogo de presença inválido")
+    for exten, entry in data.items():
+        if (not isinstance(exten, str) or not exten
+                or not isinstance(entry, dict)
+                or entry.get("status") not in PRESENCE_STATES
+                or not isinstance(entry.get("note", ""), str)):
+            raise ValueError("registro de presença inválido")
+    return data
 
 
 def save_presence(path, data: dict):

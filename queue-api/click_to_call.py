@@ -55,6 +55,8 @@ def validate_click_to_call_request(data: dict, api_key: str, config: dict):
     AMI. Retorna (ok, error_message, extension, sanitized_number).
     Se ok=False, extension e sanitized_number vêm None.
     """
+    if not isinstance(data, dict) or not isinstance(config, dict):
+        return False, "requisição ou configuração inválida", None, None
     configured_key = config.get("api_key", "")
     if not configured_key:
         return False, "click-to-call não está configurado (sem API key definida)", None, None

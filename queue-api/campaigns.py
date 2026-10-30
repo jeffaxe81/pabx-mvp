@@ -71,6 +71,10 @@ def find_campaign(campaigns: list, campaign_id: str):
 
 def validate_campaign_input(data: dict):
     """Retorna (ok, error_message, cleaned_data)."""
+    if not isinstance(data, dict):
+        return False, "campanha deve ser objeto JSON", None
+    if not isinstance(data.get("name", ""), str) or not isinstance(data.get("agent_extension", ""), str):
+        return False, "nome ou ramal inválido", None
     name = (data.get("name") or "").strip()
     if not name:
         return False, "nome da campanha obrigatório", None
@@ -80,6 +84,8 @@ def validate_campaign_input(data: dict):
         return False, "ramal do atendente obrigatório", None
 
     raw_contacts = data.get("contacts") or []
+    if not isinstance(raw_contacts, list) or len(raw_contacts) > 1000:
+        return False, "lista de contatos inválida ou excessiva", None
     if not raw_contacts:
         return False, "lista de contatos não pode ser vazia", None
 
