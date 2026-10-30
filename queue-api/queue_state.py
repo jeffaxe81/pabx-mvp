@@ -56,14 +56,14 @@ class QueueStateTracker:
                  max_per_queue=MAX_WAITING_PER_QUEUE,
                  max_age_seconds=DEFAULT_MAX_AGE_SECONDS, clock=None):
         if (type(max_waiting) is not int or not 1 <= max_waiting <= MAX_TRACKED_CALLS
-                or type(max_per_queue) is not int or not 1 <= max_per_queue <= max_waiting
+                or type(max_per_queue) is not int or not 1 <= max_per_queue <= MAX_TRACKED_CALLS
                 or type(max_age_seconds) not in (int, float)
                 or not isfinite(max_age_seconds) or not 1 <= max_age_seconds <= 86400):
             raise ValueError("limites do rastreador inválidos")
         self._waiting = {}
         self._lock = threading.RLock()
         self._max_waiting = max_waiting
-        self._max_per_queue = max_per_queue
+        self._max_per_queue = min(max_per_queue, max_waiting)
         self._max_age_seconds = max_age_seconds
         self._clock = clock or time.time
         self._counters = defaultdict(Counter)
@@ -118,6 +118,8 @@ class QueueStateTracker:
         if not isinstance(event, dict):
             return
         kind = event.get("Event")
+        if not isinstance(kind, str):
+            return
         if kind in _END_EVENTS:
             self._end(event, _END_EVENTS[kind])
             return
