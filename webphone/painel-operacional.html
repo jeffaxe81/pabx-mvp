@@ -294,6 +294,12 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 </a>
 
 <div class="panel" style="margin-bottom: 16px;">
+  <h2>Resumo da supervisão — 20 indicadores por empresa</h2>
+  <p class="empty">Visão restrita a supervisor/administrador. Fontes em memória; alertas não são histórico completo e 80% é referência ilustrativa.</p>
+  <div id="supervisionSummary" class="grid" aria-live="polite"><div class="empty">Informe a credencial do supervisor para consultar.</div></div>
+</div>
+
+<div class="panel" style="margin-bottom: 16px;">
   <h2>Métricas de hoje</h2>
   <div class="metrics-row" id="metricsRow"></div>
 </div>
@@ -430,9 +436,70 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     }).catch(() => null);
   }
 
+  // Campos explicitamente permitidos. Nunca montar a UI a partir de
+  // nomes livres do backend, tampouco renderizar CallerID/PII.
+  const supervisionGroups = [
+    ['queues', 'Filas em espera', [
+      ['waiting_calls', 'Chamadas aguardando'],
+      ['queues_with_waiting', 'Filas com espera'],
+      ['waiting_above_sla_threshold', 'Espera acima do limiar (s)'],
+      ['waiting_over_60_seconds', 'Espera superior a 60s'],
+      ['longest_wait_seconds', 'Maior espera (s)'],
+    ]],
+    ['extensions', 'Ramais monitorados (BLF)', [
+      ['monitored_extensions', 'Ramais monitorados'],
+      ['free_extensions', 'Livres'],
+      ['ringing_extensions', 'Tocando'],
+      ['busy_extensions', 'Em uso ou ocupados'],
+      ['unavailable_extensions', 'Indisponíveis'],
+    ]],
+    ['sla', 'SLA observado (hoje)', [
+      ['offered_calls', 'Oferecidas'],
+      ['within_sla_calls', 'Dentro do limiar'],
+      ['outside_sla_calls', 'Fora do limiar'],
+      ['weighted_sla_percent', 'SLA ponderado (%)'],
+      ['queues_below_reference_80', 'Filas abaixo de 80% (referência)'],
+    ]],
+    ['observations', 'Ocorrências nos buffers', [
+      ['missed_events_in_buffer', 'Eventos de chamadas perdidas'],
+      ['fraud_alerts_in_buffer', 'Alertas de fraude'],
+      ['poor_quality_samples_in_buffer', 'Amostras de qualidade ruim'],
+      ['paused_agents_snapshot', 'Agentes em pausa'],
+      ['manual_absent_overrides', 'Estados manuais ausentes'],
+    ]],
+  ];
+
+  function renderSupervisionSummary(summary) {
+    if (!summary || summary.metric_count !== 20 || summary.scope !== 'memory_snapshot_tenant_only') {
+      el('supervisionSummary').textContent = 'Resumo indisponível ou incompatível.';
+      return;
+    }
+    el('supervisionSummary').innerHTML = supervisionGroups.map(([key, title, metrics]) => {
+      const section = summary[key] || {};
+      return `<section class="panel">
+        <h2>${escapeHtml(title)}</h2>
+        ${metrics.map(([name, label]) => `<div class="item-row">
+          <span>${escapeHtml(label)}</span>
+          <strong class="mono">${escapeHtml(section[name] ?? '—')}</strong>
+        </div>`).join('')}
+      </section>`;
+    }).join('');
+  }
+
+  function refreshSupervision(token, generation) {
+    fetchScopedOperator('/api/supervision/summary', token).then((summary) => {
+      if (generation !== requestGeneration || token !== el('queueToken').value.trim()) return;
+      if (summary === null) {
+        el('supervisionSummary').textContent = 'Resumo disponível apenas para supervisor ou administrador autorizado.';
+        return;
+      }
+      renderSupervisionSummary(summary);
+    });
+  }
+
   const protectedPanels = [
     'metricsRow', 'extensionsList', 'queueList', 'queueSummaryRow', 'fraudAlertsList',
-    'qualityList', 'slaList', 'pauseHistoryList', 'slaHistoryList',
+    'qualityList', 'slaList', 'pauseHistoryList', 'slaHistoryList', 'supervisionSummary',
   ];
   let requestGeneration = 0;
 
@@ -486,6 +553,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
       renderSla(sla);
       renderPauseHistory(pauses);
       renderSlaHistory(slaHistory);
+      refreshSupervision(token, generation);
       el('lastUpdate').textContent = `Atualizado às ${new Date().toLocaleTimeString('pt-BR')}`;
     }).catch(() => {
       if (generation === requestGeneration &&
