@@ -30,10 +30,10 @@ DIAL_STRING_RE = re.compile(r"PJSIP/(\d+)@gateway-tdm")
 
 
 _CALLBACK_PHONE = re.compile(r"[+]?[0-9]{8,20}$")
-_CALLBACK_ID = re.compile(r"[0-9a-f]{12}\\Z")
-_ATTEMPT_ID = re.compile(r"[0-9a-f]{32}\\Z")
-_SOURCE_UNIQUEID = re.compile(r"[A-Za-z0-9._-]{1,96}\\Z")
-_TENANT = re.compile(r"t[1-9][0-9]*\\Z")
+_CALLBACK_ID = re.compile(r"[0-9a-f]{12}\Z")
+_ATTEMPT_ID = re.compile(r"[0-9a-f]{32}\Z")
+_SOURCE_UNIQUEID = re.compile(r"[A-Za-z0-9._-]{1,96}\Z")
+_TENANT = re.compile(r"t[1-9][0-9]*\Z")
 _MAX_CATALOG_BYTES = 8 * 1024 * 1024
 _MAX_CALLBACKS = 20000
 _ACTIVE_STATUSES = frozenset({"pendente", "discando"})
