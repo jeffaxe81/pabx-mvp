@@ -47,7 +47,9 @@ def validate_pause_request(data: dict):
 
 def extract_extension_from_interface(interface: str):
     """'PJSIP/t1-recepcao' -> 't1-recepcao'. None se não bater o formato esperado."""
-    match = INTERFACE_RE.match(interface or "")
+    if not isinstance(interface, str) or len(interface) > 160:
+        return None
+    match = INTERFACE_RE.fullmatch(interface)
     return match.group(1) if match else None
 
 
@@ -58,17 +60,20 @@ def parse_queue_member_pause_event(event: dict):
     feito por outro caminho que não o nosso, ex: CLI do Asterisk) -
     é isso que mantém nosso estado sempre correto de verdade.
     """
-    if event.get("Event") != "QueueMemberPause":
+    if not isinstance(event, dict) or event.get("Event") != "QueueMemberPause":
         return None
 
     extension = extract_extension_from_interface(event.get("Interface", ""))
-    if not extension:
+    paused = event.get("Paused")
+    if not extension or paused not in ("0", "1", "true", "false", "True", "False"):
         return None
-
+    reason = event.get("Reason", "")
+    if not isinstance(reason, str) or len(reason) > 256 or not reason.isprintable():
+        return None
     return {
         "extension": extension,
-        "paused": event.get("Paused") in ("1", "true", "True"),
-        "reason": event.get("Reason", ""),
+        "paused": paused in ("1", "true", "True"),
+        "reason": reason,
     }
 
 
