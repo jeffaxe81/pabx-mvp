@@ -89,7 +89,7 @@ def test_malformed_ami_records_are_ignored_without_type_errors():
 def test_missed_call_ami_fields_never_return_control_chars_or_objects():
     event = {"Event": "DialEnd", "DialStatus": "NOANSWER",
              "CallerIDNum": ["5511999998888"],
-             "CallerIDName": "bad\\r\\nInjected: yes",
+             "CallerIDName": "bad\r\nInjected: yes",
              "DestCallerIDNum": {"unsafe": "value"},
              "Exten": ["t1-1001"]}
     item = parse_missed_call_event(event)
@@ -97,7 +97,7 @@ def test_missed_call_ami_fields_never_return_control_chars_or_objects():
     assert item["caller_id_name"] == ""
     assert item["destination"] == ""
     assert parse_missed_call_event({
-        "Event": "QueueCallerAbandon", "Queue": "fila-t1\\nFake",
+        "Event": "QueueCallerAbandon", "Queue": "fila-t1\nFake",
         "CallerIDNum": "5511999998888", "CallerIDName": "ok",
     })["destination"] == ""
 
