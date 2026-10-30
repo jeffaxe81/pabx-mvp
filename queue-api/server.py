@@ -385,6 +385,7 @@ class Handler(BaseHTTPRequestHandler):
         return (
             path in {
                 "/api/queue", "/api/queue/pickup", "/api/queue/pause",
+                "/api/supervision/queue-health",
                 "/api/supervision/summary",
                 "/api/presence", "/api/reports/pauses", "/api/reports",
                 "/api/metrics/today", "/api/metrics/sla", "/api/metrics/sla/history",
@@ -515,16 +516,15 @@ class Handler(BaseHTTPRequestHandler):
         self._send_json(404, {"error": "not found"})
 
     def do_GET(self):
-        if urlparse(self.path).path == "/api/supervision/summary":
+        if urlparse(self.path).path == "/api/supervision/queue-health":
+            self._handle_queue_health()
+        elif urlparse(self.path).path == "/api/supervision/summary":
             self._handle_supervision_summary()
         elif urlparse(self.path).path == "/api/queue":
             identity = self._require_queue_identity()
             if identity is None:
                 return
-            waiting = [
-                item for item in state.waiting_list()
-                if queue_tenant(item.get("queue")) == identity["tenant"]
-            ]
+            waiting = state.waiting_list(tenant=identity["tenant"])
             self._send_queue_json(200, {"waiting": waiting})
         elif urlparse(self.path).path == "/api/recordings":
             self._handle_list_recordings()
@@ -628,6 +628,20 @@ class Handler(BaseHTTPRequestHandler):
             self._serve_recording_file()
         else:
             self._send_json(404, {"error": "not found"})
+
+    def _handle_queue_health(self):
+        identity = self._require_queue_identity()
+        if identity is None:
+            return
+        if identity.get("role") not in {"supervisor", "admin"}:
+            self._send_queue_json(403, {"error": "supervisao restrita"})
+            return
+        try:
+            snapshot = state.health_snapshot(identity["tenant"])
+        except (KeyError, ValueError, TypeError):
+            self._send_queue_json(503, {"error": "estado da fila indisponivel"})
+            return
+        self._send_queue_json(200, snapshot)
 
     def _handle_supervision_summary(self):
         # Nunca confiar em tenant informado na query, payload ou rota.
@@ -921,7 +935,7 @@ class Handler(BaseHTTPRequestHandler):
 
         response = ami.redirect_channel(channel, PICKUP_CONTEXT, exten=extension)
         if response.get("Response") == "Success":
-            state.remove(channel)
+            state.remove(channel, queue_name=queue_name)
             self._send_queue_json(200, {"ok": True})
         else:
             self._send_queue_json(502, {"error": "falha no redirect", "detail": response})
