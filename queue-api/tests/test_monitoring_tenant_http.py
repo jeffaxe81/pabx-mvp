@@ -242,3 +242,86 @@ def test_monitoring_tenant_parser_rejects_oversized_identifiers():
     for invalid in (None, [], "t1-" + "a" * 100000):
         assert extension_tenant(invalid) is None
     assert channel_tenant("PJSIP/t1-" + "x" * 100000 + "-00000001") is None
+
+
+def test_supervision_summary_20_metrics_isolation_and_no_pii(api, monkeypatch):
+    """O resumo não pode devolver CallerID ou linhas de outro tenant."""
+    base, _ = api
+    monkeypatch.setattr(server.state, "waiting_list", lambda: [
+        {"queue": "fila-t1-en", "waiting_seconds": 67,
+         "caller_id_num": "PRIVATE-CALLER-T1", "channel": "SECRET-T1"},
+        {"queue": "fila-t10", "waiting_seconds": 99,
+         "caller_id_num": "PRIVATE-CALLER-T10", "channel": "SECRET-T10"},
+    ])
+    monkeypatch.setattr(server.extension_states, "snapshot", lambda: [
+        {"context": "t1-hints", "exten": "t1-recepcao", "status_label": "livre"},
+        {"context": "t10-hints", "exten": "t10-recepcao", "status_label": "ocupado"},
+    ])
+    monkeypatch.setattr(server.queue_sla_tracker, "snapshot", lambda: {
+        "fila-t1-en": {"offered": 10, "within_sla": 8},
+        "fila-t10": {"offered": 100, "within_sla": 0},
+    })
+    monkeypatch.setattr(server.agent_pause_store, "snapshot", lambda: {
+        "t1-recepcao": {"paused": True},
+        "t10-recepcao": {"paused": True},
+    })
+    monkeypatch.setattr(server, "load_presence", lambda path: {
+        "t1-recepcao": {"status": "ausente", "note": "PRIVATE-NOTE"},
+        "t10-recepcao": {"status": "ausente"},
+    })
+    status, headers, raw = req(base, "/api/supervision/summary?tenant=t10",
+                               TOKENS["t1"], "http://localhost:8082")
+    assert status == 200
+    assert headers["Cache-Control"] == "no-store"
+    assert headers["Access-Control-Allow-Origin"] == "http://localhost:8082"
+    result = json.loads(raw)
+    assert result["tenant"] == "t1"
+    assert result["metric_count"] == 20
+    assert sum(len(result[section]) for section in
+               ("queues", "extensions", "sla", "observations")) == 20
+    assert result["queues"]["waiting_calls"] == 1
+    assert result["queues"]["waiting_over_60_seconds"] == 1
+    assert result["extensions"]["free_extensions"] == 1
+    assert result["extensions"]["busy_extensions"] == 0
+    assert result["sla"]["offered_calls"] == 10
+    assert result["sla"]["weighted_sla_percent"] == 80
+    assert result["observations"]["paused_agents_snapshot"] == 1
+    assert result["observations"]["manual_absent_overrides"] == 1
+    assert result["observations"]["missed_events_in_buffer"] == 1
+    assert result["observations"]["fraud_alerts_in_buffer"] == 1
+    assert result["observations"]["poor_quality_samples_in_buffer"] == 1
+    for private in (b"PRIVATE-", b"SECRET-", b"note", b"channel", b"caller_id"):
+        assert private not in raw
+
+    status, _, raw = req(base, "/api/supervision/summary?tenant=t1", TOKENS["t10"])
+    assert status == 200
+    other = json.loads(raw)
+    assert other["tenant"] == "t10"
+    assert other["queues"]["waiting_calls"] == 1
+    assert other["sla"]["offered_calls"] == 100
+    assert other["extensions"]["busy_extensions"] == 1
+
+
+def test_supervision_summary_restricts_agent_origin_and_revocation(api):
+    base, policy = api
+    path = "/api/supervision/summary"
+    assert req(base, path)[0] == 401
+    assert req(base, path, TOKENS["t1"], "https://attacker.invalid")[0] == 403
+    assert req(base, path, method="OPTIONS", origin="https://attacker.invalid")[0] == 403
+    assert req(base, path, method="OPTIONS", origin="http://localhost:8082")[0] == 204
+    assert req(base, path + "-evil", TOKENS["t1"])[0] == 404
+
+    token = "D" * 48
+    catalog = json.loads(policy.read_text(encoding="utf-8"))
+    catalog["credentials"].append({
+        "token_sha256": hashlib.sha256(token.encode()).hexdigest(),
+        "tenant": "t1", "role": "agent",
+        "extension": "t1-recepcao", "expires_at": 4102444800,
+    })
+    policy.write_text(json.dumps(catalog), encoding="utf-8")
+    policy.chmod(0o600)
+    status, _, raw = req(base, path, token)
+    assert status == 403 and b"PRIVATE-" not in raw
+
+    policy.write_text('{"credentials":[]}', encoding="utf-8")
+    assert req(base, path, TOKENS["t1"])[0] == 401
