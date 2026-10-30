@@ -8,7 +8,9 @@ Lógica pura de parsing/agregação aqui; leitura/escrita em disco fica
 isolada em CallLogStore pra facilitar teste com arquivos temporários.
 """
 import json
+import os
 import re
+import stat
 import time
 from pathlib import Path
 
@@ -119,8 +121,21 @@ class CallLogStore:
 
     def append(self, record: dict):
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        with open(self.path, "a", encoding="utf-8") as f:
-            f.write(json.dumps(record, ensure_ascii=False) + "\n")
+        flags = (os.O_WRONLY | os.O_APPEND | os.O_CREAT
+                 | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0))
+        fd = os.open(self.path, flags, 0o600)
+        try:
+            if not stat.S_ISREG(os.fstat(fd).st_mode):
+                raise ValueError("histórico CDR não é arquivo regular")
+            os.fchmod(fd, 0o600)
+            with os.fdopen(fd, "a", encoding="utf-8") as output:
+                fd = -1
+                output.write(json.dumps(record, ensure_ascii=False, allow_nan=False) + "\n")
+                output.flush()
+                os.fsync(output.fileno())
+        finally:
+            if fd >= 0:
+                os.close(fd)
 
     def load_all(self):
         if not self.path.exists():
