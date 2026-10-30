@@ -39,7 +39,7 @@ def parse_cdr_for_report(event: dict):
     Transforma um evento AMI 'Cdr' num registro de relatório, ou
     retorna None se o evento não servir (não é Cdr, ou sem disposition).
     """
-    if event.get("Event") != "Cdr":
+    if not isinstance(event, dict) or event.get("Event") != "Cdr":
         return None
 
     disposition = event.get("Disposition")
@@ -48,10 +48,31 @@ def parse_cdr_for_report(event: dict):
 
     channel = event.get("DestinationChannel") or event.get("Channel") or ""
     operator = extract_operator(channel)
-    tenant = extract_tenant(operator, event.get("DestinationContext") or event.get("Context"))
+    # Nunca atribuir CDR a uma empresa quando operador, contexto e
+    # AccountCode apontam para donos conflitantes. AccountCode, quando
+    # presente, tem precedência e deve estar íntegro.
+    context = event.get("DestinationContext") or event.get("Context")
+    operator_tenant = extract_tenant(operator, None)
+    context_tenant = extract_tenant(None, context)
+    if operator_tenant and context_tenant and operator_tenant != context_tenant:
+        return None
+    account_values = [event[key] for key in ("AccountCode", "Accountcode") if key in event]
+    if account_values:
+        if (any(not isinstance(value, str) or
+                re.fullmatch(r"t[1-9][0-9]*", value) is None
+                for value in account_values)
+                or len(set(account_values)) != 1):
+            return None
+        tenant = account_values[0]
+        if (operator_tenant and operator_tenant != tenant
+                or context_tenant and context_tenant != tenant):
+            return None
+    else:
+        # Compatibilidade apenas com os registros AMI legados sem campo.
+        tenant = operator_tenant or context_tenant
 
     try:
-        billable_seconds = int(event.get("BillableSeconds") or 0)
+        billable_seconds = max(0, int(event.get("BillableSeconds") or 0))
     except (TypeError, ValueError):
         billable_seconds = 0
 

@@ -16,7 +16,9 @@ Lógica pura aqui, sem rede - 100% testável. Reset diário com relógio
 injetável, mesmo padrão de metrics.py.
 """
 import json
+import os
 import re
+import stat
 import time
 from pathlib import Path
 
@@ -170,21 +172,49 @@ class SLAHistoryStore:
 
     def append(self, record: dict):
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        with open(self.path, "a", encoding="utf-8") as f:
-            f.write(json.dumps(record, ensure_ascii=False) + "\n")
+        # Histórico da operação deve ser regular, sem symlink e privado.
+        flags = os.O_WRONLY | os.O_CREAT | os.O_APPEND | getattr(os, "O_NOFOLLOW", 0)
+        fd = os.open(self.path, flags, 0o600)
+        try:
+            if not stat.S_ISREG(os.fstat(fd).st_mode):
+                raise ValueError("histórico SLA não é arquivo regular")
+            os.fchmod(fd, 0o600)
+            with os.fdopen(fd, "a", encoding="utf-8") as f:
+                fd = -1
+                f.write(json.dumps(record, ensure_ascii=False) + "\n")
+                f.flush()
+                os.fsync(f.fileno())
+        finally:
+            if fd >= 0:
+                os.close(fd)
 
     def load_all(self) -> list:
         if not self.path.exists():
             return []
         records = []
-        for line in self.path.read_text(encoding="utf-8").splitlines():
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                records.append(json.loads(line))
-            except json.JSONDecodeError:
-                continue
+        # Leitura em fluxo: arquivo histórico não é carregado inteiro
+        # apenas para consultar um período.
+        with open(self.path, "r", encoding="utf-8") as history:
+            for line in history:
+                if len(line) > 16384:
+                    continue
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    record = json.loads(line)
+                except (ValueError, TypeError):
+                    continue
+                if (not isinstance(record, dict)
+                        or not isinstance(record.get("date"), str)
+                        or re.fullmatch(r"\d{4}-\d{2}-\d{2}", record["date"]) is None
+                        or not _valid_queue_name(record.get("queue"))
+                        or type(record.get("offered")) is not int
+                        or type(record.get("within_sla")) is not int
+                        or record["offered"] <= 0
+                        or not 0 <= record["within_sla"] <= record["offered"]):
+                    continue
+                records.append(record)
         return records
 
 

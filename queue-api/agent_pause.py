@@ -13,7 +13,10 @@ import time
 import json
 from pathlib import Path
 
-INTERFACE_RE = re.compile(r"^PJSIP/([a-zA-Z0-9-]+)$")
+INTERFACE_RE = re.compile(r"^PJSIP/([a-zA-Z0-9_-]+)$")
+_EXTENSION_RE = re.compile(r"^t[1-9][0-9]*-[a-zA-Z0-9_-]{1,80}$")
+_PAUSED_VALUES = {"1": True, "true": True, "True": True,
+                  "0": False, "false": False, "False": False}
 
 
 def validate_pause_request(data: dict):
@@ -30,6 +33,8 @@ def validate_pause_request(data: dict):
     extension = extension.strip()
     if not extension:
         return False, "ramal obrigatório", None
+    if _EXTENSION_RE.fullmatch(extension) is None:
+        return False, "ramal deve identificar empresa e extensão válidas", None
 
     paused = data.get("paused")
     if not isinstance(paused, bool):
@@ -47,7 +52,7 @@ def validate_pause_request(data: dict):
 
 def extract_extension_from_interface(interface: str):
     """'PJSIP/t1-recepcao' -> 't1-recepcao'. None se não bater o formato esperado."""
-    match = INTERFACE_RE.match(interface or "")
+    match = INTERFACE_RE.fullmatch(interface) if isinstance(interface, str) else None
     return match.group(1) if match else None
 
 
@@ -58,17 +63,21 @@ def parse_queue_member_pause_event(event: dict):
     feito por outro caminho que não o nosso, ex: CLI do Asterisk) -
     é isso que mantém nosso estado sempre correto de verdade.
     """
-    if event.get("Event") != "QueueMemberPause":
+    if not isinstance(event, dict) or event.get("Event") != "QueueMemberPause":
         return None
 
     extension = extract_extension_from_interface(event.get("Interface", ""))
-    if not extension:
+    paused_value = event.get("Paused")
+    reason = event.get("Reason", "")
+    if (_EXTENSION_RE.fullmatch(extension or "") is None
+            or not isinstance(paused_value, str) or paused_value not in _PAUSED_VALUES
+            or not isinstance(reason, str) or len(reason) > 256):
         return None
 
     return {
         "extension": extension,
-        "paused": event.get("Paused") in ("1", "true", "True"),
-        "reason": event.get("Reason", ""),
+        "paused": _PAUSED_VALUES[paused_value],
+        "reason": reason,
     }
 
 
@@ -101,7 +110,8 @@ class AgentPauseStore:
         # como saber quando a pausa começou (ex: primeiro evento
         # depois do queue-api reiniciar) - não registra, honesto sobre
         # o que não sabemos, em vez de inventar uma duração.
-        if not parsed["paused"] and previous and previous["paused"] and self._history_store:
+        if (not parsed["paused"] and previous and previous["paused"]
+                and self._history_store and now >= previous["since"]):
             self._history_store.append({
                 "extension": extension,
                 "reason": previous["reason"],

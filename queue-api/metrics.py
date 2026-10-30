@@ -80,6 +80,8 @@ import re
 
 _ACCOUNT_TENANT = re.compile(r"^t[1-9][0-9]*$")
 MAX_DAILY_TENANTS = 256
+MAX_DAILY_CDR_IDS = 250000
+_CDR_ID_RE = re.compile(r"^[A-Za-z0-9._-]{1,96}$")
 
 
 def tenant_from_cdr(event):
@@ -102,23 +104,44 @@ class TenantDailyMetrics:
         self._clock = clock
         self._day = _day_key(clock())
         self._by_tenant = {}
+        self._seen_cdr_ids = set()
 
     def _roll_day(self):
         today = _day_key(self._clock())
         if today != self._day:
             self._day = today
             self._by_tenant.clear()
+            self._seen_cdr_ids.clear()
 
     def apply_cdr_event(self, event):
         self._roll_day()
         tenant = tenant_from_cdr(event)
         if tenant is None or not event.get("Disposition"):
             return
+        # Reentrega de eventos AMI após reconexão não pode inflar o
+        # painel por tenant. Sem UniqueID seguimos modo legado.
+        ids = [event[key] for key in ("UniqueID", "Uniqueid") if key in event]
+        fingerprint = None
+        if ids:
+            if (any(not isinstance(value, str) or
+                    _CDR_ID_RE.fullmatch(value) is None for value in ids)
+                    or len(set(ids)) != 1):
+                return
+            fingerprint = (tenant, ids[0])
+            if fingerprint in self._seen_cdr_ids:
+                return
+            # Não ampliar memória sem limite em instalação longa.
+            # Na saturação, recusar CDRs identificados em vez de
+            # introduzir duplicidade silenciosa nos totais.
+            if len(self._seen_cdr_ids) >= MAX_DAILY_CDR_IDS:
+                return
         if tenant not in self._by_tenant:
             if len(self._by_tenant) >= MAX_DAILY_TENANTS:
                 return
             self._by_tenant[tenant] = DailyMetrics(clock=self._clock)
         self._by_tenant[tenant].apply_cdr_event(event)
+        if fingerprint is not None:
+            self._seen_cdr_ids.add(fingerprint)
 
     def snapshot(self, tenant):
         self._roll_day()

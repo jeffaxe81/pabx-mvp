@@ -152,6 +152,16 @@ def propose_candidates(recordings_dir, cdr_events):
             })
     finally:
         os.close(directory_fd)
+    # Uma mesma prova CDR não pode classificar dois arquivos distintos
+    # automaticamente. Nesses casos nenhum deles vira candidato;
+    # exige-se revisão humana da correlação origem/áudio.
+    by_source = defaultdict(list)
+    for row in rows:
+        by_source[row["source_ref"]].append(row)
+    repeated_refs = {ref for ref, matches in by_source.items() if len(matches) > 1}
+    if repeated_refs:
+        ambiguous += sum(row["source_ref"] in repeated_refs for row in rows)
+        rows = [row for row in rows if row["source_ref"] not in repeated_refs]
     return rows, {
         "proposed": len(rows), "ambiguous": ambiguous,
         "without_evidence": unmatched, "unsupported": skipped,
