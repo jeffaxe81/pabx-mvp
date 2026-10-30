@@ -62,3 +62,28 @@ Sem execução de testes, homologação, CI solicitada manualmente,
 deploy ou integração na `main`. A anotação `[skip ci]` foi usada
 nos commits, mas não substitui a checagem posterior dos workflows.
 Homologação e GO de produção continuam bloqueados.
+
+## Quinto incremento — continuidade em seis frentes
+
+1. **Cadastro multiempresa:** leitura limitada a 1 MiB de arquivo
+   regular sem symlink final, rejeição de chaves JSON duplicadas e
+   números não finitos, validação do registro antes de salvar e
+   persistência atômica com fsync do diretório.
+2. **Callbacks:** tamanho calculado com a mesma indentação do
+   serializador persistente; FIFO rejeita status desconhecido ou tenant
+   inválido inclusive em registros históricos.
+3. **Presença:** validação explícita do tipo do ramal e status antes
+   do acesso ao regex; leitura ancorada que recusa symlinks ancestrais.
+4. **Relatórios CDR:** leitura ancorada por descritor e descarte de
+   registros com identificadores de empresa inválidos ou conflitantes.
+5. **SLA:** histórico rejeita percentuais não finitos, contadores
+   negativos ou inconsistentes, tanto na leitura quanto na escrita.
+6. **Gravações:** importação recusa arquivo de áudio com múltiplos
+   hardlinks e arquivo de lock com mais de um link de inode.
+
+### Condições desta rodada
+- Sem testes, builds, lint, simulações, homologação ou deploy.
+- Código mantido em branch separada, sem merge na main.
+- Progresso de homologação formal não muda por registro de código.
+- A main e a branch estão divergentes, exigindo integração
+  cuidadosa e avaliação posterior dos conflitos.
