@@ -454,7 +454,7 @@ def test_30_sla_history_rejects_invalid_calendar_date_and_queue(tmp_path):
     import json
     path = tmp_path / "sla.jsonl"
     candidates = [{"date": "2026-02-30", "queue": "fila-t1"},
-                  {"date": "2026-10-29", "queue": "fila-t1\\nInjected"},
+                  {"date": "2026-10-29", "queue": "fila-t1" + chr(10) + "Injected"},
                   {"date": "2026-10-29", "queue": []},
                   {"date": "2026-10-29", "queue": "fila-t10"}]
     records = [{**c, "offered": 1, "within_sla": 1} for c in candidates]
