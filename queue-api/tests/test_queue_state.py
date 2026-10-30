@@ -128,3 +128,22 @@ def test_clock_rollback_never_reports_negative_wait(monkeypatch):
     assert tracker.waiting_list()[0]["waiting_seconds"] == 0
     now[0] = 1015.0
     assert tracker.waiting_list()[0]["waiting_seconds"] == 15
+
+
+def test_queue_caller_id_rejects_ami_objects_and_control_characters():
+    tracker = QueueStateTracker()
+    tracker.apply_event({"Event": "QueueCallerJoin", "Queue": "fila-t1",
+                         "Channel": "CH1", "CallerIDNum": ["55119999"],
+                         "CallerIDName": "nome" + chr(13) + chr(10) + "Injected"})
+    item = tracker.waiting_list()[0]
+    assert item["caller_id_num"] == ""
+    assert item["caller_id_name"] == ""
+    tracker.apply_event({"Event": "QueueCallerJoin", "Queue": "fila-t1",
+                         "Channel": "CH2", "CallerIDNum": "1" * 65,
+                         "CallerIDName": {"unsafe": True}})
+    assert all(row["caller_id_num"] == "" and row["caller_id_name"] == ""
+               for row in tracker.waiting_list())
+    tracker.apply_event({"Event": "QueueCallerJoin", "Queue": "fila-t2",
+                         "Channel": "CH3", "CallerIDNum": "+5511988776655",
+                         "CallerIDName": "Cliente Exemplo"})
+    assert tracker.waiting_list("fila-t2")[0]["caller_id_name"] == "Cliente Exemplo"
