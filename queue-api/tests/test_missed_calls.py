@@ -109,3 +109,50 @@ def test_oversized_ami_data_does_not_enter_missed_call_history():
     assert normalized["caller_id_num"] == "desconhecido"
     assert normalized["caller_id_name"] == ""
     assert normalized["destination"] == "fila-t1"
+
+
+# Programa 30 frentes — chamadas perdidas: cinco garantias de histórico.
+def test_30_missed_rejects_invalid_history_capacity():
+    import pytest
+    for capacity in (0, -1, True, 1.2, None, "100", 10001):
+        with pytest.raises(ValueError):
+            MissedCallsLog(max_size=capacity)
+
+
+def test_30_missed_ignores_invalid_records_without_crashing():
+    log = MissedCallsLog()
+    for value in (None, [], True, "NOT DICT"):
+        assert log.append(value) is False
+    assert log.list() == []
+
+
+def test_30_missed_sanitizes_direct_inserts_without_control_chars():
+    log = MissedCallsLog()
+    log.append({"caller_id_num": ["1"], "caller_id_name": "x\\nForged",
+                "destination": {"x": "y"}, "reason": "BUSY", "source": "dial"})
+    row = log.list()[0]
+    assert row["caller_id_num"] == "desconhecido"
+    assert row["caller_id_name"] == ""
+    assert row["destination"] == ""
+
+
+def test_30_missed_invalid_limit_returns_empty_instead_of_all():
+    log = MissedCallsLog()
+    log.append({"caller_id_num": "1"})
+    for limit in (None, True, 0, -1, 1.5, "10", {}):
+        assert log.list(limit=limit) == []
+    assert len(log.list(limit=9999)) == 1
+
+
+def test_30_missed_list_returns_detached_copy_and_true_timestamp():
+    log = MissedCallsLog(max_size=2)
+    original = {"caller_id_num": "123", "timestamp": 0}
+    assert log.append(original) is True
+    copy = log.list()[0]
+    assert copy["timestamp"] > 0
+    assert original["timestamp"] == 0
+    copy["caller_id_num"] = "changed"
+    assert log.list()[0]["caller_id_num"] == "123"
+    log.append({"caller_id_num": "second"})
+    log.append({"caller_id_num": "third"})
+    assert [x["caller_id_num"] for x in log.list()] == ["third", "second"]
