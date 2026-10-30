@@ -238,8 +238,11 @@ def handle_ami_event(event: dict):
                         if key in event)):
             try:
                 with outbound_lock(CALLBACKS_PATH):
-                    add_callback_request(CALLBACKS_PATH, callback_request["caller_id_num"],
-                                         callback_request["caller_id_name"], tenant=tenant)
+                    add_callback_request(
+                        CALLBACKS_PATH, callback_request["caller_id_num"],
+                        callback_request["caller_id_name"], tenant=tenant,
+                        source_uniqueid=callback_request.get("source_uniqueid"),
+                    )
             except (OSError, UnicodeError, ValueError):
                 # Preservar snapshot suspeito; não regravar como lista vazia.
                 print("[AVISO] catalogo de callbacks indisponivel; pedido AMI nao persistido")
