@@ -68,7 +68,7 @@ def test_04_refuses_duplicate_campaign_ids_across_tenants(tmp_path):
     assert find_campaign(rows, rows[0]["id"]) is None
 
 
-@pytest.mark.parametrize("bad", [None, [], True, {"id": "x"}, [{"id": "bad"}]])
+@pytest.mark.parametrize("bad", [None, True, {"id": "x"}, [{"id": "bad"}], [None]])
 def test_05_refuses_malformed_catalog_shapes(tmp_path, bad):
     path, _ = setup_campaign(tmp_path)
     path.write_text(json.dumps(bad), encoding="utf-8")
