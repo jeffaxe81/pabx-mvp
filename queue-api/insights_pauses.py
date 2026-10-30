@@ -7,6 +7,8 @@ from insights_common import tenant_rows, valid_seconds
 
 def _pauses(records, tenant):
     valid = []
+    allowed_reasons = {"almoço", "almoco", "banheiro", "descanso", "reunião",
+                       "reuniao", "treinamento", "pausa técnica", "pausa tecnica"}
     for row in tenant_rows(records, tenant, from_agent=True):
         seconds = valid_seconds(row.get("duration_seconds"))
         if seconds is None:
@@ -14,6 +16,9 @@ def _pauses(records, tenant):
         reason = row.get("reason")
         if not isinstance(reason, str) or not 0 < len(reason) <= 120 or not reason.isprintable():
             reason = "sem motivo"
+        elif reason.strip().lower() not in allowed_reasons:
+            # Motivo livre pode conter dados pessoais: não reproduzir texto arbitrário.
+            reason = "outros"
         timestamp = row.get("started_at")
         day = None
         if type(timestamp) in (int, float) and 0 <= timestamp <= 4102444800:
