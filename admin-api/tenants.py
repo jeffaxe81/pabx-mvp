@@ -13,12 +13,27 @@ import json
 import os
 import re
 import secrets
+import stat
 import tempfile
 from pathlib import Path
 
 TENANT_ID_RE = re.compile(r"^t([3-9]|[1-9][0-9]+)$")  # t3, t4, ... - t1/t2 já existem manualmente
 DID_RE = re.compile(r"^[0-9]{8,15}$")
 DISPLAY_NAME_RE = re.compile(r"^.{2,60}$")
+MAX_TENANT_REGISTRY_BYTES = 1024 * 1024
+
+
+def _unique_json_keys(pairs):
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError("campo duplicado no cadastro multiempresa")
+        result[key] = value
+    return result
+
+
+def _no_nonfinite_json(value):
+    raise ValueError("número não finito no cadastro multiempresa")
 
 AUTO_GENERATED_HEADER = (
     "; ARQUIVO GERADO AUTOMATICAMENTE PELO WIZARD DE PREPARAÇÃO DE AMBIENTE.\n"
@@ -28,14 +43,39 @@ AUTO_GENERATED_HEADER = (
 
 
 def load_tenants(path) -> list:
+    """Recusa arquivos especiais, links simbólicos e registros ambíguos."""
     path = Path(path)
-    if not path.exists():
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
+    try:
+        fd = os.open(path, flags)
+    except FileNotFoundError:
         return []
-    return json.loads(path.read_text(encoding="utf-8"))
+    try:
+        info = os.fstat(fd)
+        if not stat.S_ISREG(info.st_mode) or info.st_size > MAX_TENANT_REGISTRY_BYTES:
+            raise ValueError("cadastro multiempresa inválido ou excessivo")
+        with os.fdopen(fd, "rb") as reader:
+            fd = -1
+            content = reader.read(MAX_TENANT_REGISTRY_BYTES + 1)
+    finally:
+        if fd >= 0:
+            os.close(fd)
+    if len(content) > MAX_TENANT_REGISTRY_BYTES:
+        raise ValueError("cadastro multiempresa excede limite")
+    records = json.loads(content, object_pairs_hook=_unique_json_keys,
+                         parse_constant=_no_nonfinite_json)
+    if not _valid_existing_records(records):
+        raise ValueError("cadastro multiempresa inconsistente")
+    return records
 
 
 def save_tenants(path, tenants: list):
     """Publica JSON de forma atômica para evitar arquivo truncado."""
+    if not _valid_existing_records(tenants):
+        raise ValueError("cadastro multiempresa inconsistente")
+    encoded = json.dumps(tenants, indent=2, ensure_ascii=False, allow_nan=False)
+    if len(encoded.encode("utf-8")) > MAX_TENANT_REGISTRY_BYTES:
+        raise ValueError("cadastro multiempresa excede limite")
     destination = Path(path)
     destination.parent.mkdir(parents=True, exist_ok=True)
     temporary = None
@@ -45,10 +85,15 @@ def save_tenants(path, tenants: list):
             prefix=f".{destination.name}.", delete=False,
         ) as handle:
             temporary = handle.name
-            json.dump(tenants, handle, indent=2, ensure_ascii=False)
+            handle.write(encoded)
             handle.flush()
             os.fsync(handle.fileno())
         os.replace(temporary, destination)
+        parent_fd = os.open(destination.parent, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
+        try:
+            os.fsync(parent_fd)
+        finally:
+            os.close(parent_fd)
     finally:
         if temporary is not None and os.path.exists(temporary):
             os.unlink(temporary)
