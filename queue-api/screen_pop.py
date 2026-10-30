@@ -19,18 +19,25 @@ def parse_dial_begin_event(event: dict):
     retorna None se o evento não servir (não é DialBegin, ou sem
     CallerID).
     """
-    if event.get("Event") != "DialBegin":
+    if not isinstance(event, dict) or event.get("Event") != "DialBegin":
         return None
 
     caller_id_num = event.get("CallerIDNum")
-    if not caller_id_num:
+    if (not isinstance(caller_id_num, str) or not 0 < len(caller_id_num) <= 64
+            or not caller_id_num.isprintable() or caller_id_num.isspace()):
         return None
+
+    def optional_ami_text(key, max_length):
+        value = event.get(key, "")
+        if not isinstance(value, str) or len(value) > max_length or not value.isprintable():
+            return ""
+        return value
 
     return {
         "caller_id_num": caller_id_num,
-        "caller_id_name": event.get("CallerIDName", ""),
-        "destination_exten": event.get("DestExten", ""),
-        "destination_channel": event.get("DestChannel", ""),
+        "caller_id_name": optional_ami_text("CallerIDName", 128),
+        "destination_exten": optional_ami_text("DestExten", 64),
+        "destination_channel": optional_ami_text("DestChannel", 160),
     }
 
 

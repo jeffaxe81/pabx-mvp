@@ -64,3 +64,28 @@ def test_dispatch_returns_error_message_on_failure_without_raising():
         error = dispatch_screen_pop(event, webhook_url="https://crm.exemplo.com/webhook")
     assert error is not None
     assert "crm fora do ar" in error
+
+
+def test_screen_pop_rejects_invalid_ami_caller_without_sending():
+    for invalid in (None, [], False, "DialBegin"):
+        assert parse_dial_begin_event(invalid) is None
+    for invalid in ([], {}, True, 123, "", " ", "1" * 65,
+                    "5511" + chr(10) + "Injected"):
+        event = {"Event": "DialBegin", "CallerIDNum": invalid}
+        assert parse_dial_begin_event(event) is None
+        with patch("screen_pop.send_webhook") as send:
+            assert dispatch_screen_pop(event, "https://crm.exemplo.com/webhook") is None
+            send.assert_not_called()
+
+
+def test_screen_pop_sanitizes_optional_ami_fields():
+    event = {"Event": "DialBegin", "CallerIDNum": "+551199998888",
+             "CallerIDName": ["malformed"],
+             "DestExten": "1000" + chr(13) + "Injected",
+             "DestChannel": {"unsafe": True}}
+    item = parse_dial_begin_event(event)
+    assert item["caller_id_num"] == "+551199998888"
+    assert item["caller_id_name"] == ""
+    assert item["destination_exten"] == ""
+    assert item["destination_channel"] == ""
+    assert build_webhook_payload(item)["operator_extension"] == ""
