@@ -93,3 +93,13 @@ def test_dispatch_does_nothing_when_no_channels_enabled():
     mock_email.assert_not_called()
     mock_whatsapp.assert_not_called()
     assert errors == []
+
+
+def test_notifications_ignore_unsafe_ami_caller_metadata():
+    subject, _ = build_email_message(
+        {"caller_id_name": "A" + chr(10) + "Injected",
+         "caller_id_num": "5511999998888"}, {})
+    assert "Injected" not in subject
+    assert "5511999998888" in subject
+    assert dispatch_notifications([], {"channels": []})
+    assert dispatch_notifications({"caller_id_num": "123"}, {"channels": "email"})
