@@ -19,6 +19,7 @@ from recording_access import read_regular_file_secure
 
 MAX_CALLBACK_CATALOG_BYTES = 4 * 1024 * 1024
 MAX_CALLBACK_RECORDS = 20000
+_VALID_CALLBACK_STATES = {"pendente", "discando", "concluido", "cancelado", "esgotado"}
 
 MAX_ATTEMPTS = 2  # menos tentativas que campanha - é o cliente esperando, não uma lista fria
 
@@ -94,7 +95,15 @@ def load_callbacks(path) -> list:
             or len(records) > MAX_CALLBACK_RECORDS):
         raise ValueError("catalogo de callbacks com ids inválidos ou volume excessivo")
     for record in records:
-        if record.get("status") != "pendente":
+        status = record.get("status")
+        tenant = record.get("tenant")
+        if status not in _VALID_CALLBACK_STATES:
+            raise ValueError("estado de callback inválido")
+        if tenant is not None and (
+                not isinstance(tenant, str)
+                or re.fullmatch(r"t[1-9][0-9]*", tenant) is None):
+            raise ValueError("empresa de callback histórico inválida")
+        if status != "pendente":
             continue
         number = record.get("caller_id_num")
         contact = _callback_contact(number)
