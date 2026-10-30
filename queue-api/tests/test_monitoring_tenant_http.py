@@ -277,6 +277,14 @@ def test_supervision_summary_20_metrics_isolation_and_no_pii(api, monkeypatch):
     result = json.loads(raw)
     assert result["tenant"] == "t1"
     assert result["metric_count"] == 20
+    diagnostics = result["diagnostics"]
+    assert diagnostics["tenant"] == "t1"
+    assert diagnostics["rule_count"] == 20
+    assert len(diagnostics["rules"]) == 20
+    assert diagnostics["evaluation"] == "reference_only_not_automatic_remediation"
+    assert diagnostics["operational_homologation_claimed"] is False
+    assert all(rule["reference_is_contractual"] is False
+               for rule in diagnostics["rules"])
     assert sum(len(result[section]) for section in
                ("queues", "extensions", "sla", "observations")) == 20
     assert result["queues"]["waiting_calls"] == 1
