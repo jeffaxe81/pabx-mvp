@@ -136,3 +136,33 @@ def test_survey_operator_channel_rejects_invalid_types():
         item = parse_survey_event({**SAMPLE_EVENT, "Operator": bad})
         assert item["operator"] is None
         assert item["tenant"] is None
+
+
+def test_survey_store_ignores_valid_json_with_invalid_record_shape(tmp_path):
+    path = tmp_path / "survey.jsonl"
+    path.write_text(
+        '{"score":5,"operator":"t1-recepcao","tenant":"t1"}\n'
+        '[]\n'
+        '123\n'
+        '{"score":true,"tenant":"t1"}\n'
+        '{"score":99,"tenant":"t1"}\n'
+        '{"score":"5","tenant":"t1"}\n'
+        '{"score":1,"tenant":"t01"}\n'
+        '{"score":4,"operator":[],"tenant":"t1"}\n'
+        '{"score":2,"operator":"t10-agente","tenant":"t10"}\n',
+        encoding="utf-8",
+    )
+    store = SurveyStore(path)
+    assert len(store.load_all()) == 2
+    scoped = store.query(tenant="t1")
+    assert len(scoped) == 1
+    assert scoped[0]["score"] == 5
+    assert average_score(scoped) == 5.0
+    assert store.query(tenant="t10")[0]["score"] == 2
+
+
+def test_survey_store_skips_oversized_jsonl_line(tmp_path):
+    path = tmp_path / "survey.jsonl"
+    path.write_text('{"score":5,"operator":"' + "a" * 5000 +
+                    '"}\n{"score":1,"operator":null}\n', encoding="utf-8")
+    assert [r["score"] for r in SurveyStore(path).load_all()] == [1]
