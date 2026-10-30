@@ -33,8 +33,12 @@ def test_sanitize_rejects_non_string_input():
     assert sanitize_phone_number(5511999998888) is None
 
 
-def test_sanitize_strips_letters_and_symbols():
-    assert sanitize_phone_number("liga pra 11999998888 por favor") == "11999998888"
+def test_sanitize_rejects_letters_and_ambiguous_payloads():
+    assert sanitize_phone_number("liga pra 11999998888 por favor") is None
+    for raw in ("+55+11999998888", "11999998888 ext 2",
+                "11999998888;phone-context=x", "11999998888\\nInjected",
+                "11999998888#1234", "11999998888@" + "gateway"):
+        assert sanitize_phone_number(raw) is None
 
 
 # ---------- build_originate_action ----------
