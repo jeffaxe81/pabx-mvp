@@ -69,12 +69,29 @@ class SurveyStore:
         records = []
         for line in self.path.read_text(encoding="utf-8").splitlines():
             line = line.strip()
-            if not line:
+            if not line or len(line) > 4096:
                 continue
             try:
-                records.append(json.loads(line))
-            except json.JSONDecodeError:
+                record = json.loads(line)
+            except (ValueError, TypeError):
                 continue
+            # Um JSON sintaticamente valido pode ser lista, número ou
+            # nota forjada. Nunca misturar isso nas métricas ou quebrar
+            # consulta do supervisor por tenant.
+            if (not isinstance(record, dict)
+                    or type(record.get("score")) is not int
+                    or not 1 <= record["score"] <= 5):
+                continue
+            operator = record.get("operator")
+            tenant = record.get("tenant")
+            if (operator is not None and
+                    (not isinstance(operator, str) or len(operator) > 160)):
+                continue
+            if tenant is not None and (
+                    not isinstance(tenant, str)
+                    or re.fullmatch(r"t[1-9][0-9]*", tenant) is None):
+                continue
+            records.append(record)
         return records
 
     def query(self, operator=None, tenant=None):
