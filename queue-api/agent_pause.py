@@ -95,6 +95,11 @@ class AgentPauseStore:
         extension = parsed["extension"]
         previous = self._state.get(extension)
         now = self._clock()
+        # O AMI pode repetir QueueMemberPause após reconexão. Repetição
+        # não pode reiniciar o cronômetro, nem o relatório histórico.
+        if (previous is not None and previous["paused"] == parsed["paused"]
+                and (not parsed["paused"] or previous["reason"] == parsed["reason"])):
+            return
 
         # Estava pausado e agora despausou - fecha o registro de
         # histórico com a duração completa. Sem "previous", não tem
@@ -107,7 +112,7 @@ class AgentPauseStore:
                 "reason": previous["reason"],
                 "started_at": previous["since"],
                 "ended_at": now,
-                "duration_seconds": round(now - previous["since"], 1),
+                "duration_seconds": round(max(0, now - previous["since"]), 1),
             })
 
         self._state[extension] = {
