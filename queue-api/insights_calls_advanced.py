@@ -17,7 +17,10 @@ def _operator(row, tenant):
 
 def calls_disposition_breakdown(records, tenant):
     """21. Distribuição das chamadas por resultado CDR."""
-    counts = Counter(r["disposition"] for r in _calls(records, tenant))
+    accepted = {"ANSWERED", "NOANSWER", "NO ANSWER", "BUSY", "CANCEL",
+                "CANCELLED", "CONGESTION", "FAILED", "CHANUNAVAIL"}
+    counts = Counter(r["disposition"] if r["disposition"] in accepted else "OTHER"
+                     for r in _calls(records, tenant))
     return dict(sorted(counts.items()))
 
 
