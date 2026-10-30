@@ -95,6 +95,8 @@ def validate_callback_catalog(records):
     source_claims = set()
     for item in records:
         status = item.get("status")
+        if not isinstance(status, str):
+            raise ValueError("callback com status invalido")
         if status not in _ACTIVE_STATUSES:
             continue  # Retained history is not a dial authorization.
         cid = item.get("id")
@@ -111,7 +113,9 @@ def validate_callback_catalog(records):
                     not isinstance(tenant, str) or _TENANT.fullmatch(tenant) is None)
                 or type(when) not in (int, float) or not math.isfinite(when) or when < 0
                 or type(attempts) is not int or not 0 <= attempts <= MAX_ATTEMPTS):
-            raise ValueError("catalogo de callbacks com pedido ativo inconsistente")
+            raise ValueError("catalogo de callbacks com pedido "
+                             + ("pendente" if status == "pendente" else "discando")
+                             + " inconsistente")
         source = item.get("source_uniqueid")
         if source is not None:
             if (not isinstance(source, str)
@@ -139,7 +143,8 @@ def validate_callback_catalog(records):
             raise ValueError("callback com identificador de tentativa duplicado")
         active_attempts.add(attempt)
         response = item.get("originate_response")
-        if response is not None and response not in _RESPONSE_STATUSES:
+        if response is not None and (
+                not isinstance(response, str) or response not in _RESPONSE_STATUSES):
             raise ValueError("callback com resposta AMI inconsistente")
         response_at = item.get("originate_response_at")
         if response_at is not None and (
