@@ -15,6 +15,20 @@ def _day_key(timestamp: float) -> str:
     return time.strftime("%Y-%m-%d", time.localtime(timestamp))
 
 
+MAX_BILLABLE_SECONDS = 30 * 24 * 3600
+
+
+def _billable_seconds(value):
+    """Aceitar somente duração integral em segundos, sem truncamento."""
+    if type(value) is int:
+        n = value
+    elif isinstance(value, str) and value.isascii() and value.isdecimal() and len(value) <= 10:
+        n = int(value)
+    else:
+        return None
+    return n if 0 <= n <= MAX_BILLABLE_SECONDS else None
+
+
 class DailyMetrics:
     def __init__(self, clock=time.time):
         self._clock = clock
@@ -31,7 +45,7 @@ class DailyMetrics:
             self.total_talk_seconds = 0
 
     def apply_cdr_event(self, event: dict):
-        if event.get("Event") != "Cdr":
+        if not isinstance(event, dict) or event.get("Event") != "Cdr":
             return
 
         self._reset_if_new_day()
@@ -44,10 +58,9 @@ class DailyMetrics:
 
         if disposition == "ANSWERED":
             self.answered_calls += 1
-            try:
-                self.total_talk_seconds += int(event.get("BillableSeconds") or 0)
-            except (TypeError, ValueError):
-                pass
+            duration = _billable_seconds(event.get("BillableSeconds"))
+            if duration is not None:
+                self.total_talk_seconds += duration
         else:
             self.missed_calls += 1
 
