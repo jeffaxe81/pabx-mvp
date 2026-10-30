@@ -16,6 +16,7 @@ Lógica pura aqui, sem rede - 100% testável. Reset diário com relógio
 injetável, mesmo padrão de metrics.py.
 """
 import json
+import math
 import os
 import re
 import stat
@@ -178,6 +179,8 @@ class SLAHistoryStore:
         self.path = Path(path)
 
     def append(self, record: dict):
+        if not self._valid_record(record):
+            raise ValueError("registro de SLA inválido")
         self.path.parent.mkdir(parents=True, exist_ok=True)
         # Histórico da operação deve ser regular, sem symlink e privado.
         flags = os.O_WRONLY | os.O_CREAT | os.O_APPEND | getattr(os, "O_NOFOLLOW", 0)
@@ -188,12 +191,28 @@ class SLAHistoryStore:
             os.fchmod(fd, 0o600)
             with os.fdopen(fd, "a", encoding="utf-8") as f:
                 fd = -1
-                f.write(json.dumps(record, ensure_ascii=False) + "\n")
+                f.write(json.dumps(record, ensure_ascii=False, allow_nan=False) + "\n")
                 f.flush()
                 os.fsync(f.fileno())
         finally:
             if fd >= 0:
                 os.close(fd)
+
+    @staticmethod
+    def _valid_record(record):
+        if not isinstance(record, dict):
+            return False
+        date = record.get("date")
+        offered, within = record.get("offered"), record.get("within_sla")
+        percent = record.get("sla_percent")
+        return (
+            isinstance(date, str) and re.fullmatch(r"\d{4}-\d{2}-\d{2}", date) is not None
+            and _valid_queue_name(record.get("queue"))
+            and type(offered) is int and offered > 0
+            and type(within) is int and 0 <= within <= offered
+            and type(percent) in (int, float)
+            and math.isfinite(percent) and 0 <= percent <= 100
+        )
 
     def load_all(self) -> list:
         if not self.path.exists():
@@ -219,14 +238,7 @@ class SLAHistoryStore:
                     record = json.loads(line)
                 except (ValueError, TypeError):
                     continue
-                if (not isinstance(record, dict)
-                        or not isinstance(record.get("date"), str)
-                        or re.fullmatch(r"\d{4}-\d{2}-\d{2}", record["date"]) is None
-                        or not _valid_queue_name(record.get("queue"))
-                        or type(record.get("offered")) is not int
-                        or type(record.get("within_sla")) is not int
-                        or record["offered"] <= 0
-                        or not 0 <= record["within_sla"] <= record["offered"]):
+                if not self._valid_record(record):
                     continue
                 records.append(record)
         return records
