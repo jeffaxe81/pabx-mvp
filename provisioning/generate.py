@@ -15,6 +15,7 @@ e aplica a configuracao sozinho (auto-provisionamento real).
 """
 import json
 import os
+import re
 
 BASE = os.path.dirname(os.path.abspath(__file__))
 DEVICES_FILE = os.path.join(BASE, "devices.json")
@@ -32,7 +33,19 @@ def main():
     with open(DEVICES_FILE, encoding="utf-8") as f:
         data = json.load(f)
 
-    for device in data["devices"]:
+    devices = data.get("devices") if isinstance(data, dict) else None
+    if not isinstance(devices, list):
+        raise ValueError("catálogo de dispositivos inválido")
+    seen_macs = set()
+    for device in devices:
+        mac = device.get("mac") if isinstance(device, dict) else None
+        if not isinstance(mac, str) or re.fullmatch(r"[0-9A-Fa-f]{12}", mac) is None:
+            raise ValueError("MAC de dispositivo inválido")
+        normalized = mac.lower()
+        if normalized in seen_macs:
+            raise ValueError("MAC de dispositivo duplicado")
+        seen_macs.add(normalized)
+    for device in devices:
         vendor = device["vendor"]
         template_name = TEMPLATE_EXT.get(vendor)
         if not template_name:
