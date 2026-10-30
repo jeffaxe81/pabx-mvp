@@ -12,7 +12,7 @@ import stat
 from recording_access import (
     HEX_SHA256, MAX_POLICY_BYTES, ROLES, TENANT,
     _extension_belongs_to_tenant, _open_policy_file,
-    authenticate_recordings, allowed_browser_origin,
+    _reject_duplicate_json_keys, authenticate_recordings, allowed_browser_origin,
 )
 
 MAX_QUEUE_CREDENTIALS = 256
@@ -33,7 +33,8 @@ def load_queue_policy(path):
             payload = opened.read(MAX_POLICY_BYTES + 1)
         if len(payload) > MAX_POLICY_BYTES:
             return None
-        policy = json.loads(payload)
+        policy = json.loads(payload, object_pairs_hook=_reject_duplicate_json_keys,
+                            parse_constant=lambda _: (_ for _ in ()).throw(ValueError("nonfinite JSON")))
     except (OSError, TypeError, ValueError, UnicodeError):
         return None
     finally:

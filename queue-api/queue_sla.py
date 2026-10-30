@@ -82,6 +82,8 @@ class QueueSLATracker:
     """
 
     def __init__(self, threshold_seconds: int = DEFAULT_SLA_THRESHOLD_SECONDS, clock=time.time, history_store=None):
+        if type(threshold_seconds) is not int or not 0 <= threshold_seconds <= 3600:
+            raise ValueError("limiar de SLA inválido (0..3600 segundos)")
         self.threshold_seconds = threshold_seconds
         self._clock = clock
         self._history_store = history_store

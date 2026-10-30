@@ -84,7 +84,11 @@ def audit_event(path, entry):
         if (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1
                 or stat.S_IMODE(info.st_mode) & 0o077):
             raise PermissionError("unsafe audit log")
+        if not isinstance(entry, dict):
+            raise ValueError("registro de auditoria inválido")
         data = (json.dumps(entry, ensure_ascii=False, sort_keys=True) + "\n").encode()
+        if len(data) > 65536:
+            raise ValueError("registro de auditoria excessivo")
         if os.write(fd, data) != len(data):
             raise OSError("incomplete audit append")
         os.fsync(fd)

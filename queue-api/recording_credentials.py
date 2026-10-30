@@ -6,6 +6,7 @@ modo 0600. Nunca registrar o token em versionamento ou logs.
 import argparse
 import hashlib
 import json
+import math
 import re
 import secrets
 import time
@@ -40,7 +41,10 @@ def issue_credential(policy_path, tenant, role, extension=None, ttl=3600, now=No
             raise ValueError("agente requer ramal pertencente ao tenant")
     elif extension is not None:
         raise ValueError("somente agente pode receber extensão associada")
-    issued = int(time.time() if now is None else now)
+    current = time.time() if now is None else now
+    if type(current) not in (int, float) or not math.isfinite(current) or current < 0:
+        raise ValueError("relógio inválido")
+    issued = int(current)
     if issued < 0:
         raise ValueError("relógio inválido")
     token = secrets.token_urlsafe(48)

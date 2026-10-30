@@ -132,3 +132,15 @@ def test_fresh_claim_cannot_be_quarantined_and_never_auto_redials(tmp_path):
         quarantine_claim(path, "callbacks", "t2", callback["id"],
                          "Evidência insuficiente para encaminhar nova chamada", "supervisor")
     assert load_callbacks(path)[0]["status"] == "discando"
+
+
+def test_audit_log_rejects_non_object_and_oversize_entries(tmp_path):
+    from outbound_safety import audit_event
+    path = tmp_path / "callbacks.json"
+    for bad in ([], None, "text", {"detail": "x" * 70000}):
+        with pytest.raises(ValueError):
+            audit_event(path, bad)
+    audit_path = tmp_path / "callbacks.json.audit.jsonl"
+    assert not audit_path.exists() or audit_path.read_text() == ""
+    audit_event(path, {"event": "callback_cancel", "tenant": "t1"})
+    assert "callback_cancel" in audit_path.read_text(encoding="utf-8")
