@@ -50,3 +50,13 @@ def test_rejects_empty_allowlist():
         {"channel": "CH1", "extension": "t1-recepcao"}, {"allowed_extensions": []}
     )
     assert ok is False
+
+
+def test_pickup_rejects_malformed_http_body_and_channel():
+    config = {"allowed_extensions": ["t1-recepcao"]}
+    for bad in (None, [], True, 4):
+        assert validate_pickup_request(bad, config)[0] is False
+        assert validate_pickup_request({"channel": "CH1", "extension": "t1-recepcao"}, bad)[0] is False
+        assert validate_pickup_request({"channel": bad, "extension": "t1-recepcao"}, config)[0] is False
+    assert validate_pickup_request({"channel": "CH" + chr(10) + "Injected",
+                                    "extension": "t1-recepcao"}, config)[0] is False
