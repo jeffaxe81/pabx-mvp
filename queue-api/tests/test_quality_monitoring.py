@@ -99,3 +99,28 @@ def test_quality_log_respects_max_size():
     for i in range(5):
         log.append({"channel": f"CH{i}"}, poor=False)
     assert len(log.list(limit=100)) == 3
+
+
+def test_rejects_nonfinite_negative_and_out_of_range_rtcp_metrics():
+    for raw in ("NaN", "Infinity", "-Infinity", "-1", "-0.1", "1e999", "x" * 100):
+        quality = parse_quality_event({**SAMPLE_EVENT, "Jitter": raw, "RTT": raw})
+        assert quality["jitter_ms"] is None
+        assert quality["rtt_ms"] is None
+    for raw in ("-1", "100.01", "NaN", "inf", "1e999", "x" * 100):
+        assert parse_quality_event({**SAMPLE_EVENT, "PacketLoss": raw})["packet_loss_percent"] is None
+    assert parse_quality_event({**SAMPLE_EVENT, "PacketLoss": "100"})["packet_loss_percent"] == 100.0
+    assert parse_quality_event({**SAMPLE_EVENT, "Jitter": "0"})["jitter_ms"] == 0.0
+
+
+def test_quality_parser_rejects_non_object_and_boolean_values():
+    assert parse_quality_event(None) is None
+    assert parse_quality_event("QualityStats") is None
+    q = parse_quality_event({**SAMPLE_EVENT, "Jitter": True, "PacketLoss": False})
+    assert q["jitter_ms"] is None
+    assert q["packet_loss_percent"] is None
+
+
+def test_invalid_quality_numbers_do_not_create_false_alarm():
+    assert not is_poor_quality({"jitter_ms": float("inf"),
+                                "packet_loss_percent": float("nan")})
+    assert not is_poor_quality({"jitter_ms": -5, "packet_loss_percent": 105})
