@@ -71,7 +71,7 @@ class QueueStateTracker:
                 "queue": i["queue"],
                 "caller_id_num": i["caller_id_num"],
                 "caller_id_name": i["caller_id_name"],
-                "waiting_seconds": int(now - i["joined_at"]),
+                "waiting_seconds": max(0, int(now - i["joined_at"])),
             }
             for i in items
         ]
