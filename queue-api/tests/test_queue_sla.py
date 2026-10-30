@@ -431,3 +431,63 @@ def test_sla_threshold_rejects_ambiguous_types_and_unreasonable_values():
         with pytest.raises(ValueError):
             QueueSLATracker(threshold_seconds=bad)
     assert QueueSLATracker(threshold_seconds=0).threshold_seconds == 0
+
+# Programa 30 frentes — SLA: cinco garantias de integridade.
+@pytest.mark.parametrize("threshold", [None, True, False, -1, 86401, 2.5, "20"])
+def test_30_sla_rejects_invalid_configured_threshold(threshold):
+    with pytest.raises(ValueError, match="limiar"):
+        QueueSLATracker(threshold_seconds=threshold)
+
+
+def test_30_sla_history_skips_non_objects_and_oversized_json(tmp_path):
+    import json
+    path = tmp_path / "sla.jsonl"
+    valid = {"date": "2026-10-29", "queue": "fila-t1",
+             "offered": 2, "within_sla": 1, "sla_percent": 50}
+    path.write_text("\n".join([json.dumps(valid), "[]", "null", '"text"',
+                               '{"blob":"' + "x" * 5000 + '"}']), encoding="utf-8")
+    assert SLAHistoryStore(path).load_all() == [
+        {**valid, "sla_percent": 50.0}]
+
+
+def test_30_sla_history_rejects_invalid_calendar_date_and_queue(tmp_path):
+    import json
+    path = tmp_path / "sla.jsonl"
+    candidates = [{"date": "2026-02-30", "queue": "fila-t1"},
+                  {"date": "2026-10-29", "queue": "fila-t1\\nInjected"},
+                  {"date": "2026-10-29", "queue": []},
+                  {"date": "2026-10-29", "queue": "fila-t10"}]
+    records = [{**c, "offered": 1, "within_sla": 1} for c in candidates]
+    path.write_text("\n".join(json.dumps(x) for x in records), encoding="utf-8")
+    assert [r["queue"] for r in SLAHistoryStore(path).load_all()] == ["fila-t10"]
+
+
+@pytest.mark.parametrize("offered,within", [
+    (0, 0), (2, -1), (2, 3), (True, 1), (3, False),
+    ("2", 1), (float("nan"), 1), (10_000_001, 1),
+])
+def test_30_sla_history_rejects_inconsistent_counters(tmp_path, offered, within):
+    import json
+    path = tmp_path / "sla.jsonl"
+    path.write_text(json.dumps({"date": "2026-10-29", "queue": "fila-t1",
+                                "offered": offered, "within_sla": within,
+                                "sla_percent": 100}), encoding="utf-8")
+    assert SLAHistoryStore(path).load_all() == []
+
+
+def test_30_sla_history_recomputes_percentage_and_aggregates_same_day(tmp_path):
+    import json
+    path = tmp_path / "sla.jsonl"
+    rows = [
+        {"date": "2026-10-29", "queue": "fila-t1",
+         "offered": 3, "within_sla": 3, "sla_percent": -999},
+        {"date": "2026-10-29", "queue": "fila-t1",
+         "offered": 2, "within_sla": 0, "sla_percent": 100},
+        {"date": "2026-10-29", "queue": "fila-t10",
+         "offered": 1, "within_sla": 1, "sla_percent": "NaN"},
+    ]
+    path.write_text("\n".join(json.dumps(x) for x in rows), encoding="utf-8")
+    summary = summarize_sla_history_by_date(SLAHistoryStore(path).load_all())
+    assert summary["2026-10-29"]["fila-t1"] == {
+        "offered": 5, "within_sla": 3, "sla_percent": 60.0}
+    assert summary["2026-10-29"]["fila-t10"]["sla_percent"] == 100.0
