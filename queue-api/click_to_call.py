@@ -8,7 +8,11 @@ Tudo aqui é lógica PURA (sanitização, montagem da ação AMI, validação
 da requisição) - testável sem rede. O disparo de verdade (ami.send_action)
 fica no server.py, junto com o resto da integração AMI já existente.
 """
+import hmac
 import re
+
+_ALLOWED_PHONE = re.compile(r"^\\+?[0-9 ()-]+$")
+_ALLOWED_EXTENSION = re.compile(r"^t[1-9][0-9]*-[a-z0-9][a-z0-9_-]{0,79}$")
 
 DEFAULT_TIMEOUT_MS = 30000
 
@@ -24,6 +28,10 @@ def sanitize_phone_number(raw: str):
         return None
 
     raw = raw.strip()
+    if (len(raw) > 48 or not raw.isascii() or
+            _ALLOWED_PHONE.fullmatch(raw) is None or
+            raw.count("+") > 1):
+        return None
     has_plus = raw.startswith("+")
     digits = re.sub(r"[^0-9]", "", raw)
 
@@ -61,12 +69,17 @@ def validate_click_to_call_request(data: dict, api_key: str, config: dict):
     if not configured_key:
         return False, "click-to-call não está configurado (sem API key definida)", None, None
 
-    if not api_key or api_key != configured_key:
+    if (not isinstance(api_key, str) or not isinstance(configured_key, str)
+            or len(api_key) > 256 or len(configured_key) > 256
+            or not hmac.compare_digest(api_key, configured_key)):
         return False, "chave de API inválida", None, None
 
     extension = data.get("extension")
     allowed_extensions = config.get("allowed_extensions", [])
-    if not extension or extension not in allowed_extensions:
+    if (not isinstance(extension, str) or
+            _ALLOWED_EXTENSION.fullmatch(extension) is None or
+            not isinstance(allowed_extensions, (list, tuple, set)) or
+            extension not in allowed_extensions):
         return False, f"ramal '{extension}' não autorizado para click-to-call", None, None
 
     number = sanitize_phone_number(data.get("number", ""))
