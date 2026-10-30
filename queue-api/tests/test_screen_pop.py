@@ -89,3 +89,11 @@ def test_screen_pop_sanitizes_optional_ami_fields():
     assert item["destination_exten"] == ""
     assert item["destination_channel"] == ""
     assert build_webhook_payload(item)["operator_extension"] == ""
+
+
+def test_screen_pop_webhook_payload_fails_closed_for_missing_caller():
+    import pytest
+    for malformed in (None, [], {}, {"caller_id_num": None}):
+        with pytest.raises(ValueError):
+            build_webhook_payload(malformed)
+    assert build_webhook_payload({"caller_id_num": "123"})["caller_number"] == "123"
