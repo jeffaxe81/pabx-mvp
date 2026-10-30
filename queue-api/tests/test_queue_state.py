@@ -96,11 +96,17 @@ def test_duplicate_join_does_not_reset_wait_time(monkeypatch):
 
 def test_late_leave_from_old_queue_cannot_remove_requeued_channel():
     tracker = QueueStateTracker()
-    tracker.apply_event({"Event": "QueueCallerJoin", "Queue": "fila-t1", "Channel": "CH1"})
-    tracker.apply_event({"Event": "QueueCallerJoin", "Queue": "fila-t2", "Channel": "CH1"})
-    tracker.apply_event({"Event": "QueueCallerLeave", "Queue": "fila-t1", "Channel": "CH1"})
+    # Reaproveitar Channel entre tenants exige Uniqueid distinto:
+    # sem esse vínculo o rastreador não permite troca ambígua.
+    tracker.apply_event({"Event": "QueueCallerJoin", "Queue": "fila-t1",
+                         "Channel": "CH1", "Uniqueid": "old-call"})
+    tracker.apply_event({"Event": "QueueCallerJoin", "Queue": "fila-t2",
+                         "Channel": "CH1", "Uniqueid": "new-call"})
+    tracker.apply_event({"Event": "QueueCallerLeave", "Queue": "fila-t1",
+                         "Channel": "CH1", "Uniqueid": "old-call"})
     assert tracker.queue_for_channel("CH1") == "fila-t2"
-    tracker.apply_event({"Event": "QueueCallerLeave", "Queue": "fila-t2", "Channel": "CH1"})
+    tracker.apply_event({"Event": "QueueCallerLeave", "Queue": "fila-t2",
+                         "Channel": "CH1", "Uniqueid": "new-call"})
     assert tracker.waiting_list() == []
 
 
