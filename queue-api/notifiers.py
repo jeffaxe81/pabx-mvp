@@ -28,15 +28,19 @@ def _display_name(missed_call: dict) -> str:
 
 def build_email_message(missed_call: dict, config: dict):
     """Retorna (subject, body) - texto simples, sem HTML de propósito."""
+    missed_call = missed_call if isinstance(missed_call, dict) else {}
     caller = _display_name(missed_call)
+    number = _safe_notification_text(missed_call.get("caller_id_num")) or "desconhecido"
+    destination = _safe_notification_text(missed_call.get("destination"))
+    reason = _safe_notification_text(missed_call.get("reason"))
     subject = f"Chamada perdida de {caller}"
 
     body_lines = [
         "Você perdeu uma chamada no PABX.",
         "",
-        f"De: {caller} ({missed_call.get('caller_id_num', 'desconhecido')})",
-        f"Para: {missed_call.get('destination', '')}",
-        f"Motivo: {missed_call.get('reason', '')}",
+        f"De: {caller} ({number})",
+        f"Para: {destination}",
+        f"Motivo: {reason}",
     ]
     return subject, "\n".join(body_lines)
 
@@ -46,11 +50,11 @@ def build_whatsapp_payload(missed_call: dict, config: dict) -> dict:
     Monta o corpo da requisição pra API do WhatsApp Business Cloud
     (Meta). Formato de mensagem de texto simples.
     """
+    missed_call = missed_call if isinstance(missed_call, dict) else {}
     caller = _display_name(missed_call)
-    text = (
-        f"Chamada perdida de {caller} ({missed_call.get('caller_id_num', 'desconhecido')}). "
-        f"Motivo: {missed_call.get('reason', '')}"
-    )
+    number = _safe_notification_text(missed_call.get("caller_id_num")) or "desconhecido"
+    reason = _safe_notification_text(missed_call.get("reason"))
+    text = f"Chamada perdida de {caller} ({number}). Motivo: {reason}"
     return {
         "messaging_product": "whatsapp",
         "to": config.get("to_number", ""),
