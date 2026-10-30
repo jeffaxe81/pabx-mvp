@@ -77,7 +77,7 @@ def summarize(registry, plan):
         raise ValueError("plano invalido ou autorizacao de GO indevida")
     plan_policy = plan.get("development_policy")
     if not isinstance(plan_policy, dict) or any(
-        plan_policy.get(name) is not expected
+        plan_policy.get(name) != expected
         for name, expected in (
             ("controlled_real_environment_homologation_permitted", True),
             ("unproven_implementation_code_status", "CODE_REGISTERED_PENDING_REAL_HOMOLOGATION"),
