@@ -231,3 +231,16 @@ def test_untrusted_ami_data_are_escaped_before_html_interpolation():
     ):
         assert "${escapeHtml(" + data + ")}" in script, data
     assert "knownStates.includes(e.status_label)" in script
+
+
+def test_30_supervisor_queue_kpis_are_present_and_tenant_protected():
+    html = load_panel_html()
+    assert 'id="queueSummaryRow"' in html
+    assert "'queueSummaryRow'" in html
+    source = html[html.index("function renderQueueSummary"):html.index("function renderQueue(waiting)")]
+    for label in ("Aguardando", "Maior espera", "Espera média",
+                  "Filas ativas", "Espera acima de 60s"):
+        assert label in source
+    assert "textContent" in source
+    assert "innerHTML" not in source
+    assert "caller_id_name" not in source

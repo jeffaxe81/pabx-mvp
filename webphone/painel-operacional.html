@@ -312,6 +312,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
              placeholder="Token da empresa" style="flex:1; min-width:0;">
       <button id="refreshQueueBtn" type="button" style="border-radius:6px; border:1px solid var(--border); padding:8px;">Atualizar fila</button>
     </div>
+    <div id="queueSummaryRow" class="summary-grid" aria-label="Indicadores da fila"><div class="empty">Informe a credencial da fila.</div></div>
     <div id="queueList"><div class="empty">Informe a credencial da fila.</div></div>
   </div>
 </div>
@@ -430,7 +431,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   }
 
   const protectedPanels = [
-    'metricsRow', 'extensionsList', 'queueList', 'fraudAlertsList',
+    'metricsRow', 'extensionsList', 'queueList', 'queueSummaryRow', 'fraudAlertsList',
     'qualityList', 'slaList', 'pauseHistoryList', 'slaHistoryList',
   ];
   let requestGeneration = 0;
@@ -684,9 +685,47 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     }).join('');
   }
 
+  function formatQueueSeconds(value) {
+    const seconds = Math.max(0, Math.floor(Number(value) || 0));
+    const minutes = Math.floor(seconds / 60);
+    return `${String(minutes).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
+  }
+
+  function renderQueueSummary(waiting) {
+    const list = Array.isArray(waiting) ? waiting : [];
+    const seconds = list.map(call => {
+      const n = Number(call.waiting_seconds);
+      return Number.isFinite(n) ? Math.max(0, n) : 0;
+    });
+    const uniqueQueues = new Set(list.map(call => String(call.queue || '')));
+    const cards = [
+      ['Aguardando', list.length],
+      ['Maior espera', formatQueueSeconds(Math.max(0, ...seconds))],
+      ['Espera média', formatQueueSeconds(
+        seconds.length ? seconds.reduce((a, b) => a + b, 0) / seconds.length : 0)],
+      ['Filas ativas', uniqueQueues.size],
+      ['Espera acima de 60s', seconds.filter(n => n > 60).length],
+    ];
+    const area = el('queueSummaryRow');
+    area.replaceChildren();
+    for (const [label, value] of cards) {
+      const card = document.createElement('div');
+      card.className = 'metric-card';
+      const number = document.createElement('div');
+      number.className = 'metric-value mono';
+      number.textContent = String(value);
+      const caption = document.createElement('div');
+      caption.className = 'metric-label';
+      caption.textContent = label;
+      card.append(number, caption);
+      area.appendChild(card);
+    }
+  }
+
   function renderQueue(waiting) {
     const container = el('queueList');
     container.replaceChildren();
+    renderQueueSummary(waiting);
     if (!Array.isArray(waiting) || waiting.length === 0) {
       const empty = document.createElement('div');
       empty.className = 'empty';

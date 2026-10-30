@@ -513,3 +513,38 @@ test('supervisor panel clears tenant data on token change and rejects stale HTTP
     await context.close();
   }
 });
+
+
+test('supervisor queue shows five aggregate KPIs without personal identifiers', async () => {
+  const { context, page, errors } = await openPage('webphone/painel-operacional.html');
+  try {
+    await page.route('**/api/queue', route => route.fulfill({
+      status: 200, contentType: 'application/json',
+      body: JSON.stringify({ waiting: [
+        { queue: 'fila-t1', channel: 'CH1', caller_id_name: 'Secret-A',
+          waiting_seconds: 20 },
+        { queue: 'fila-t1', channel: 'CH2', caller_id_name: 'Secret-B',
+          waiting_seconds: 80 },
+        { queue: 'fila-t1-en', channel: 'CH3', caller_id_name: 'Secret-C',
+          waiting_seconds: 40 },
+      ] }),
+    }));
+    await page.locator('#queueToken').fill('test-tenant-token');
+    await page.locator('#refreshQueueBtn').click();
+    await page.waitForFunction(() => document.querySelectorAll('#queueSummaryRow .metric-card').length === 5);
+    const cards = await page.locator('#queueSummaryRow .metric-card').allTextContents();
+    for (const label of ['Aguardando', 'Maior espera', 'Espera média',
+                          'Filas ativas', 'Espera acima de 60s']) {
+      assert.equal(cards.some(row => row.includes(label)), true, label);
+    }
+    const visible = cards.join(' ');
+    assert.match(visible, /03|3/);
+    assert.ok(visible.includes('01:20'));
+    assert.ok(visible.includes('00:46'));
+    assert.equal(visible.includes('Secret-'), false);
+    assert.equal(await page.locator('#queueSummaryRow img').count(), 0);
+    await page.locator('#queueToken').fill('');
+    assert.equal(await page.locator('#queueSummaryRow .metric-card').count(), 0);
+    assert.deepEqual(errors, []);
+  } finally { await context.close(); }
+});
