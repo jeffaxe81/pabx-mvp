@@ -20,6 +20,7 @@ import threading
 import time
 from pathlib import Path
 from outbound_safety import outbound_lock
+from recording_access import _open_policy_file
 
 PRESENCE_STATES = {"disponivel", "ausente", "reuniao", "ferias"}
 MAX_PRESENCE_BYTES = 1024 * 1024
@@ -62,10 +63,12 @@ def load_presence(path) -> dict:
     # Nunca seguir um symlink apontado pelo catálogo nem carregar um
     # JSON ilimitado; corrupção deve ser visível, não sobrescrita.
     try:
-        fd = os.open(Path(path), os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
-                     | getattr(os, "O_NONBLOCK", 0))
+        Path(path).lstat()
     except FileNotFoundError:
         return {}
+    fd = _open_policy_file(path)
+    if fd is None:
+        raise ValueError("catálogo de presença com caminho inseguro")
     try:
         metadata = os.fstat(fd)
         if not stat.S_ISREG(metadata.st_mode) or metadata.st_size > MAX_PRESENCE_BYTES:
@@ -124,8 +127,10 @@ def save_presence(path, data: dict):
 
 
 def set_presence(path, extension: str, status: str, note: str = ""):
-    if (_EXTENSION_RE.fullmatch(extension or "") is None
-            or status not in PRESENCE_STATES or not isinstance(note, str)
+    if (not isinstance(extension, str)
+            or _EXTENSION_RE.fullmatch(extension) is None
+            or not isinstance(status, str) or status not in PRESENCE_STATES
+            or not isinstance(note, str)
             or len(note) > 256):
         raise ValueError("presença inválida")
     # RLock protege threads; flock protege processos no mesmo volume.
