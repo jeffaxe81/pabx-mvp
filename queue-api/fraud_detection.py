@@ -26,7 +26,9 @@ class CallRateTracker:
         self._calls = {}  # extension -> lista de timestamps
 
     def track_call(self, extension: str, destination: str):
-        if not extension:
+        if (not isinstance(extension, str) or not 1 <= len(extension) <= 96
+                or not isinstance(destination, str) or not 1 <= len(destination) <= 128
+                or not extension.isprintable() or not destination.isprintable()):
             return
         now = self._clock()
         # Retenção deslizante de 24 h; poda somente quando o primeiro
