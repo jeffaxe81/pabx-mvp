@@ -80,3 +80,39 @@ def test_join_without_channel_is_ignored():
     tracker = QueueStateTracker()
     tracker.apply_event({"Event": "QueueCallerJoin", "Queue": "fila-t1"})
     assert tracker.waiting_list() == []
+
+
+def test_duplicate_join_does_not_reset_wait_time(monkeypatch):
+    import queue_state
+    current = [100.0]
+    monkeypatch.setattr(queue_state.time, "time", lambda: current[0])
+    tracker = QueueStateTracker()
+    event = {"Event": "QueueCallerJoin", "Queue": "fila-t1", "Channel": "CH1"}
+    tracker.apply_event(event)
+    current[0] = 115.0
+    tracker.apply_event(event)
+    assert tracker.waiting_list()[0]["waiting_seconds"] == 15
+
+
+def test_late_leave_from_old_queue_cannot_remove_requeued_channel():
+    tracker = QueueStateTracker()
+    tracker.apply_event({"Event": "QueueCallerJoin", "Queue": "fila-t1", "Channel": "CH1"})
+    tracker.apply_event({"Event": "QueueCallerJoin", "Queue": "fila-t2", "Channel": "CH1"})
+    tracker.apply_event({"Event": "QueueCallerLeave", "Queue": "fila-t1", "Channel": "CH1"})
+    assert tracker.queue_for_channel("CH1") == "fila-t2"
+    tracker.apply_event({"Event": "QueueCallerLeave", "Queue": "fila-t2", "Channel": "CH1"})
+    assert tracker.waiting_list() == []
+
+
+def test_invalid_ami_channels_and_queues_are_ignored_without_pollution():
+    tracker = QueueStateTracker()
+    for channel, queue in (([], "fila-t1"), ({}, "fila-t1"), ("CH1", {}),
+                           ("CH1", "fila-t1\r\nInjected"), ("", "fila-t1"),
+                           ("CH1", ""), ("X" * 161, "fila-t1")):
+        tracker.apply_event({"Event": "QueueCallerJoin", "Channel": channel,
+                             "Queue": queue})
+    tracker.apply_event(None)
+    tracker.apply_event({"Event": "Hangup", "Channel": []})
+    tracker.apply_event({"Event": "QueueCallerLeave", "Channel": {}})
+    tracker.remove([])
+    assert tracker.waiting_list() == []
