@@ -11,7 +11,7 @@ fica no server.py, junto com o resto da integração AMI já existente.
 import hmac
 import re
 
-_ALLOWED_PHONE = re.compile(r"^\\+?[0-9 ()-]+$")
+_ALLOWED_PHONE = re.compile(r"^\+?[0-9 ()-]+$")
 _ALLOWED_EXTENSION = re.compile(r"^t[1-9][0-9]*-[a-z0-9][a-z0-9_-]{0,79}$")
 
 DEFAULT_TIMEOUT_MS = 30000
