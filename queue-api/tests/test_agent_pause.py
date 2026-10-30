@@ -328,3 +328,46 @@ def test_filter_by_date_range_only_end():
 def test_filter_by_date_range_empty_records():
     from agent_pause import filter_pause_records_by_date_range
     assert filter_pause_records_by_date_range([], start="2026-01-01") == []
+
+
+def test_duplicate_pause_event_preserves_original_start_and_duration():
+    class History:
+        def __init__(self):
+            self.items = []
+        def append(self, item):
+            self.items.append(item)
+    now = [1000.0]
+    history = History()
+    store = AgentPauseStore(history_store=history, clock=lambda: now[0])
+    pause = {"Event": "QueueMemberPause", "Interface": "PJSIP/t1-recepcao",
+             "Paused": "1", "Reason": "Almoço"}
+    unpause = {**pause, "Paused": "0"}
+    store.apply_event(pause)
+    now[0] = 1300
+    store.apply_event(pause)
+    assert store.get("t1-recepcao")["since"] == 1000.0
+    now[0] = 1600
+    store.apply_event(unpause)
+    assert len(history.items) == 1
+    assert history.items[0]["duration_seconds"] == 600.0
+    now[0] = 1800
+    store.apply_event(unpause)
+    assert len(history.items) == 1
+    assert store.get("t1-recepcao")["since"] == 1600
+
+
+def test_clock_rollback_cannot_create_negative_pause_duration():
+    class History:
+        def __init__(self):
+            self.items = []
+        def append(self, item):
+            self.items.append(item)
+    now = [1000.0]
+    history = History()
+    store = AgentPauseStore(history_store=history, clock=lambda: now[0])
+    store.apply_event({"Event": "QueueMemberPause", "Interface": "PJSIP/t1-recepcao",
+                       "Paused": "1", "Reason": "descanso"})
+    now[0] = 800
+    store.apply_event({"Event": "QueueMemberPause", "Interface": "PJSIP/t1-recepcao",
+                       "Paused": "0"})
+    assert history.items[0]["duration_seconds"] == 0.0
