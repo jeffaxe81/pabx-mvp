@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Registra e valida pendências operacionais sem executar qualquer prova.
+"""Registra pendências sem executar provas ou autorizar GO.
 
-A ferramenta não consulta telefonia/infraestrutura, não muda estados de
-homologação e nunca autoriza GO. Código de desenvolvimento pode avançar
-enquanto requisitos externos continuam explicitamente não executados.
+Código pode ser integrado e considerado para homologação controlada em
+ambiente real. Sem evidência, seu status é registrado como implementação
+pendente de homologação; a aprovação definitiva depende de aceite separado.
+Esta ferramenta não acessa telefonia ou infraestrutura operacional.
 """
 import argparse
 from datetime import date
@@ -51,6 +52,19 @@ def summarize(registry, plan):
         raise ValueError("data de registro invalida") from exc
     if registry.get("execution_mode") != "DEVELOPMENT_ONLY_PROOFS_DEFERRED":
         raise ValueError("modo operacional diferente do solicitado")
+    real_policy = registry.get("real_environment_policy")
+    if not isinstance(real_policy, dict):
+        raise ValueError("politica de homologacao em ambiente real ausente")
+    expected_policy = {
+        "controlled_application_allowed_for_homologation": True,
+        "unproven_code_status": "CODE_REGISTERED_PENDING_REAL_HOMOLOGATION",
+        "record_missing_evidence_without_claiming_approval": True,
+        "automated_code_and_security_ci_required": True,
+        "target_environment_preflight_and_rollback_required": True,
+        "production_go_requires_separate_explicit_acceptance": True,
+    }
+    if real_policy != expected_policy:
+        raise ValueError("politica de uso real e homologacao inconsistente")
     for flag, desired in (
         ("operational_proofs_executed_in_this_change", False),
         ("operational_go_authorized", False),
@@ -61,6 +75,17 @@ def summarize(registry, plan):
     if (plan.get("schema_version") != 1 or plan.get("project") != "AXE PABX"
             or plan.get("operational_go_authorized") is not False):
         raise ValueError("plano invalido ou autorizacao de GO indevida")
+    plan_policy = plan.get("development_policy")
+    if not isinstance(plan_policy, dict) or any(
+        plan_policy.get(name) is not expected
+        for name, expected in (
+            ("controlled_real_environment_homologation_permitted", True),
+            ("unproven_implementation_code_status", "CODE_REGISTERED_PENDING_REAL_HOMOLOGATION"),
+            ("real_environment_validation_requires_target_checks_and_rollback", True),
+            ("homologation_and_final_production_go_are_separate_decisions", True),
+        )
+    ):
+        raise ValueError("plano nao corresponde a politica de homologacao real")
     milestones = plan.get("milestones")
     if not isinstance(milestones, list) or len(milestones) != 16:
         raise ValueError("plano precisa dos 16 marcos")
@@ -92,6 +117,8 @@ def summarize(registry, plan):
             raise ValueError("marco dado como concluido apesar de prova pendente")
         if row.get("status") != "DEFERRED_NOT_EXECUTED":
             raise ValueError("pendencia alterada para estado nao executado sem aceite")
+        if row.get("homologation_required") is not True or row.get("target_environment") != "REAL_ENVIRONMENT":
+            raise ValueError("pendencia sem homologacao real obrigatoria")
         if not isinstance(row.get("description"), str) or not 15 <= len(row["description"]) <= 500:
             raise ValueError("descricao ausente ou excessiva")
         if any(ord(c) < 32 or ord(c) == 127 for c in row["description"]):
@@ -111,6 +138,10 @@ def summarize(registry, plan):
         "formal_milestones_total": 16,
         "formal_percent": round(formal * 100 / 16, 1),
         "development_can_continue": True,
+        "controlled_real_environment_homologation_allowed": True,
+        "unproven_code_status": real_policy["unproven_code_status"],
+        "pending_real_environment_homologations": len(checks),
+        "target_preflight_and_rollback_required": True,
         "automated_ci_still_required": True,
         "homologation_complete": False,
         "operational_go_authorized": False,
