@@ -95,3 +95,14 @@ def test_malformed_extension_events_do_not_crash_or_corrupt_tenants():
     }]
     tracker.apply_event({**safe, "Context": "t2-hints", "Status": "8"})
     assert len(tracker.snapshot()) == 2
+
+
+def test_extension_state_tracker_limits_memory_without_losing_updates(monkeypatch):
+    import extension_states
+    monkeypatch.setattr(extension_states, "MAX_TRACKED_EXTENSIONS", 2)
+    tracker = ExtensionStateTracker()
+    for exten in ("1000", "1001", "1002"):
+        tracker.apply_event({"Event": "ExtensionStatus", "Exten": exten, "Status": "0"})
+    assert len(tracker.snapshot()) == 2
+    tracker.apply_event({"Event": "ExtensionStatus", "Exten": "1000", "Status": "8"})
+    assert {x["exten"]: x["status_label"] for x in tracker.snapshot()}["1000"] == "tocando"
