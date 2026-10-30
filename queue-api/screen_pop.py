@@ -41,16 +41,22 @@ def parse_dial_begin_event(event: dict):
     }
 
 
+def _safe_pop_text(value, limit):
+    return value if isinstance(value, str) and len(value) <= limit and value.isprintable() else ""
+
+
 def build_webhook_payload(call_info: dict) -> dict:
     if (not isinstance(call_info, dict)
             or not isinstance(call_info.get("caller_id_num"), str)
-            or not call_info["caller_id_num"]):
+            or not 0 < len(call_info["caller_id_num"]) <= 64
+            or not call_info["caller_id_num"].isprintable()
+            or call_info["caller_id_num"].isspace()):
         raise ValueError("dados de screen-pop inválidos")
     return {
         "event": "incoming_call",
         "caller_number": call_info["caller_id_num"],
-        "caller_name": call_info.get("caller_id_name", ""),
-        "operator_extension": call_info.get("destination_exten", ""),
+        "caller_name": _safe_pop_text(call_info.get("caller_id_name", ""), 128),
+        "operator_extension": _safe_pop_text(call_info.get("destination_exten", ""), 64),
     }
 
 
