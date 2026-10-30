@@ -478,3 +478,51 @@ def test_callback_summary_groups_by_tenant_without_personal_data(tmp_path):
         summarize_callbacks(records, "t01")
     with pytest.raises(ValueError, match="ambiguo"):
         summarize_callbacks(records + [records[0]], "t1")
+
+
+# Programa 30 frentes — callbacks: cinco KPIs para supervisão.
+def test_30_callback_summary_pending_count_is_tenant_scoped():
+    from callbacks import summarize_callbacks
+    records = [{"id": "a", "tenant": "t1", "status": "pendente", "requested_at": 50},
+               {"id": "b", "tenant": "t10", "status": "pendente", "requested_at": 10}]
+    assert summarize_callbacks(records, "t1", now=100)["pending"] == 1
+    assert summarize_callbacks(records, "t2", now=100)["pending"] == 0
+
+
+def test_30_callback_summary_counts_dialing_without_pending():
+    from callbacks import summarize_callbacks
+    records = [{"id": "a", "tenant": "t1", "status": "discando"}]
+    output = summarize_callbacks(records, "t1", now=100)
+    assert output["dialing"] == 1
+    assert output["pending"] == 0
+
+
+def test_30_callback_summary_counts_completed_separately():
+    from callbacks import summarize_callbacks
+    records = [{"id": "a", "tenant": "t1", "status": "concluido"},
+               {"id": "b", "tenant": "t10", "status": "concluido"}]
+    output = summarize_callbacks(records, "t1", now=100)
+    assert output["completed"] == 1
+    assert output["total"] == 1
+
+
+def test_30_callback_summary_cancellations_do_not_count_as_completions():
+    from callbacks import summarize_callbacks
+    records = [{"id": "a", "tenant": "t1", "status": "cancelado"}]
+    output = summarize_callbacks(records, "t1", now=100)
+    assert output["cancelled"] == 1
+    assert output["completed"] == 0
+
+
+def test_30_callback_summary_oldest_wait_excludes_other_tenant_and_future():
+    from callbacks import summarize_callbacks
+    records = [{"id": "a", "tenant": "t1", "status": "pendente", "requested_at": 70},
+               {"id": "b", "tenant": "t1", "status": "pendente", "requested_at": 80},
+               {"id": "c", "tenant": "t10", "status": "pendente", "requested_at": 1}]
+    assert summarize_callbacks(records, "t1", now=100)["oldest_pending_seconds"] == 30
+    assert summarize_callbacks(records, "t1", now=10)["oldest_pending_seconds"] == 0
+    assert summarize_callbacks([], "t1", now=100)["oldest_pending_seconds"] is None
+    with pytest.raises(ValueError, match="relogio"):
+        summarize_callbacks(records, "t1", now=float("nan"))
+    with pytest.raises(ValueError, match="data"):
+        summarize_callbacks([{**records[0], "requested_at": "bad"}], "t1", now=100)
