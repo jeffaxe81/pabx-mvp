@@ -282,7 +282,8 @@ def test_corrupt_dialing_counter_prevents_ami_result_mutation(tmp_path, bad_atte
     record = load_callbacks(path)[0]
     save_callbacks(path, [{**record, "attempts": bad_attempts}])
     before = path.read_bytes()
-    assert mark_callback_result(path, record["id"], "ANSWER")[0] is False
+    with pytest.raises(ValueError, match="discando inconsistente"):
+        mark_callback_result(path, record["id"], "ANSWER")
     assert path.read_bytes() == before
 
 
