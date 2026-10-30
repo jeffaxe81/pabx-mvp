@@ -333,3 +333,55 @@ def test_supervision_summary_restricts_agent_origin_and_revocation(api):
 
     policy.write_text('{"credentials":[]}', encoding="utf-8")
     assert req(base, path, TOKENS["t1"])[0] == 401
+
+
+def test_queue_health_http_requires_supervisor_and_isolates_t1_t10(api, monkeypatch):
+    """Rota não deve exibir identificadores nem totais de outras empresas."""
+    from queue_state import QueueStateTracker
+    base, policy = api
+    tracker = QueueStateTracker()
+    tracker.apply_event({"Event": "QueueCallerJoin", "Queue": "fila-t1",
+                         "Channel": "CH-t1", "Uniqueid": "uid-t1",
+                         "CallerIDNum": "PRIVATE-T1"})
+    tracker.apply_event({"Event": "QueueCallerJoin", "Queue": "fila-t10",
+                         "Channel": "CH-t10", "Uniqueid": "uid-t10",
+                         "CallerIDNum": "PRIVATE-T10"})
+    tracker.apply_event({"Event": "QueueCallerAbandon", "Queue": "fila-t10",
+                         "Channel": "CH-t10", "Uniqueid": "uid-t10"})
+    monkeypatch.setattr(server, "state", tracker)
+    path = "/api/supervision/queue-health?tenant=t10"
+    status, headers, raw = req(base, path, TOKENS["t1"], "http://localhost:8082")
+    assert status == 200
+    assert headers["Cache-Control"] == "no-store"
+    report = json.loads(raw)
+    assert report["tenant"] == "t1"
+    assert report["tracked_waiting"] == 1
+    assert report["events_abandoned"] == 0
+    assert b"CH-" not in raw and b"uid-" not in raw and b"PRIVATE-" not in raw
+    status, _, raw = req(base, path + "&tenant=t1", TOKENS["t10"])
+    assert status == 200
+    assert json.loads(raw)["events_abandoned"] == 1
+    assert json.loads(raw)["tracked_waiting"] == 0
+    assert req(base, "/api/supervision/queue-health-evil", TOKENS["t1"])[0] == 404
+    assert req(base, "/api/supervision/queue-health")[0] == 401
+    assert req(base, "/api/supervision/queue-health", TOKENS["t1"],
+               "https://attacker.invalid")[0] == 403
+    assert req(base, "/api/supervision/queue-health", method="OPTIONS",
+               origin="http://localhost:8082")[0] == 204
+    assert req(base, "/api/supervision/queue-health", method="OPTIONS",
+               origin="https://attacker.invalid")[0] == 403
+
+    user_token = "D" * 48
+    catalog = json.loads(policy.read_text(encoding="utf-8"))
+    catalog["credentials"].append({
+        "token_sha256": hashlib.sha256(user_token.encode()).hexdigest(),
+        "tenant": "t1", "role": "agent",
+        "extension": "t1-recepcao", "expires_at": 4102444800,
+    })
+    policy.write_text(json.dumps(catalog), encoding="utf-8")
+    policy.chmod(0o600)
+    denied, _, raw = req(base, "/api/supervision/queue-health", user_token)
+    assert denied == 403
+    assert b"PRIVATE-" not in raw
+    policy.write_text('{"credentials":[]}', encoding="utf-8")
+    assert req(base, "/api/supervision/queue-health", TOKENS["t1"])[0] == 401
