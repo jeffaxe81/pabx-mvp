@@ -17,7 +17,7 @@ def list_unprocessed_recordings(directory, already_processed: set) -> list:
     chegada, não aleatório).
     """
     path = Path(directory)
-    if not path.exists():
+    if path.is_symlink() or not path.exists() or not path.is_dir():
         return []
 
     files = [
