@@ -1,0 +1,118 @@
+{
+  "schema_version": 1,
+  "project": "AXE PABX",
+  "purpose": "Homologação técnica limitada ao código; não homologa funcionalidade ponta a ponta ou produção.",
+  "baseline_reference": "main",
+  "review_method": "AST_SYMBOLS_AND_EXISTING_AUTOMATED_TEST_REFERENCES",
+  "code_review_status": "CODE_ONLY_ACCEPTED_WITH_LIMITATIONS",
+  "operational_homologation_status": "PENDING_REAL_ENVIRONMENT",
+  "real_tests_executed_by_this_register": false,
+  "production_deployed_by_this_register": false,
+  "operational_go_authorized": false,
+  "items": [
+    {
+      "id": "PABX-PARTIAL-IDENTITY",
+      "title": "Login e papéis do painel",
+      "code_scope": "Sessões locais com expiração/revogação e validação de usuários admin/supervisor.",
+      "evidence": [
+        {
+          "path": "admin-api/auth.py",
+          "symbol": "SessionStore"
+        },
+        {
+          "path": "admin-api/users.py",
+          "symbol": "validate_user_input"
+        }
+      ],
+      "existing_test_files": [
+        "admin-api/tests/test_auth.py",
+        "admin-api/tests/test_users.py"
+      ],
+      "pending_implementation": [
+        "SSO e identidade compartilhada entre painel e queue-api",
+        "Revogação integrada entre serviços e vínculos tenant/papel em sessão real"
+      ],
+      "code_review_status": "CODE_ONLY_ACCEPTED_WITH_LIMITATIONS",
+      "operational_status": "PENDING_REAL_ENVIRONMENT"
+    },
+    {
+      "id": "PABX-PARTIAL-RECORDINGS",
+      "title": "Identificação da empresa de gravações",
+      "code_scope": "Proposta conservadora de classificação por CDR e importação de manifesto com revisão explícita, sem concessão automática de acesso.",
+      "evidence": [
+        {
+          "path": "queue-api/recording_cdr_candidates.py",
+          "symbol": "corroborate_cdr"
+        },
+        {
+          "path": "queue-api/recording_catalog.py",
+          "symbol": "reconcile_catalog"
+        }
+      ],
+      "existing_test_files": [
+        "queue-api/tests/test_recording_cdr_candidates.py",
+        "queue-api/tests/test_recording_catalog.py"
+      ],
+      "pending_implementation": [
+        "Catalogação automática confiável vinculada à origem de cada gravação",
+        "Homologação das fontes CDR/MixMonitor e permissões entre tenants no destino"
+      ],
+      "code_review_status": "CODE_ONLY_ACCEPTED_WITH_LIMITATIONS",
+      "operational_status": "PENDING_REAL_ENVIRONMENT"
+    },
+    {
+      "id": "PABX-PARTIAL-PROVISIONING",
+      "title": "Provisionamento de telefones",
+      "code_scope": "Geração de configuração a partir de template Yealink com teste de arquivo temporário; não é suporte multimarcas.",
+      "evidence": [
+        {
+          "path": "provisioning/generate.py",
+          "symbol": "main"
+        }
+      ],
+      "existing_test_files": [
+        "tests/test_provisioning.py"
+      ],
+      "pending_implementation": [
+        "Templates e validações específicas de outros fabricantes",
+        "Teste de download, TLS e instalação em telefone físico"
+      ],
+      "code_review_status": "CODE_ONLY_ACCEPTED_WITH_LIMITATIONS",
+      "operational_status": "PENDING_REAL_ENVIRONMENT"
+    },
+    {
+      "id": "PABX-PARTIAL-AI",
+      "title": "Pipeline de IA e síntese de voz",
+      "code_scope": "Pipeline de transcrição/resumo/sentimento e validação de TTS; IA desativada por padrão até habilitação expressa.",
+      "evidence": [
+        {
+          "path": "ai-worker/pipeline.py",
+          "symbol": "process_recording"
+        },
+        {
+          "path": "ai-worker/tts_service.py",
+          "symbol": "validate_tts_request"
+        },
+        {
+          "path": "ai-worker/server.py",
+          "symbol": "Handler"
+        }
+      ],
+      "existing_test_files": [
+        "ai-worker/tests/test_pipeline.py",
+        "ai-worker/tests/test_tts_service.py"
+      ],
+      "pending_implementation": [
+        "Homologação dos modelos locais Whisper/Ollama/Piper no hardware-alvo e desempenho/latência",
+        "Revisão das condições de licença do XTTS opcional antes de eventual ativação"
+      ],
+      "code_review_status": "CODE_ONLY_ACCEPTED_WITH_LIMITATIONS",
+      "operational_status": "PENDING_REAL_ENVIRONMENT"
+    }
+  ],
+  "excluded_not_implemented": [
+    "Alta disponibilidade com failover automático",
+    "Instalação local totalmente automatizada no Windows/WSL2"
+  ],
+  "source_go_registry": "docs/quality/provas-operacionais-diferidas.json"
+}
