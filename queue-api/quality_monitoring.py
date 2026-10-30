@@ -8,17 +8,25 @@ Lógica pura, sem rede - 100% testável. Os valores de RTCP vêm do
 Asterisk como string, e podem vir vazios se a chamada foi curta demais
 ou o codec/transporte não gerou dado - tratado com cuidado abaixo.
 """
+import math
 import time
 
 
 def _parse_float_or_none(value):
     """Converte string do Asterisk pra float, tratando vazio/inválido como None."""
-    if value is None or value == "":
+    if (type(value) not in (str, int, float)
+            or isinstance(value, str) and (not value or len(value) > 48)):
         return None
     try:
-        return float(value)
-    except (TypeError, ValueError):
+        number = float(value)
+    except (TypeError, ValueError, OverflowError):
         return None
+    return number if math.isfinite(number) and number >= 0 else None
+
+
+def _parse_loss_percent(value):
+    result = _parse_float_or_none(value)
+    return result if result is not None and result <= 100 else None
 
 
 def parse_quality_event(event: dict):
@@ -26,13 +34,14 @@ def parse_quality_event(event: dict):
     Extrai as métricas de um evento AMI UserEvent/QualityStats, ou
     retorna None se o evento não for esse.
     """
-    if event.get("Event") != "UserEvent" or event.get("UserEvent") != "QualityStats":
+    if (not isinstance(event, dict) or event.get("Event") != "UserEvent"
+            or event.get("UserEvent") != "QualityStats"):
         return None
 
     return {
         "channel": event.get("Channel", ""),
         "jitter_ms": _parse_float_or_none(event.get("Jitter")),
-        "packet_loss_percent": _parse_float_or_none(event.get("PacketLoss")),
+        "packet_loss_percent": _parse_loss_percent(event.get("PacketLoss")),
         "rtt_ms": _parse_float_or_none(event.get("RTT")),
     }
 
@@ -46,9 +55,11 @@ def is_poor_quality(quality: dict, jitter_threshold_ms: float = 30.0, packet_los
     jitter = quality.get("jitter_ms")
     packet_loss = quality.get("packet_loss_percent")
 
-    if jitter is not None and jitter > jitter_threshold_ms:
+    if (type(jitter) in (int, float) and math.isfinite(jitter)
+            and jitter >= 0 and jitter > jitter_threshold_ms):
         return True
-    if packet_loss is not None and packet_loss > packet_loss_threshold_percent:
+    if (type(packet_loss) in (int, float) and math.isfinite(packet_loss)
+            and 0 <= packet_loss <= 100 and packet_loss > packet_loss_threshold_percent):
         return True
     return False
 
