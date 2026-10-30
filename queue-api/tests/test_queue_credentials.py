@@ -102,3 +102,16 @@ def test_queue_catalog_rejects_duplicate_json_fields(tmp_path):
     path.write_text('{"credentials":[],"credentials":[]}', encoding="utf-8")
     path.chmod(0o600)
     assert load_queue_policy(path) is None
+
+
+def test_queue_credential_listing_never_exposes_plaintext(tmp_path):
+    from queue_credentials import list_credential_metadata
+    path = tmp_path / "queue-credentials.json"
+    init_policy(path)
+    issued = issue_credential(path, "t1", "agent", extension="t1-1001", now=1000)
+    listed = list_credential_metadata(path)
+    assert len(listed) == 1
+    assert listed[0]["sha256"] == issued["sha256"]
+    assert listed[0]["tenant"] == "t1"
+    assert "token" not in listed[0]
+    assert issued["token"] not in str(listed)
