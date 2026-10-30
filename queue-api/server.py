@@ -31,6 +31,7 @@ from recording_access import (
 )
 from missed_calls import parse_missed_call_event, MissedCallsLog
 from notifiers import dispatch_notifications
+from outbound_admission import OriginateAdmission
 from click_to_call import build_originate_action, validate_click_to_call_request
 from campaigns import (
     create_campaign, load_campaigns, find_campaign, next_pending_contact,
@@ -168,6 +169,8 @@ ami = None  # inicializado em main(), None durante os testes automatizados
 # Serializa seleção + claim persistido + Originate entre threads HTTP.
 # Para múltiplos processos/instâncias ainda serão necessários locks distribuídos.
 OUTBOUND_LOCK = threading.RLock()
+# Limites por processo; para clusters é obrigatório usar controle distribuído.
+CTI_ADMISSION = OriginateAdmission()
 
 
 def handle_ami_event(event: dict):
@@ -495,7 +498,7 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
             allowed_headers = "Authorization, Content-Type"
             if urlparse(self.path).path.startswith(("/api/campaigns", "/api/callbacks")) or urlparse(self.path).path == "/api/click-to-call":
-                allowed_headers += ", X-Click-To-Call-Key"
+                allowed_headers += ", X-Click-To-Call-Key, X-Idempotency-Key"
             self.send_header("Access-Control-Allow-Headers", allowed_headers)
             self.send_header("Content-Length", "0")
             self.end_headers()
@@ -962,16 +965,37 @@ class Handler(BaseHTTPRequestHandler):
             self._send_queue_json(503, {"error": "AMI nao conectado"})
             return
 
+        request_id = self.headers.get("X-Idempotency-Key")
+        admitted, ticket = CTI_ADMISSION.reserve(
+            identity["tenant"], extension, number, request_id)
+        if admitted == "duplicate":
+            self._send_queue_json(200, {"ok": True, "duplicate": True})
+            return
+        if admitted in ("pending", "conflict"):
+            self._send_queue_json(409, {"error": "originação já registrada ou conflitante"})
+            return
+        if admitted == "limited":
+            self._send_queue_json(429, {"error": "limite de originação atingido"})
+            return
+        if admitted != "reserved":
+            self._send_queue_json(400, {"error": "idempotência ou origem inválida"})
+            return
+
         action = build_originate_action(f"PJSIP/{extension}", number, CLICK_TO_CALL_CONTEXT)
         action["Account"] = identity["tenant"]
         action["Variable"] = "TENANT=" + identity["tenant"]
         try:
             response = ami.send_action(action)
         except (OSError, TimeoutError, ConnectionError):
-            self._send_queue_json(502, {"error": "falha de comunicacao AMI"})
+            # Resposta AMI pode ter se perdido após Originate ser aceito.
+            # O request-id permanece "uncertain" até expirar o TTL.
+            CTI_ADMISSION.finish(ticket, "uncertain")
+            self._send_queue_json(502, {"error": "resultado AMI desconhecido"})
             return
-        if response.get("Response") == "Success":
-            self._send_queue_json(200, {"ok": True})
+        accepted = isinstance(response, dict) and response.get("Response") == "Success"
+        CTI_ADMISSION.finish(ticket, "accepted" if accepted else "rejected")
+        if accepted:
+            self._send_queue_json(200, {"ok": True, "duplicate": False})
         else:
             self._send_queue_json(502, {"error": "falha ao originar chamada"})
 
