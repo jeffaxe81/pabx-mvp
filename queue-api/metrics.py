@@ -9,6 +9,8 @@ justamente pra dar pra testar a virada do dia sem precisar esperar a
 meia-noite de verdade.
 """
 import time
+import re
+from collections import deque
 
 
 def _day_key(timestamp: float) -> str:
@@ -16,6 +18,13 @@ def _day_key(timestamp: float) -> str:
 
 
 MAX_BILLABLE_SECONDS = 30 * 24 * 3600
+MAX_CDR_DEDUPE_IDS = 10000
+_CDR_UNIQUEID = re.compile(r"[A-Za-z0-9._-]{1,96}$")
+
+
+def _valid_disposition(value):
+    return (isinstance(value, str) and 0 < len(value) <= 32
+            and value.isprintable() and not value.isspace())
 
 
 def _billable_seconds(value):
@@ -43,6 +52,8 @@ class DailyMetrics:
             self.answered_calls = 0
             self.missed_calls = 0
             self.total_talk_seconds = 0
+            self._seen_cdr_ids = set()
+            self._cdr_id_order = deque()
 
     def apply_cdr_event(self, event: dict):
         if not isinstance(event, dict) or event.get("Event") != "Cdr":
@@ -51,9 +62,28 @@ class DailyMetrics:
         self._reset_if_new_day()
 
         disposition = event.get("Disposition")
-        if (not isinstance(disposition, str) or not disposition
-                or len(disposition) > 32 or not disposition.isprintable()):
+        if not _valid_disposition(disposition):
             return
+
+        # Repetição do mesmo CDR após reconexão AMI não pode inflar
+        # contadores. Legs diferentes são distinguidas por destino e
+        # início de chamada, não apenas por Uniqueid.
+        uniqueid = event.get("Uniqueid")
+        if uniqueid is not None:
+            if not isinstance(uniqueid, str) or not _CDR_UNIQUEID.fullmatch(uniqueid):
+                return
+            start = event.get("StartTime", "")
+            dest = event.get("Destination", "")
+            if (not isinstance(start, str) or len(start) > 40
+                    or not isinstance(dest, str) or len(dest) > 96):
+                return
+            key = (uniqueid, start, dest, disposition)
+            if key in self._seen_cdr_ids:
+                return
+            self._seen_cdr_ids.add(key)
+            self._cdr_id_order.append(key)
+            if len(self._cdr_id_order) > MAX_CDR_DEDUPE_IDS:
+                self._seen_cdr_ids.discard(self._cdr_id_order.popleft())
 
         self.total_calls += 1
 
