@@ -55,16 +55,21 @@ def save_tenants(path, tenants: list):
 
 
 def _valid_existing_records(existing) -> bool:
-    """Uma lista corrompida não pode liberar criação/remoção por engano."""
-    return (
-        isinstance(existing, list)
-        and all(
-            isinstance(item, dict)
-            and isinstance(item.get("tenant_id"), str)
-            and isinstance(item.get("did"), str)
-            for item in existing
-        )
-    )
+    """Cadastro válido não pode conter DIDs ou empresas repetidos."""
+    if not isinstance(existing, list):
+        return False
+    known_tenants, known_dids = set(), set()
+    for item in existing:
+        if not isinstance(item, dict):
+            return False
+        tenant, did = item.get("tenant_id"), item.get("did")
+        if (not isinstance(tenant, str) or TENANT_ID_RE.fullmatch(tenant) is None
+                or not isinstance(did, str) or DID_RE.fullmatch(did) is None
+                or tenant in known_tenants or did in known_dids):
+            return False
+        known_tenants.add(tenant)
+        known_dids.add(did)
+    return True
 
 
 def parse_static_inbound_dids(dialplan_text: str) -> set:
