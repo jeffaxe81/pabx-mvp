@@ -122,9 +122,13 @@ def run_preflight(queue_path, recording_path, *, now=None):
         other_tenant_denied = not can_read_recording(
             r, {"tenant": foreign, "role": "admin"}, filename
         )
+        owner = metadata.get("owner_extension")
+        synthetic_other = tenant + "-non-owner"
+        if owner == synthetic_other:
+            synthetic_other = tenant + "-different-owner"
         non_owner_denied = not can_read_recording(
             r, {"tenant": tenant, "role": "agent",
-                "extension": tenant + "-non-owner"}, filename
+                "extension": synthetic_other}, filename
         )
 
     decisions = (
