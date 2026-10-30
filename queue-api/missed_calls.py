@@ -57,6 +57,8 @@ class MissedCallsLog:
     """Histórico em memória das últimas chamadas perdidas."""
 
     def __init__(self, max_size=100):
+        if type(max_size) is not int or not 1 <= max_size <= 10000:
+            raise ValueError("limite de historico invalido")
         self._entries = []
         self._max_size = max_size
 
@@ -64,11 +66,24 @@ class MissedCallsLog:
         if not isinstance(missed_call, dict):
             return False
         entry = dict(missed_call)
+        # Defesa adicional: o histórico também pode receber registros
+        # de APIs internas, não somente do parser AMI.
+        for name, maximum in (("caller_id_num", 64), ("caller_id_name", 100),
+                              ("destination", 96)):
+            if name in entry:
+                entry[name] = _safe_ami_text(
+                    entry[name], "desconhecido" if name == "caller_id_num" else "",
+                    maximum,
+                )
         entry["timestamp"] = time.time()
         self._entries.append(entry)
         if len(self._entries) > self._max_size:
             self._entries.pop(0)
+        return True
 
     def list(self, limit=20):
-        """Mais recente primeiro."""
-        return list(reversed(self._entries))[:limit]
+        """Mais recente primeiro, com cópias para não alterar o histórico."""
+        if type(limit) is not int or limit <= 0:
+            return []
+        return [dict(record) for record in reversed(self._entries)][
+            :min(limit, self._max_size)]
