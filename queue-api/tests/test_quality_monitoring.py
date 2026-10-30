@@ -130,3 +130,47 @@ def test_quality_requires_bounded_printable_ami_channel():
     for bad in (None, False, [], {}, "", "X" * 161, "PJSIP/x" + chr(13) + chr(10) + "Injected"):
         assert parse_quality_event({**SAMPLE_EVENT, "Channel": bad}) is None
     assert parse_quality_event(SAMPLE_EVENT)["channel"] == SAMPLE_EVENT["Channel"]
+
+
+# Programa 30 frentes — RTCP: cinco garantias de qualidade.
+def test_30_rtcp_non_dict_quality_cannot_create_alarm():
+    for q in (None, [], True, "bad"):
+        assert is_poor_quality(q) is False
+
+
+def test_30_rtcp_invalid_threshold_does_not_raise_false_alarm():
+    for bad in (None, False, float("nan"), float("inf"), -1, "30"):
+        assert is_poor_quality({"jitter_ms": 50}, jitter_threshold_ms=bad) is False
+        assert is_poor_quality({"packet_loss_percent": 10},
+                               packet_loss_threshold_percent=bad) is False
+    assert is_poor_quality({"packet_loss_percent": 10},
+                           packet_loss_threshold_percent=101) is False
+
+
+def test_30_rtcp_log_rejects_invalid_capacity():
+    import pytest
+    for capacity in (0, -1, True, None, "10", 10001):
+        with pytest.raises(ValueError):
+            QualityLog(max_size=capacity)
+
+
+def test_30_rtcp_log_refuses_bad_reports_and_invalid_flags():
+    log = QualityLog()
+    for payload in (None, [], "bad", True):
+        assert log.append(payload, poor=True) is False
+    assert log.append({"channel": "CH1"}, poor=1) is False
+    assert log.append({"channel": "CH2"}, poor=True) is True
+    assert log.list(only_poor=True)[0]["channel"] == "CH2"
+
+
+def test_30_rtcp_log_limit_and_copy_preserve_original_reports():
+    log = QualityLog(max_size=2)
+    log.append({"channel": "CH1"}, poor=False)
+    log.append({"channel": "CH2"}, poor=True)
+    for invalid in (None, False, -1, "100", 1.5):
+        assert log.list(limit=invalid) == []
+    record = log.list()[0]
+    record["channel"] = "MUTATED"
+    assert log.list()[0]["channel"] == "CH2"
+    assert [r["channel"] for r in log.list(limit=9999)] == ["CH2", "CH1"]
+    assert [r["channel"] for r in log.list(only_poor=True)] == ["CH2"]
