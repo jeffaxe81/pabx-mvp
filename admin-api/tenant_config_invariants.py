@@ -85,7 +85,7 @@ def inspect_generated_tenant_files(contents, tenant):
                        for name in endpoints),
         tid_ok and all(("\naors=" + name + "\n") in p and ("[" + name + "]\ntype=aor") in p
                        for name in endpoints),
-        tid_ok and all(("mailboxes=" + name + "@" + tenant) in p for name in endpoints),
+        tid_ok and all(("\nmailboxes=" + name + "@" + tenant + "\n") in p for name in endpoints),
         tid_ok and all(("[" + name + "]") in q
                        for name in ("fila-" + tenant, "fila-" + tenant + "-en",
                                     "fila-" + tenant + "-es")),
