@@ -59,12 +59,14 @@ class SurveyStore:
         self.path = Path(path)
 
     def append(self, record: dict):
+        if self.path.is_symlink():
+            raise ValueError("arquivo de pesquisa não pode ser um link simbólico")
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with open(self.path, "a", encoding="utf-8") as f:
             f.write(json.dumps(record, ensure_ascii=False) + "\n")
 
     def load_all(self):
-        if not self.path.exists():
+        if self.path.is_symlink() or not self.path.exists():
             return []
         records = []
         for line in self.path.read_text(encoding="utf-8").splitlines():
