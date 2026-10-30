@@ -169,7 +169,7 @@ CALLBACK_SUMMARY_STATUSES = (
 )
 
 
-def summarize_callbacks(callbacks, tenant):
+def summarize_callbacks(callbacks, tenant, now=None):
     """Resumo gerencial sem dados pessoais, estritamente por empresa.
 
     Os registros legados sem tenant não são atribuídos por semelhança
@@ -188,7 +188,27 @@ def summarize_callbacks(callbacks, tenant):
             by_status[status] += 1
         else:
             by_status["outros"] += 1
-    return {"total": len(scoped), "by_status": by_status}
+    # Indicadores adicionais para a supervisão: todos derivados somente
+    # do escopo autenticado, sem números ou nomes dos chamadores.
+    now = time.time() if now is None else now
+    if type(now) not in (int, float) or not math.isfinite(now) or now < 0:
+        raise ValueError("relogio de callbacks invalido")
+    pending = [item for item in scoped if item.get("status") == "pendente"]
+    oldest_pending = None
+    if pending:
+        requested = [item.get("requested_at") for item in pending]
+        if any(type(v) not in (int, float) or not math.isfinite(v) or v < 0
+               for v in requested):
+            raise ValueError("pedido pendente sem data valida")
+        oldest_pending = max(0, int(now - min(requested)))
+    return {
+        "total": len(scoped), "by_status": by_status,
+        "pending": by_status["pendente"],
+        "dialing": by_status["discando"],
+        "completed": by_status["concluido"],
+        "cancelled": by_status["cancelado"],
+        "oldest_pending_seconds": oldest_pending,
+    }
 
 
 def next_pending_callback(callbacks: list):
