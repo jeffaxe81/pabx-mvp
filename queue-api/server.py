@@ -1055,12 +1055,23 @@ class Handler(BaseHTTPRequestHandler):
             return None
         return data
 
+    def _read_campaigns_for_http(self):
+        """Fail closed on a damaged catalog, never return an empty false snapshot."""
+        try:
+            return load_campaigns(CAMPAIGNS_PATH)
+        except (OSError, UnicodeError, ValueError, TypeError):
+            self._send_queue_json(503, {"error": "catalogo de campanhas indisponivel"})
+            return None
+
     def _handle_list_campaigns(self):
         identity = self._require_campaign_api_key()
         if identity is None:
             return
+        snapshot = self._read_campaigns_for_http()
+        if snapshot is None:
+            return
         campaigns = [
-            c for c in load_campaigns(CAMPAIGNS_PATH)
+            c for c in snapshot
             if c.get("tenant") == identity["tenant"]
             and may_pickup(identity, c.get("agent_extension"))
         ]
@@ -1075,8 +1086,11 @@ class Handler(BaseHTTPRequestHandler):
         campaign_id = path[len("/api/campaigns/"):]
         if not campaign_id or "/" in campaign_id:
             self._send_queue_json(404, {"error": "campanha nao encontrada"})
+            return 
+        snapshot = self._read_campaigns_for_http()
+        if snapshot is None:
             return
-        campaign = find_campaign(load_campaigns(CAMPAIGNS_PATH), campaign_id)
+        campaign = find_campaign(snapshot, campaign_id)
         if not campaign or campaign.get("tenant") != identity["tenant"] or not may_pickup(
                 identity, campaign.get("agent_extension")):
             self._send_queue_json(404, {"error": "campanha nao encontrada"})
@@ -1094,8 +1108,12 @@ class Handler(BaseHTTPRequestHandler):
             self._send_queue_json(403, {"error": "ramal de outra empresa"})
             return
         data["tenant"] = identity["tenant"]
-        with outbound_lock(CAMPAIGNS_PATH):
-            ok, error, campaign = create_campaign(CAMPAIGNS_PATH, data)
+        try:
+            with outbound_lock(CAMPAIGNS_PATH):
+                ok, error, campaign = create_campaign(CAMPAIGNS_PATH, data)
+        except (OSError, UnicodeError, ValueError, TypeError):
+            self._send_queue_json(503, {"error": "catalogo de campanhas indisponivel"})
+            return
         if not ok:
             self._send_queue_json(400, {"error": error})
             return
@@ -1109,8 +1127,11 @@ class Handler(BaseHTTPRequestHandler):
         campaign_id = path[len("/api/campaigns/"):-len("/dial-next")].rstrip("/")
         if not campaign_id or "/" in campaign_id:
             self._send_queue_json(404, {"error": "campanha nao encontrada"})
+            return 
+        snapshot = self._read_campaigns_for_http()
+        if snapshot is None:
             return
-        campaign = find_campaign(load_campaigns(CAMPAIGNS_PATH), campaign_id)
+        campaign = find_campaign(snapshot, campaign_id)
         if not campaign or campaign.get("tenant") != identity["tenant"] or not may_pickup(
                 identity, campaign.get("agent_extension")):
             self._send_queue_json(404, {"error": "campanha nao encontrada"})
@@ -1126,8 +1147,11 @@ class Handler(BaseHTTPRequestHandler):
 
         # Claim precisa incluir a leitura do pendente: duas requisições
         # HTTP simultâneas não podem originar o mesmo contato.
-        with outbound_lock(CAMPAIGNS_PATH):
-            campaign = find_campaign(load_campaigns(CAMPAIGNS_PATH), campaign_id)
+        with outbound_lock(CAMPAIGNS_PATH): 
+            snapshot = self._read_campaigns_for_http()
+            if snapshot is None:
+                return
+            campaign = find_campaign(snapshot, campaign_id)
             if not campaign or campaign.get("tenant") != identity["tenant"] or not may_pickup(
                     identity, campaign.get("agent_extension")):
                 self._send_queue_json(404, {"error": "campanha nao encontrada"})

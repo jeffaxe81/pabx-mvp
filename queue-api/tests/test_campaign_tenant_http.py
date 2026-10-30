@@ -652,3 +652,43 @@ def test_click_to_call_incorrect_key_and_text_phone_do_not_ami_http(api, monkeyp
         assert request(base, "/api/click-to-call", TOKENS["t1"], KEY,
                        "POST", {"extension": "t1-recepcao", "number": number})[0] == 400
     assert ami.actions == []
+
+
+@pytest.mark.parametrize("corruption", [
+    "duplicated_ids", "bad_pending", "wrong_tenant", "nonfinite",
+])
+def test_campaign_catalog_corruption_http_returns_503_without_ami(api, corruption):
+    """All campaign routes fail closed; corrupted catalogs cannot authorize Originate."""
+    base, campaign_path, _, ami, _ = api
+    rows = load_campaigns(campaign_path)
+    if corruption == "duplicated_ids":
+        rows.append({**rows[0], "agent_extension": "t10-recepcao",
+                     "tenant": "t10"})
+    elif corruption == "bad_pending":
+        rows[0]["contacts"][0]["attempts"] = 3
+    elif corruption == "wrong_tenant":
+        rows[0]["tenant"] = "t10"
+    elif corruption == "nonfinite":
+        rows[0]["contacts"][0]["attempts"] = float("nan")
+    campaign_path.write_text(json.dumps(rows), encoding="utf-8")
+    target = rows[0]["id"]
+    requests = [
+        own(api, "/api/campaigns"),
+        own(api, "/api/campaigns/" + target),
+        own(api, "/api/campaigns", method="POST",
+            payload={"name": "futura", "agent_extension": "t1-recepcao",
+                     "contacts": ["11999998888"]}),
+        own(api, "/api/campaigns/" + target + "/dial-next", method="POST"),
+    ]
+    assert [result[0] for result in requests] == [503, 503, 503, 503]
+    assert ami.actions == []
+    assert all("catalogo" in response[2]["error"] for response in requests)
+
+
+def test_campaign_http_catalog_symlink_not_followed(api, tmp_path):
+    base, path, _, ami, _ = api
+    safe = tmp_path / "old-campaigns.json"
+    path.rename(safe)
+    path.symlink_to(safe)
+    assert own(api, "/api/campaigns")[0] == 503
+    assert ami.actions == []
