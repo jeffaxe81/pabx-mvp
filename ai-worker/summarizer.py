@@ -5,6 +5,7 @@ e validação da resposta são lógica pura - a chamada de rede de
 verdade fica isolada em llm_client.generate().
 """
 
+MAX_SUMMARY_CHARS = 2000
 MIN_TRANSCRIPT_LENGTH = 20  # abaixo disso, não vale a pena gastar chamada de LLM
 
 
@@ -33,7 +34,9 @@ def clean_summary_response(raw_response: str) -> str:
     aspas, etc.) - não é infalível, mas cobre os casos mais comuns
     sem precisar de outra chamada de LLM só pra limpar a primeira.
     """
-    cleaned = raw_response.strip()
+    if not isinstance(raw_response, str):
+        return ""
+    cleaned = raw_response[:MAX_SUMMARY_CHARS].strip()
     for prefix in ("Resumo:", "resumo:", "Resumo -", "**Resumo:**"):
         if cleaned.startswith(prefix):
             cleaned = cleaned[len(prefix):].strip()
