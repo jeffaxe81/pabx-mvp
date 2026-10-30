@@ -423,3 +423,11 @@ def test_ami_events_without_uniqueid_remain_supported():
         tracker.apply_event({"Event": "AgentConnect", "Queue": "fila-t1",
                              "HoldTime": "2"})
     assert tracker.snapshot()["fila-t1"]["offered"] == 2
+
+
+def test_sla_threshold_rejects_ambiguous_types_and_unreasonable_values():
+    import pytest
+    for bad in (None, True, 10.5, "20", -1, 3601):
+        with pytest.raises(ValueError):
+            QueueSLATracker(threshold_seconds=bad)
+    assert QueueSLATracker(threshold_seconds=0).threshold_seconds == 0
