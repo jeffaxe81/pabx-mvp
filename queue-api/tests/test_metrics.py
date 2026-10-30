@@ -141,3 +141,10 @@ def test_non_dict_cdr_does_not_crash_daily_metrics():
     for event in (None, [], False, "Cdr"):
         metrics.apply_cdr_event(event)
     assert metrics.snapshot()["total_calls"] == 0
+
+
+def test_cdr_disposition_malformed_never_inflates_totals():
+    metrics = DailyMetrics(clock=lambda: DAY_1)
+    for bad in ([], {}, True, 1, "", "X" * 33, "ANSWERED" + chr(10)):
+        metrics.apply_cdr_event({"Event": "Cdr", "Disposition": bad})
+    assert metrics.snapshot()["total_calls"] == 0
