@@ -11,6 +11,8 @@ que foi construído aqui.
 Prompt e parsing são puros - a chamada de rede fica em llm_client.py.
 """
 
+import re
+
 VALID_INTENTS = {"vendas", "suporte", "outro"}
 
 # Mapeia a intenção classificada pro destino no dialplan (mesmos
@@ -43,11 +45,12 @@ def parse_intent_response(raw_response: str) -> str:
     pra quando o modelo genuinamente classifica como 'outro' quanto
     pra quando a resposta vem em formato inesperado.
     """
+    if not isinstance(raw_response, str):
+        return "outro"
     normalized = raw_response.strip().lower()
-    for intent in ("vendas", "suporte"):  # checa os específicos antes do fallback
-        if intent in normalized:
-            return intent
-    return "outro"
+    matches = {intent for intent in ("vendas", "suporte")
+               if re.search(r"\b" + intent + r"\b", normalized)}
+    return next(iter(matches)) if len(matches) == 1 else "outro"
 
 
 def intent_to_extension(intent: str) -> str:
