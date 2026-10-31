@@ -4,6 +4,7 @@ Amostras com data no futuro não são usadas para medir atraso. Não há
 repetição automática, discagem ou chamada AMI.
 """
 from collections import Counter
+import math
 import time
 
 from insights_callbacks import _callbacks
@@ -11,22 +12,30 @@ from insights_common import percent
 from callbacks import MAX_ATTEMPTS
 
 
+def _valid_cutoff(as_of):
+    value = time.time() if as_of is None else as_of
+    if (type(value) not in (int, float) or not math.isfinite(value)
+            or not 0 <= value <= 4102444800):
+        raise ValueError("instante de referência inválido")
+    return value
+
+
 def _pending(records, tenant):
     return [r for r in _callbacks(records, tenant) if r["status"] == "pendente"]
 
 
-def callback_pending_over_24h(records, tenant):
+def callback_pending_over_24h(records, tenant, as_of=None):
     """101. Pendentes com idade comprovada de pelo menos 24h."""
-    now = time.time()
+    now = _valid_cutoff(as_of)
     rows = [r for r in _pending(records, tenant) if r["at"] <= now]
     stale = sum(now - r["at"] >= 86400 for r in rows)
     return {"dated_pending": len(rows), "at_least_24h": stale,
             "rate_percent": percent(stale, len(rows))}
 
 
-def callback_pending_over_48h(records, tenant):
+def callback_pending_over_48h(records, tenant, as_of=None):
     """102. Pendentes com idade comprovada de pelo menos 48h."""
-    now = time.time()
+    now = _valid_cutoff(as_of)
     rows = [r for r in _pending(records, tenant) if r["at"] <= now]
     stale = sum(now - r["at"] >= 172800 for r in rows)
     return {"dated_pending": len(rows), "at_least_48h": stale,
