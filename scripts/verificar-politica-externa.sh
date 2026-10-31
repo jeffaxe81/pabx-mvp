@@ -7,7 +7,10 @@ command -v "$ASTERISK_BIN" >/dev/null || { echo "ERRO: asterisk indisponivel" >&
 run() { "$ASTERISK_BIN" -rx "$1"; }
 check_context() {
   local ctx="$1" output
-  output="$(run "dialplan show $ctx")"
+  if ! output="$(run "dialplan show $ctx")"; then
+    echo "ERRO: falha ao consultar dialplan do contexto $ctx" >&2
+    exit 1
+  fi
   # Asterisk CLI: [ Context 'nome' created by ... ]; mocks: [nome].
   if ! grep -Fq "[$ctx]" <<<"$output" && ! grep -Fq "[ Context '$ctx'" <<<"$output"; then
     echo "FALHA: contexto $ctx ausente" >&2
