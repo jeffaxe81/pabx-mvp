@@ -48,3 +48,15 @@ def test_wizard_gera_validacao_antes_do_dial():
     source = (ROOT / "admin-api" / "tenants.py").read_text(encoding="utf-8")
     assert 'Gosub(politica-externa,s,1)' in source
     assert 'GotoIf($["${{GOSUB_RETVAL}}" != "ALLOW"]?numero-bloqueado,1)' in source
+
+
+def test_politica_inicia_negada_ate_validacao():
+    context = POLICY.split('[politica-externa]', 1)[1]
+    assert context.index('Set(GOSUB_RETVAL=DENY)') < context.index('GotoIf(')
+
+
+def test_rota_alternativa_normaliza_destino_antes_da_politica():
+    start = DIALPLAN.index('exten => rota-alternativa,1')
+    end = DIALPLAN.index('exten => 800,1', start)
+    section = DIALPLAN[start:end]
+    assert section.index('Set(DESTINO=${DESTINO:1})') < section.index('Gosub(politica-externa,s,1)')
