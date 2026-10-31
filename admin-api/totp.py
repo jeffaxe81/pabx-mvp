@@ -22,6 +22,8 @@ DEFAULT_DIGITS = 6
 
 def generate_secret(length_bytes: int = 20) -> str:
     """Gera um segredo aleatório em Base32 (formato padrão pra apps autenticadores)."""
+    if type(length_bytes) is not int or not 10 <= length_bytes <= 64:
+        raise ValueError("tamanho do segredo TOTP inválido")
     return base64.b32encode(os.urandom(length_bytes)).decode("ascii").rstrip("=")
 
 
