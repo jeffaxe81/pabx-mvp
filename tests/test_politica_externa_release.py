@@ -90,3 +90,35 @@ def test_politica_internacional_consulta_tenant_corrente():
 def test_politica_nega_sem_tenant_antes_de_permitir():
     context = POLICY.split("[politica-externa]", 1)[1]
     assert context.index('GotoIf($["${TENANT}" = ""]?negado)') < context.index("Set(GOSUB_RETVAL=ALLOW)")
+
+
+def test_politica_exige_decisao_negativa_por_padrao():
+    context = POLICY.split("[politica-externa]", 1)[1]
+    assert context.index("Set(GOSUB_RETVAL=DENY)") < context.index("Set(GOSUB_RETVAL=ALLOW)")
+
+
+def test_politica_so_consulta_bloqueio_apos_identificar_prefixo_internacional():
+    context = POLICY.split("[politica-externa]", 1)[1]
+    assert context.index('DESTINO:0:2') < context.index('DB(politica-externa-${TENANT}/internacional)')
+
+
+def test_politica_retorna_explicitamente_nos_dois_caminhos():
+    context = POLICY.split("[politica-externa]", 1)[1]
+    assert context.count("Return()") >= 2
+    assert "n(negado),NoOp(" in context
+    assert "n(permitido),Set(GOSUB_RETVAL=ALLOW)" in context
+
+
+def test_rota_alternativa_usa_gateway_secundario_apos_autorizacao():
+    start = DIALPLAN.index("exten => rota-alternativa,1")
+    end = DIALPLAN.index("exten => 800,1", start)
+    section = DIALPLAN[start:end]
+    assert section.index('GotoIf($["${GOSUB_RETVAL}" != "ALLOW"]?numero-bloqueado,1)') < section.index("Dial(PJSIP/${DESTINO}@gateway-tdm-2,30)")
+
+
+def test_tenant_t2_nao_seleciona_rota_alternativa_t1():
+    start = DIALPLAN.index("[t2-internal]")
+    end = DIALPLAN.find("\n[", start + 1)
+    section = DIALPLAN[start:end if end >= 0 else None]
+    assert "Gosub(politica-externa,s,1)" in section
+    assert "gateway-tdm-2" not in section
