@@ -40,6 +40,10 @@ def validate_prepared_voicemail(*contents):
                     tenant = section if TENANT.fullmatch(section) else None
                 continue
             if "=>" not in line:
+                # Em seções [tN], todas as entradas efetivas precisam
+                # declarar uma caixa; erros silenciosos invalidam o aceite.
+                if tenant in EXPECTED:
+                    invalid += 1
                 continue
             mailbox, fields = (part.strip() for part in line.split("=>", 1))
             mailboxes += 1
