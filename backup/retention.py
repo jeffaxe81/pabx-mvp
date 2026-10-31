@@ -17,7 +17,8 @@ def delete_old_backups(directory, retention_days: int, clock=time.time):
         return []
 
     path = Path(directory)
-    if path.is_symlink() or not path.exists() or not path.is_dir():
+    if (path.is_symlink() or any(parent.is_symlink() for parent in path.parents)
+            or not path.exists() or not path.is_dir()):
         return []
 
     cutoff = clock() - (retention_days * 86400)
@@ -36,7 +37,8 @@ def delete_old_backups(directory, retention_days: int, clock=time.time):
 def list_backups(directory):
     """Lista os backups existentes, mais recente primeiro - usado só pra inspeção/log."""
     path = Path(directory)
-    if not path.exists():
+    if (path.is_symlink() or any(parent.is_symlink() for parent in path.parents)
+            or not path.is_dir()):
         return []
 
     files = [f for f in path.iterdir() if not f.is_symlink() and f.is_file() and f.name.endswith(".tar.gz")]
