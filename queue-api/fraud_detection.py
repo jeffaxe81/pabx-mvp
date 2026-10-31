@@ -11,6 +11,8 @@ Lógica pura, sem rede - 100% testável.
 import math
 import time
 
+MAX_RATE_TRACKED_EXTENSIONS = 10000
+
 from reports import extract_operator
 from monitoring_access import extension_tenant
 
@@ -32,6 +34,11 @@ class CallRateTracker:
                 or not extension.isprintable() or not destination.isprintable()):
             return
         now = self._clock()
+        if type(now) not in (int, float) or not math.isfinite(now) or now < 0:
+            return
+        if (extension not in self._calls
+                and len(self._calls) >= MAX_RATE_TRACKED_EXTENSIONS):
+            return
         # Retenção deslizante de 24 h; poda somente quando o primeiro
         # evento estiver vencido, evitando recomputar toda a lista a
         # cada chamada (importante em ramais de alto tráfego).
