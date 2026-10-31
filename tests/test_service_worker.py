@@ -66,5 +66,5 @@ def test_fetch_handler_does_not_intercept_dynamic_requests():
     fetch_start = source.index("addEventListener('fetch'")
     fetch_end = source.index("});", fetch_start)
     body = source[fetch_start:fetch_end]
-    assert "isShellRequest" in body
-    assert "if (!isShellRequest) return;" in body
+    assert "APP_SHELL_URLS.has(event.request.url)" in body
+    assert "event.request.method !== 'GET'" in body
