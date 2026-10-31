@@ -9,6 +9,8 @@ import re
 from insights_common import percent, require_tenant
 from quality_monitoring import _parse_float_or_none, _parse_loss_percent
 
+MAX_RTCP_MILLISECONDS = 60000  # Bound untrusted numeric exports before aggregation.
+
 CHANNEL = re.compile(r"PJSIP/(t[1-9][0-9]*-[a-z0-9_-]{1,75})-[A-Fa-f0-9]{1,16}\Z")
 
 
@@ -27,6 +29,10 @@ def _quality(records, tenant):
         jitter = _parse_float_or_none(row.get("jitter_ms"))
         loss = _parse_loss_percent(row.get("packet_loss_percent"))
         rtt = _parse_float_or_none(row.get("rtt_ms"))
+        if jitter is not None and jitter > MAX_RTCP_MILLISECONDS:
+            jitter = None
+        if rtt is not None and rtt > MAX_RTCP_MILLISECONDS:
+            rtt = None
         if jitter is None and loss is None and rtt is None:
             continue
         selected.append({"agent": match.group(1), "jitter": jitter,
