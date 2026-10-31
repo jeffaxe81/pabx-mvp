@@ -79,3 +79,8 @@ curl "http://<ip-do-servidor>:8090/api/reports?group_by=tenant"
 - Chamadas que não batem no padrão de canal esperado (ex: chamadas
   puramente internas entre dois ramais comuns) aparecem sem atendente/
   tenant identificado, agrupadas como "desconhecido"
+
+
+## Endurecimento de 31/10/2026 — frente 7/10
+
+Evitar mutação do catálogo por consumidores de relatórios. Mudança limitada ao módulo, regressão negativa em `queue-api/tests/test_wave10_7.py`. Sem execução contra ambiente operacional; gate de produção permanece bloqueado.

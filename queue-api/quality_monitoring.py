@@ -40,7 +40,7 @@ def parse_quality_event(event: dict):
 
     channel = event.get("Channel")
     if (not isinstance(channel, str) or not 0 < len(channel) <= 160
-            or not channel.isprintable()):
+            or not channel.isprintable() or any(ch.isspace() for ch in channel)):
         return None
     return {
         "channel": channel,

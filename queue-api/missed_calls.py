@@ -11,6 +11,7 @@ Duas fontes de "chamada perdida":
    esperava na fila, antes de qualquer agente atender.
 """
 import time
+import re
 
 MISSED_DIAL_STATUSES = {"NOANSWER", "BUSY", "CANCEL", "CONGESTION"}
 
@@ -65,19 +66,23 @@ class MissedCallsLog:
     def append(self, missed_call: dict):
         if not isinstance(missed_call, dict):
             return False
-        entry = dict(missed_call)
-        # Defesa adicional: o histórico também pode receber registros
-        # de APIs internas, não somente do parser AMI.
+        # Lista explícita: não copiar campos arbitrários recebidos de AMI/APIs,
+        # evitando objetos aninhados, dados privados e payloads excessivos.
+        entry = {}
         for name, maximum in (("caller_id_num", 64), ("caller_id_name", 100),
                               ("destination", 96)):
-            if name in entry:
+            if name in missed_call:
                 entry[name] = _safe_ami_text(
-                    entry[name], "desconhecido" if name == "caller_id_num" else "",
+                    missed_call[name], "desconhecido" if name == "caller_id_num" else "",
                     maximum,
                 )
         for name in ("reason", "source"):
-            if name in entry:
-                entry[name] = _safe_ami_text(entry[name], max_length=64)
+            if name in missed_call:
+                entry[name] = _safe_ami_text(missed_call[name], max_length=64)
+        # Obrigatório para filtragem por empresa no servidor: não perder tenant.
+        tenant = missed_call.get("tenant")
+        if isinstance(tenant, str) and len(tenant) <= 32 and re.fullmatch(r"t[1-9][0-9]*", tenant):
+            entry["tenant"] = tenant
         entry["timestamp"] = time.time()
         self._entries.append(entry)
         if len(self._entries) > self._max_size:

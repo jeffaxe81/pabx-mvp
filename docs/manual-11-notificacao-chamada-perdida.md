@@ -87,7 +87,11 @@ funcionando normalmente — só a notificação externa fica desligada.
   `1001` ligando pra `1002` sem atender) — se isso gerar notificações
   demais no seu uso real, vale filtrar por destino antes de disparar
 
+## Integridade e minimização do histórico (31/10/2026)
+
+O histórico em memória aceita exclusivamente os campos conhecidos: `caller_id_num`, `caller_id_name`, `destination`, `reason`, `source`, `tenant` (validado no formato `tN`) e o timestamp gerado pelo servidor. A preservação do `tenant` é obrigatória para a filtragem HTTP entre empresas. Campos desconhecidos, objetos aninhados e valores de controle inesperados não entram no histórico, mesmo por gravação direta de APIs internas. Testes negativos cobrem a lista permitida e a preservação do objeto original. Sem alegação de execução com telefonia real.
+
 
 ## Endurecimento de 31/10/2026 — frente 10/10
 
-Remover segredos de mensagens de erro de notificadores. Regressões de entrada sensível/erro foram adicionadas, mantendo a operação anterior quando os dados são válidos. Não substitui testes reais nem altera o gate de produção.
+Mensagens de erro de e-mail e WhatsApp não ecoam mais exceções de bibliotecas de transporte que poderiam incluir credenciais ou endereços sensíveis. O envio por canal segue independente. A regressão `queue-api/tests/test_wave10_10.py` usa falhas sintéticas com marcadores secretos; homologação real de SMTP/WhatsApp permanece pendente.

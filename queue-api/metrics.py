@@ -75,7 +75,9 @@ class DailyMetrics:
             start = event.get("StartTime", "")
             dest = event.get("Destination", "")
             if (not isinstance(start, str) or len(start) > 40
-                    or not isinstance(dest, str) or len(dest) > 96):
+                    or not start.isprintable()
+                    or not isinstance(dest, str) or len(dest) > 96
+                    or not dest.isprintable()):
                 return
             key = (uniqueid, start, dest, disposition)
             if key in self._seen_cdr_ids:
