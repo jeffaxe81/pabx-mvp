@@ -352,7 +352,7 @@ isolamento por tenant garantido pelo próprio nome da sala — ver
 **E motivo de pausa do agente**: `QueuePause` nativo do Asterisk, com
 o painel de supervisão mostrando o motivo exato (não só
 "indisponível"), prioridade máxima de exibição por ser o estado mais
-operacional — ver `docs/manual-44-motivo-pausa-agente.md`.
+operacional — ver `docs/manual-44-motivo-pausa-agente.md`. As leituras de pausa do painel recebem cópias imutáveis por isolamento de referência, sem alterar o estado AMI.
 
 **E overflow entre filas**: se a fila de idioma específico (inglês/
 espanhol) não atender dentro de um tempo configurável, a chamada

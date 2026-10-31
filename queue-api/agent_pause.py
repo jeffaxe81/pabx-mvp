@@ -131,10 +131,12 @@ class AgentPauseStore:
         }
 
     def get(self, extension: str):
-        return self._state.get(extension, {"paused": False, "reason": "", "since": None})
+        # Não vazar a referência mutável do estado interno para APIs/painéis.
+        return dict(self._state.get(extension, {"paused": False, "reason": "", "since": None}))
 
     def snapshot(self) -> dict:
-        return dict(self._state)
+        # Cópia também dos objetos internos; dict(self._state) seria superficial.
+        return {extension: dict(state) for extension, state in self._state.items()}
 
 
 class PauseHistoryStore:

@@ -394,3 +394,27 @@ def test_invalid_pause_events_cannot_unpause_agent():
 def test_malformed_pause_interface_never_raises():
     for bad in ([], {}, True, 3, None, "PJSIP/" + "t" * 200):
         assert extract_extension_from_interface(bad) is None
+
+
+def test_public_pause_views_cannot_change_internal_ami_state():
+    store = AgentPauseStore(clock=lambda: 1234.0)
+    store.apply_event({"Event": "QueueMemberPause", "Interface": "PJSIP/t1-recepcao",
+                       "Paused": "1", "Reason": "Almoço"})
+    row = store.get("t1-recepcao")
+    snapshot = store.snapshot()
+    row["paused"] = False
+    row["reason"] = "forjado"
+    snapshot["t1-recepcao"]["since"] = -1
+    snapshot["t1-recepcao"]["reason"] = "alterado"
+    snapshot["t1-recepcao"] = {"paused": False}
+    assert store.get("t1-recepcao") == {
+        "paused": True, "reason": "Almoço", "since": 1234.0,
+    }
+    assert store.snapshot()["t1-recepcao"]["paused"] is True
+
+
+def test_unknown_pause_get_returns_independent_default():
+    store = AgentPauseStore()
+    missing = store.get("nao-existe")
+    missing["paused"] = True
+    assert store.get("nao-existe")["paused"] is False
