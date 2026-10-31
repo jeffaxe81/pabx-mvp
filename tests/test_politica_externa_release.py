@@ -60,3 +60,14 @@ def test_rota_alternativa_normaliza_destino_antes_da_politica():
     end = DIALPLAN.index('exten => 800,1', start)
     section = DIALPLAN[start:end]
     assert section.index('Set(DESTINO=${DESTINO:1})') < section.index('Gosub(politica-externa,s,1)')
+
+
+def test_t1_valida_destino_original_antes_de_escolher_rota_alternativa():
+    """O prefixo 00 do destino original nao pode escapar da politica."""
+    start = DIALPLAN.index("[t1-internal]")
+    end = DIALPLAN.index("exten => rota-alternativa,1", start)
+    section = DIALPLAN[start:end]
+    policy = section.index("Gosub(politica-externa,s,1)")
+    route = section.index("?rota-alternativa,1)")
+    assert policy < route
+    assert section.index('GotoIf($["${GOSUB_RETVAL}" != "ALLOW"]?numero-bloqueado,1)', policy) < route
