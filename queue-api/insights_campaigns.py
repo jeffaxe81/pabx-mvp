@@ -22,7 +22,8 @@ def _campaigns(records, tenant):
             continue
         filtered = [
             item for item in contacts if isinstance(item, dict)
-            and item.get("status") in KNOWN_STATUSES
+            and isinstance(item.get("status"), str)
+            and item["status"] in KNOWN_STATUSES
             and type(item.get("attempts")) is int
             and 0 <= item["attempts"] <= MAX_ATTEMPTS
         ]
