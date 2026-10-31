@@ -51,9 +51,12 @@ def presence_updated_by_day(records, tenant):
     return dict(sorted(counts.items()))
 
 
-def presence_older_than_week(records, tenant):
+def presence_older_than_week(records, tenant, as_of=None):
     """84. Overrides com última alteração datada há pelo menos 7 dias."""
-    now = time.time()
+    now = time.time() if as_of is None else as_of
+    if (type(now) not in (int, float) or not math.isfinite(now)
+            or not 0 <= now <= MAX_TIMESTAMP):
+        raise ValueError("instante de referência inválido")
     measured = [r for r in _presence(records, tenant)
                 if r["at"] is not None and r["at"] <= now]
     old = sum(now - r["at"] >= 7 * 86400 for r in measured)
