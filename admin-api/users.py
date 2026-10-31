@@ -29,7 +29,10 @@ def save_users(path, users: list):
 
 
 def find_user(users: list, username: str):
-    return next((u for u in users if u["username"] == username), None)
+    if not isinstance(users, list) or not isinstance(username, str):
+        return None
+    return next((u for u in users if isinstance(u, dict)
+                 and u.get("username") == username), None)
 
 
 def validate_user_input(data: dict, existing: list, editing_username: str = None):
