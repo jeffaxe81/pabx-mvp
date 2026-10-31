@@ -41,7 +41,11 @@ def valid_seconds(value):
 
 
 def percent(part, total):
-    return round(part * 100 / total, 1) if total else 0.0
+    if (type(part) not in (int, float) or type(total) not in (int, float)
+            or not math.isfinite(part) or not math.isfinite(total)
+            or total <= 0 or part < 0 or part > total):
+        return 0.0
+    return round(part * 100 / total, 1)
 
 
 def tenant_rows(rows, tenant, *, from_agent=False):
