@@ -51,5 +51,7 @@ def cdr_invalid_disposition_structure(records, tenant):
     """100. Entradas do tenant com disposition vazio/tipo inválido/excessivo."""
     rows = tenant_rows(records, tenant)
     invalid = sum(not isinstance(r.get("disposition"), str)
-                  or not 0 < len(r["disposition"]) <= 32 for r in rows)
+                  or not 0 < len(r["disposition"]) <= 32
+                  or not r["disposition"].strip()
+                  or not r["disposition"].isprintable() for r in rows)
     return {"tenant_records": len(rows), "invalid_disposition": invalid}
