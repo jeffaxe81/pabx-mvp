@@ -84,3 +84,8 @@ curl "http://<ip>:8090/api/quality?only_poor=true"  # só as ruins
   `QualityLog` é só em memória, reinicia zerado se o `queue-api`
   reiniciar
 - **Um limiar global**, não por ramal, tenant ou tipo de rede
+
+
+## Correção 31/10/2026 — frente 2/10
+
+Validar identidade do canal nas métricas RTCP. Validação conservadora de dados AMI, com regressões automatizadas. O patch não comprova interoperabilidade no ambiente real e não autoriza implantação.
