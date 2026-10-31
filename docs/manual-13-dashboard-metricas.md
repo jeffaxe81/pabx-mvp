@@ -68,3 +68,8 @@ dois arquivos de CDR já são montados junto com o resto.
 - TMA considera só chamadas atendidas pela telefonista via `Dial()`
   direto ou fila — chamadas puramente internas entre ramais também
   entram na contagem geral, já que qualquer CDR conta
+
+
+## Correção independente de 31/10/2026 — frente 6/10
+
+Impedir IDs CDR ambíguos no agrupamento diário. O comportamento esperado é preservado e entradas inválidas são recusadas com testes negativos no serviço correspondente. CI obrigatória; sem homologação real ou implantação.

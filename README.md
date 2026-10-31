@@ -193,7 +193,7 @@ padrão — ver `docs/manual-12-click-to-call.md (proteção: [frente 4](docs/ma
 **E dashboard de métricas do dia** (painel "Métricas de hoje" no
 webphone): chamadas totais, atendidas, perdidas, TMA e taxa de
 perdidas, calculados a partir do CDR do Asterisk — ver
-`docs/manual-13-dashboard-metricas.md`.
+`docs/manual-13-dashboard-metricas.md (robustez: [frente 6](docs/manual-13-dashboard-metricas.md))`.
 
 **E múltiplas telefonistas simultâneas**: duas (ou mais) operadoras
 logadas ao mesmo tempo, com a fila distribuindo chamadas em
