@@ -64,7 +64,7 @@ def sla_days_below_eighty(records, tenant):
         totals[row["date"]][0] += row["within"]
         totals[row["date"]][1] += row["offered"]
     return {"days_measured": len(totals),
-            "days_below_80_percent": sum(percent(w, o) < 80 for w, o in totals.values())}
+            "days_below_80_percent": sum(w * 5 < o * 4 for w, o in totals.values())}
 
 
 def sla_worst_day(records, tenant):
