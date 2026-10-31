@@ -20,7 +20,10 @@ check_context t1-internal
 check_context t2-internal
 echo "Politicas atuais (somente leitura):"
 for tenant in t1 t2; do
-  value="$(run "database get politica-externa-$tenant internacional" || true)"
+  if ! value="$(run "database get politica-externa-$tenant internacional")"; then
+    echo "ERRO: falha ao consultar AstDB do tenant $tenant" >&2
+    exit 1
+  fi
   printf '%s: %s\n' "$tenant" "$value"
 done
 echo "Pre-requisitos consultados. PENDENTE: executar chamadas SIP reais, verificar CDR e rollback."
