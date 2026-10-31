@@ -3,6 +3,7 @@
 Dados são tratados apenas após seleção exata do tenant. A ferramenta local
 não substitui autenticação, autorização nem auditoria no backend HTTP.
 """
+import copy
 from datetime import date
 import json
 import math
@@ -64,7 +65,7 @@ def tenant_rows(rows, tenant, *, from_agent=False):
                 continue
         elif row.get("tenant") != tenant:
             continue
-        selected.append(dict(row))
+        selected.append(copy.deepcopy(row))
     return selected
 
 
