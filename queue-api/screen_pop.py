@@ -61,6 +61,8 @@ def build_webhook_payload(call_info: dict) -> dict:
 
 
 def send_webhook(url: str, payload: dict, timeout=5):
+    if type(timeout) not in (int, float) or not 0.1 <= timeout <= 30:
+        raise ValueError("timeout do webhook inválido")
     data = json.dumps(payload).encode("utf-8")
     request = urllib.request.Request(
         url, data=data, method="POST", headers={"Content-Type": "application/json"}
