@@ -71,3 +71,7 @@ suporte".
 - **Sem teste de integração real** contra o Asterisk de verdade —
   mesma situação já documentada pro resto das integrações AMI do
   projeto
+
+## Integridade das leituras (reforço de 31/10/2026)
+
+As operações `AgentPauseStore.get()` e `snapshot()` retornam cópias independentes por ramal. Isso impede que o painel operacional ou qualquer consumidor de estado modifique o cronômetro, o motivo e a condição de pausa internos sem um novo evento AMI. Há dois testes negativos em `queue-api/tests/test_agent_pause.py`. Essa validação é lógica/local e não substitui homologação de `QueuePause` no Asterisk.
