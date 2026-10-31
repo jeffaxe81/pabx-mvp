@@ -67,6 +67,19 @@ def agent_median_talk_seconds(records, tenant):
     return out
 
 
+def agent_duration_coverage(records, tenant):
+    """91. Cobertura dos CDR ANSWERED com duração faturável confiável.
+
+    Uma duração desconhecida não deve ser interpretada como zero segundo.
+    """
+    return {agent: {
+        "answered": row["answered"],
+        "with_valid_duration": len(row["durations"]),
+        "without_valid_duration": row["answered"] - len(row["durations"]),
+        "coverage_percent": percent(len(row["durations"]), row["answered"]),
+    } for agent, row in sorted(_agent_groups(records, tenant).items())}
+
+
 def agent_over_five_minutes(records, tenant):
     """90. Contagem de chamadas atendidas acima de cinco minutos."""
     out = {}
