@@ -17,12 +17,17 @@ def validate_pickup_request(data: dict, config: dict):
     if not isinstance(data, dict) or not isinstance(config, dict):
         return False, "requisição de pickup inválida", None, None
     channel = data.get("channel")
-    if not isinstance(channel, str) or not 0 < len(channel) <= 160 or not channel.isprintable():
+    if (not isinstance(channel, str) or not 0 < len(channel) <= 160
+            or not channel.isprintable() or any(ch.isspace() for ch in channel)):
         return False, "campo 'channel' obrigatório", None, None
 
     extension = data.get("extension")
     allowed_extensions = config.get("allowed_extensions", [])
-    if not extension or extension not in allowed_extensions:
+    if (not isinstance(allowed_extensions, (list, tuple, set))
+            or not isinstance(extension, str) or not 0 < len(extension) <= 80
+            or not extension.isprintable() or any(ch.isspace() for ch in extension)):
+        return False, "ramal não autorizado para pickup", None, None
+    if extension not in allowed_extensions:
         return False, f"ramal '{extension}' não autorizado para pickup", None, None
 
     return True, None, channel, extension
