@@ -4,6 +4,7 @@ Nenhuma transação distribuída existe entre Asterisk e JSON. Em falhas,
 o serviço remove os arquivos novos e tenta compensar o AstDB.
 """
 from contextlib import contextmanager
+import re
 import os
 from pathlib import Path
 import tempfile
@@ -28,6 +29,9 @@ class TenantProvisionError(RuntimeError):
 
 
 def build_tenant_files(root, tenant_id, sip_credentials, voicemail_pins):
+    if (not isinstance(tenant_id, str) or len(tenant_id) > 32
+            or re.fullmatch(r"t[1-9][0-9]*", tenant_id) is None):
+        raise ValueError("identificador de tenant inválido")
     root = Path(root)
     contents = {
         root / "pjsip_tenants" / f"{tenant_id}.conf": render_tenant_pjsip(tenant_id, sip_credentials),
