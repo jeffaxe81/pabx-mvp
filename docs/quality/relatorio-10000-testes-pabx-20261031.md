@@ -67,7 +67,7 @@ Cada linha contém:
 - `indice_no_grupo`: valor de parametrização de 0 a 999;
 - `cenario_esperado`: comportamento esperado conforme a classe do caso;
 - `arquivo_teste`: fonte executável do teste;
-- `resultado_ci`: `APROVADO_NA_SUITE` significa que o job pytest da respectiva suíte foi aprovado. Não substitui um log separado por ID individual nem uma prova física.
+- `resultado_ci`: `OK` significa que o job pytest da respectiva suíte foi aprovado. Não substitui um log separado por ID individual nem uma prova física.
 
 Os casos são determinísticos, exceto os segredos gerados internamente pelo validador de ramais. Para reproduzir localmente é necessário utilizar as mesmas dependências e o ambiente de teste descritos no workflow do repositório. A prova da execução conjunta se apoia nos três jobs consolidados ligados acima.
 
