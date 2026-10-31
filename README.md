@@ -212,7 +212,7 @@ configurar uma senha de admin — ver `docs/manual-16-painel-administracao.md`.
 
 **E painel operacional consolidado** (`webphone/painel-operacional.html`):
 fila, estado dos ramais e métricas do dia numa tela só, pra supervisão —
-ver `docs/manual-17-painel-operacional.md`.
+ver `docs/manual-17-painel-operacional.md (proteção: [frente 1](docs/manual-55-monitoramento-ramais-dinamicos.md))`.
 
 **E relatórios históricos** por atendente e tenant, com filtro de
 período — diferente das métricas do dia (que zeram à meia-noite), fica

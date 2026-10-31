@@ -38,7 +38,7 @@ class ExtensionStateTracker:
         # deixar estruturas AMI ou caracteres de controle contaminar
         # o mapa (inclusive quando o mesmo ramal existe em duas empresas).
         if (not isinstance(exten, str) or not 0 < len(exten) <= 64
-                or not exten.isprintable()
+                or not exten.isprintable() or any(ch.isspace() for ch in exten)
                 or not isinstance(context, str) or len(context) > 96
                 or not context.isprintable()
                 or not isinstance(status_code, str) or len(status_code) > 12

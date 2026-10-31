@@ -67,3 +67,8 @@ testado explicitamente
   editados (não há um comando pra "sincronizar tudo de uma vez" ainda)
 - **Nunca testado contra um Asterisk real** — mesma situação de
   sempre pro resto das integrações AMI/AstDB deste projeto
+
+
+## Correção 31/10/2026 — frente 1/10
+
+Rejeitar ramais AMI com espaços ambíguos. Validação conservadora de dados AMI, com regressões automatizadas. O patch não comprova interoperabilidade no ambiente real e não autoriza implantação.
