@@ -54,12 +54,19 @@ class CallRateTracker:
             del calls[:-10000]
 
     def is_abnormal(self, extension: str, window_seconds: int = 60, threshold: int = 10) -> bool:
+        if (not isinstance(extension, str) or type(window_seconds) is not int
+                or not 1 <= window_seconds <= 86400 or type(threshold) is not int
+                or not 0 <= threshold <= 10000):
+            return False
         calls = self._calls.get(extension, [])
         cutoff = self._clock() - window_seconds
         recent = [c for c in calls if c[0] >= cutoff]
         return len(recent) > threshold
 
     def recent_destinations(self, extension: str, window_seconds: int = 60):
+        if (not isinstance(extension, str) or type(window_seconds) is not int
+                or not 1 <= window_seconds <= 86400):
+            return []
         calls = self._calls.get(extension, [])
         cutoff = self._clock() - window_seconds
         return [dest for ts, dest in calls if ts >= cutoff]
