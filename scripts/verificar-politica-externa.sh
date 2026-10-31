@@ -8,7 +8,8 @@ run() { "$ASTERISK_BIN" -rx "$1"; }
 check_context() {
   local ctx="$1" output
   output="$(run "dialplan show $ctx")"
-  if ! grep -Fq "[$ctx]" <<<"$output"; then
+  # Asterisk CLI: [ Context 'nome' created by ... ]; mocks: [nome].
+  if ! grep -Fq "[$ctx]" <<<"$output" && ! grep -Fq "[ Context '$ctx'" <<<"$output"; then
     echo "FALHA: contexto $ctx ausente" >&2
     exit 1
   fi
