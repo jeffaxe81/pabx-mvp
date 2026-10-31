@@ -925,3 +925,8 @@ Plano de aceleração: [100 dias do AXE PABX](docs/roadmap-100-dias-antecipacao-
 
 123. [Correio de voz autenticado por endpoint SIP](docs/manual-123-voicemail-endpoint-autenticado.md)
 124. [Prova SIP real de voicemail *97 por tenant](docs/manual-124-voicemail-runtime.md)
+
+
+### Atualização de ciclo de vida do áudio WebRTC
+
+O áudio remoto agora é desligado apenas pela sessão que o possui e ignora eventos atrasados de conexões substituídas. O service worker usa shell PWA v4 com URLs de cache exatas. Regressões simuladas e limitações de homologação: [Manual 140](docs/manual-140-audio-webrtc-lifecycle.md). Isso não substitui os ensaios reais DTLS/SRTP.
