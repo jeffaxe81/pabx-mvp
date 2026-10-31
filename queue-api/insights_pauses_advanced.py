@@ -39,6 +39,19 @@ def pause_weekday_seconds(records, tenant):
     return {weekday: round(value, 1) for weekday, value in totals.items()}
 
 
+def pause_p95_duration(records, tenant):
+    """Percentil 95 da pausa encerrada, método nearest rank.
+
+    Não presume duração para pausas ainda em andamento.
+    """
+    values = sorted(r["seconds"] for r in _pauses(records, tenant))
+    if not values:
+        return {"measured_pauses": 0, "p95_seconds": None}
+    from math import ceil
+    return {"measured_pauses": len(values),
+            "p95_seconds": round(values[ceil(len(values) * 0.95) - 1], 1)}
+
+
 def pause_active_agent_count(records, tenant):
     """45. Quantos ramais tiveram alguma pausa encerrada no arquivo."""
     agents = {r["extension"] for r in _pauses(records, tenant)}
