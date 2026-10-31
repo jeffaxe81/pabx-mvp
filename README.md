@@ -183,17 +183,17 @@ ver `docs/manual-10-multi-chamada.md`.
 
 **E notificação de chamada perdida** (e-mail/WhatsApp, desligado por
 padrão até você configurar credenciais reais) — ver
-`docs/manual-11-notificacao-chamada-perdida.md`. O histórico usa apenas campos de chamada explicitamente autorizados, rejeitando informações extras de eventos AMI.
+`docs/manual-11-notificacao-chamada-perdida.md` (segurança: [frente 10](docs/manual-11-notificacao-chamada-perdida.md)). O histórico usa apenas campos de chamada explicitamente autorizados, rejeitando informações extras de eventos AMI.
 
 **E discagem por clique a partir do CRM**: um sistema externo chama
 uma API pra disparar ligação (liga primeiro pra telefonista, depois
 completa pro cliente) — protegida por chave de API, desligada por
-padrão — ver `docs/manual-12-click-to-call.md (proteção: [frente 4](docs/manual-112-pickup-isolamento-tenant.md))`.
+padrão — ver `docs/manual-12-click-to-call.md` (proteção: [frente 4](docs/manual-112-pickup-isolamento-tenant.md)).
 
 **E dashboard de métricas do dia** (painel "Métricas de hoje" no
 webphone): chamadas totais, atendidas, perdidas, TMA e taxa de
 perdidas, calculados a partir do CDR do Asterisk — ver
-`docs/manual-13-dashboard-metricas.md (robustez: [frente 6](docs/manual-13-dashboard-metricas.md))`.
+`docs/manual-13-dashboard-metricas.md` (robustez: [frente 6](docs/manual-13-dashboard-metricas.md)).
 
 **E múltiplas telefonistas simultâneas**: duas (ou mais) operadoras
 logadas ao mesmo tempo, com a fila distribuindo chamadas em
@@ -212,11 +212,11 @@ configurar uma senha de admin — ver `docs/manual-16-painel-administracao.md`.
 
 **E painel operacional consolidado** (`webphone/painel-operacional.html`):
 fila, estado dos ramais e métricas do dia numa tela só, pra supervisão —
-ver `docs/manual-17-painel-operacional.md (proteção: [frente 1](docs/manual-55-monitoramento-ramais-dinamicos.md))`.
+ver `docs/manual-17-painel-operacional.md` (proteção: [frente 1](docs/manual-55-monitoramento-ramais-dinamicos.md)).
 
 **E relatórios históricos** por atendente e tenant, com filtro de
 período — diferente das métricas do dia (que zeram à meia-noite), fica
-persistido em disco — ver `docs/manual-18-relatorios.md (robustez: [frente 7](docs/manual-18-relatorios.md))`.
+persistido em disco — ver `docs/manual-18-relatorios.md` (robustez: [frente 7](docs/manual-18-relatorios.md)).
 
 **E screen-pop pro CRM** (PABX→CRM): link clicável na interface + webhook
 opcional do servidor, avisando quem está ligando assim que a chamada
@@ -224,7 +224,7 @@ começa a tocar — ver `docs/manual-19-crm-screen-pop.md`.
 
 **E regras de discagem externa**: bloqueio de números via AstDB
 (gerenciável pelo painel de administração), rota alternativa por
-prefixo, segundo tronco (`gateway-tdm-2`) — ver `docs/manual-20-discagem-externa.md (robustez: [frente 8](docs/manual-20-discagem-externa.md))`.
+prefixo, segundo tronco (`gateway-tdm-2`) — ver `docs/manual-20-discagem-externa.md` (robustez: [frente 8](docs/manual-20-discagem-externa.md)).
 
 **E busca de gravações por número/atendente/período**, com expurgo
 automático configurável (desligado por padrão) — ver
@@ -255,7 +255,7 @@ Com isso, a **Fase 2 do backlog está completa**.
 **E detecção de fraude**: alerta de volume anormal de chamadas
 externas, bloqueio automático de destino suspeito (reaproveitando a
 lista de bloqueio existente) e limite de gasto diário por ramal — ver
-`docs/manual-27-deteccao-fraude.md (proteção: [frente 3](docs/manual-27-deteccao-fraude.md))`.
+`docs/manual-27-deteccao-fraude.md` (proteção: [frente 3](docs/manual-27-deteccao-fraude.md)).
 
 **E backup automático** (não é alta disponibilidade de verdade — ver
 o aviso honesto logo no início do manual): empacota configuração e
@@ -264,7 +264,7 @@ documentado — ver `docs/manual-28-backup-disponibilidade.md`.
 
 **E monitoramento de qualidade de chamada**: jitter, perda de pacotes
 e RTT capturados via RTCP nas chamadas da telefonista, com alerta
-automático — ver `docs/manual-29-monitoramento-qualidade.md (proteção: [frente 2](docs/manual-29-monitoramento-qualidade.md))`.
+automático — ver `docs/manual-29-monitoramento-qualidade.md` (proteção: [frente 2](docs/manual-29-monitoramento-qualidade.md)).
 
 Com isso, os **itens de infraestrutura do backlog (31-34) estão
 completos** — resta a Fase 3 (recursos de IA/ML).
@@ -285,7 +285,7 @@ participou da chamada — ver `docs/manual-32-pesquisa-satisfacao.md`.
 **E transferência inteligente por regra**: cliente VIP identificado
 pelo número roteia direto pro ramal escolhido (prioridade máxima), e
 retorno automático de verdade pra fila geral quando ninguém atende —
-ver `docs/manual-33-transferencia-inteligente.md (segurança: [frente 9](docs/manual-33-transferencia-inteligente.md))`.
+ver `docs/manual-33-transferencia-inteligente.md` (segurança: [frente 9](docs/manual-33-transferencia-inteligente.md)).
 
 **E presença corporativa avançada**: cada telefonista marca
 manualmente ausente/em reunião/férias (com nota), sobrepondo o BLF
@@ -402,7 +402,7 @@ t1/t2 de remoção acidental — ver `docs/manual-52-remocao-tenant.md`.
 documentada (manual 48) — a seção de TTS agora mostra todo `.wav`
 existente em `asterisk/sounds/custom/`, com nome, tamanho e data,
 atualizando automaticamente após gerar um áudio novo — ver
-`docs/manual-53-lista-audios.md (robustez: [frente 5](docs/manual-53-lista-audios.md))`.
+`docs/manual-53-lista-audios.md` (robustez: [frente 5](docs/manual-53-lista-audios.md)).
 
 **E, fechando outra lacuna documentada no próprio manual 52**:
 remover um tenant agora também limpa os ramais dinâmicos criados
