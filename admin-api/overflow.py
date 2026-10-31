@@ -18,7 +18,8 @@ def validate_overflow_timeout_input(data: dict):
     raw = data.get("seconds") if isinstance(data, dict) else None
     if type(raw) is int:
         seconds = raw
-    elif isinstance(raw, str) and raw.isascii() and raw.isdecimal() and len(raw) <= 4:
+    elif (isinstance(raw, str) and raw.isascii() and raw.isdecimal()
+          and 1 <= len(raw) <= 4 and (len(raw) == 1 or raw[0] != "0")):
         seconds = int(raw)
     else:
         return False, "tempo de overflow deve ser um número inteiro de segundos", None
