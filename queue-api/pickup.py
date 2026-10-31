@@ -43,7 +43,7 @@ _TENANT_QUEUE = re.compile(r"^fila-(t[1-9][0-9]*)(?:-(?:en|es))?$")
 
 def queue_tenant(queue_name):
     """Extrai tenant apenas de filas com nome exato registrado pelo AMI."""
-    if not isinstance(queue_name, str):
+    if not isinstance(queue_name, str) or len(queue_name) > 96:
         return None
     match = _TENANT_QUEUE.fullmatch(queue_name)
     return match.group(1) if match else None
@@ -51,7 +51,8 @@ def queue_tenant(queue_name):
 
 def pickup_matches_queue(extension, queue_name):
     """Exige vínculo exato entre ramal autorizado e fila AMI observada."""
-    if not isinstance(extension, str) or not isinstance(queue_name, str):
+    if (not isinstance(extension, str) or not isinstance(queue_name, str)
+            or len(extension) > 96 or len(queue_name) > 96):
         return False
     owner = _PICKUP_EXTENSION.fullmatch(extension)
     queue = _TENANT_QUEUE.fullmatch(queue_name)
