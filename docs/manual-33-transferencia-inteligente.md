@@ -98,3 +98,8 @@ curl -X POST http://<ip>:8091/api/vip \
   real, `DIALSTATUS`/`QUEUESTATUS` de verdade) — mesma situação já
   documentada pro resto das integrações que dependem do Asterisk de
   verdade rodando
+
+
+## Endurecimento de 31/10/2026 — frente 9/10
+
+Limitar entradas brutas no cadastro VIP. Regressões de entrada sensível/erro foram adicionadas, mantendo a operação anterior quando os dados são válidos. Não substitui testes reais nem altera o gate de produção.
