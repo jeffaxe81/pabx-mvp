@@ -48,7 +48,8 @@ def build_action(fields: dict) -> str:
         raise ValueError("Ação AMI vazia ou inválida")
     lines = []
     for key, value in fields.items():
-        if not isinstance(key, str) or not key or any(c in key for c in "\r\n:"):
+        if (not isinstance(key, str) or not 1 <= len(key) <= 64
+                or any(ord(c) < 33 or ord(c) > 126 or c == ':' for c in key)):
             raise ValueError("Campo AMI inválido")
         value = str(value)
         if "\r" in value or "\n" in value:
