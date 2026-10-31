@@ -2,6 +2,7 @@
 from collections import Counter, defaultdict
 from datetime import date
 from insights_calls import _calls
+from insights_calls_audit import RECOGNIZED
 from insights_common import percent, valid_day
 
 
@@ -39,6 +40,8 @@ def calls_monthly_answer_rate(records, tenant):
     """29. Atendimento mensal calculado de contadores válidos."""
     counts = defaultdict(lambda: [0, 0])
     for row, day in _dated(records, tenant):
+        if row["disposition"] not in RECOGNIZED:
+            continue
         item = counts[day.strftime("%Y-%m")]
         item[1] += 1
         item[0] += row["disposition"] == "ANSWERED"
@@ -50,6 +53,8 @@ def calls_daily_answer_rate(records, tenant):
     """30. Atendimento diário calculado de contadores válidos."""
     counts = defaultdict(lambda: [0, 0])
     for row, day in _dated(records, tenant):
+        if row["disposition"] not in RECOGNIZED:
+            continue
         item = counts[day.isoformat()]
         item[1] += 1
         item[0] += row["disposition"] == "ANSWERED"
