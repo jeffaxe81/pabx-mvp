@@ -9,6 +9,7 @@ Asterisk como string, e podem vir vazios se a chamada foi curta demais
 ou o codec/transporte não gerou dado - tratado com cuidado abaixo.
 """
 import math
+import re
 import time
 
 
@@ -84,6 +85,8 @@ def is_poor_quality(quality: dict, jitter_threshold_ms: float = 30.0,
     return False
 
 
+_QUALITY_TENANT = re.compile(r"t[1-9][0-9]*\Z")
+
 class QualityLog:
     """Histórico de relatórios de qualidade, mesmo padrão do FraudAlertsLog."""
 
@@ -96,7 +99,20 @@ class QualityLog:
     def append(self, quality: dict, poor: bool):
         if not isinstance(quality, dict) or type(poor) is not bool:
             return False
-        entry = {**quality, "poor": poor, "timestamp": time.time()}
+        channel = quality.get("channel")
+        if (not isinstance(channel, str) or not 0 < len(channel) <= 160
+                or not channel.isprintable()):
+            return False
+        entry = {"channel": channel}
+        for field in ("jitter_ms", "rtt_ms", "packet_loss_percent"):
+            if field in quality:
+                entry[field] = (_parse_loss_percent(quality[field])
+                                if field == "packet_loss_percent"
+                                else _parse_float_or_none(quality[field]))
+        tenant = quality.get("tenant")
+        if isinstance(tenant, str) and _QUALITY_TENANT.fullmatch(tenant):
+            entry["tenant"] = tenant
+        entry.update({"poor": poor, "timestamp": time.time()})
         self._entries.append(entry)
         if len(self._entries) > self._max_size:
             self._entries.pop(0)
