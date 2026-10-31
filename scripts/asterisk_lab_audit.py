@@ -19,6 +19,7 @@ DID_RE = re.compile(r"[0-9]{8,15}\Z")
 STATIC_ENDPOINTS = {"t1": "t1-1001", "t2": "t2-1001"}
 MAX_TENANTS = 30
 MAX_RESULT_CHARS = 131072
+MAX_REGISTRY_BYTES = 4 * 1024 * 1024
 
 BASE_COMMANDS = {
     "version": "core show version",
@@ -33,8 +34,9 @@ def read_expected_tenants(path):
     if path is None:
         return {}
     registry = Path(path)
-    if registry.is_symlink() or not registry.is_file():
-        raise ValueError("registro de tenants ausente ou inseguro")
+    if (registry.is_symlink() or any(parent.is_symlink() for parent in registry.parents)
+            or not registry.is_file() or registry.stat().st_size > MAX_REGISTRY_BYTES):
+        raise ValueError("registro de tenants ausente, excessivo ou inseguro")
     data = json.loads(registry.read_text(encoding="utf-8"))
     if not isinstance(data, list) or len(data) > MAX_TENANTS:
         raise ValueError("registro de tenants inválido ou excessivo")
@@ -70,7 +72,7 @@ def run_cli(commands, *, runtime="docker", container="pabx-mvp", timeout=8):
         raise ValueError("runtime inválido")
     if runtime == "docker" and not CONTAINER_RE.fullmatch(container):
         raise ValueError("nome do container inválido")
-    if not isinstance(timeout, int) or not 1 <= timeout <= 30:
+    if type(timeout) is not int or not 1 <= timeout <= 30:
         raise ValueError("timeout inválido")
     outputs = {}
     for key, command in commands.items():
@@ -99,10 +101,14 @@ def run_cli(commands, *, runtime="docker", container="pabx-mvp", timeout=8):
 
 
 def _healthy_output(snapshots, name):
-    entry = snapshots.get(name, {})
-    if entry.get("code") != 0 or entry.get("truncated"):
+    if not isinstance(snapshots, dict):
         return ""
-    return entry.get("output", "")
+    entry = snapshots.get(name, {})
+    if (not isinstance(entry, dict) or type(entry.get("code")) is not int
+            or entry["code"] != 0 or entry.get("truncated")):
+        return ""
+    output = entry.get("output", "")
+    return output if isinstance(output, str) and len(output) <= MAX_RESULT_CHARS else ""
 
 
 def check_snapshots(snapshots, expected):
@@ -116,7 +122,8 @@ def check_snapshots(snapshots, expected):
     transports = _healthy_output(snapshots, "transports")
     for transport in ("transport-tls", "transport-wss"):
         check(f"transport:{transport}",
-              bool(re.search(r"\b" + re.escape(transport) + r"\b", transports)))
+              bool(re.search(r"(?im)^\s*Transport\s*:\s*" + re.escape(transport)
+                             + r"(?:\s|$)", transports)))
     ingress = _healthy_output(snapshots, "ingress")
     check("ingress_unknown_did_rejection", all(
         x in ingress for x in ("tenant-did/", "did-desconhecido", "Hangup(21)")
