@@ -18,11 +18,13 @@ injetável, mesmo padrão de metrics.py.
 import json
 import re
 import time
+from collections import deque
 from datetime import date
 from pathlib import Path
 
 DEFAULT_SLA_THRESHOLD_SECONDS = 20
 MAX_HOLD_SECONDS = 24 * 3600
+MAX_SLA_DEDUPE_IDS = 10000
 _AMI_UNIQUEID = re.compile(r"[A-Za-z0-9._-]{1,96}$")
 
 
@@ -114,6 +116,7 @@ class QueueSLATracker:
             self._queues = {}  # queue -> {"offered": int, "within_sla": int}
             # Dedupe apenas dentro do dia da fila; não confundir t1 e t10.
             self._seen_ami_calls = set()
+            self._seen_ami_call_order = deque()
 
     def _record(self, queue: str, hold_time: int, outcome: str):
         if not _valid_queue_name(queue):
@@ -149,6 +152,9 @@ class QueueSLATracker:
         self._record(outcome["queue"], outcome["hold_time"], outcome["outcome"])
         if key is not None:
             self._seen_ami_calls.add(key)
+            self._seen_ami_call_order.append(key)
+            if len(self._seen_ami_call_order) > MAX_SLA_DEDUPE_IDS:
+                self._seen_ami_calls.discard(self._seen_ami_call_order.popleft())
 
     def snapshot(self) -> dict:
         """
