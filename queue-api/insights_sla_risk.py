@@ -77,6 +77,8 @@ def sla_best_day(records, tenant):
     totals = _daily(records, tenant)
     if not totals:
         return {"date": None, "sla_percent": None, "offered": 0}
-    day = min(totals, key=lambda d: (-totals[d][0] / totals[d][1], d))
+    # Em percentuais iguais, priorizar a amostra de maior volume.
+    # Persistindo empate, escolher a data mais antiga.
+    day = min(totals, key=lambda d: (-totals[d][0] / totals[d][1], -totals[d][1], d))
     within, offered = totals[day]
     return {"date": day, "sla_percent": percent(within, offered), "offered": offered}
