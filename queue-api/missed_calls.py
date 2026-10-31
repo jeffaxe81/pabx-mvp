@@ -11,6 +11,7 @@ Duas fontes de "chamada perdida":
    esperava na fila, antes de qualquer agente atender.
 """
 import time
+import re
 
 MISSED_DIAL_STATUSES = {"NOANSWER", "BUSY", "CANCEL", "CONGESTION"}
 
@@ -78,6 +79,10 @@ class MissedCallsLog:
         for name in ("reason", "source"):
             if name in missed_call:
                 entry[name] = _safe_ami_text(missed_call[name], max_length=64)
+        # Obrigatório para filtragem por empresa no servidor: não perder tenant.
+        tenant = missed_call.get("tenant")
+        if isinstance(tenant, str) and len(tenant) <= 32 and re.fullmatch(r"t[1-9][0-9]*", tenant):
+            entry["tenant"] = tenant
         entry["timestamp"] = time.time()
         self._entries.append(entry)
         if len(self._entries) > self._max_size:
