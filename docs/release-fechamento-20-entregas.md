@@ -5,7 +5,7 @@
 **Escopo:** PABX puro. Contact Center e IA permanecem no backlog. Implantação inicial local; produção exige aceite específico.
 
 - [x] **REL-01 — Escopo congelado:** PABX puro; CC e IA fora da release. **Estado:** CONCLUÍDO (escopo confirmado nesta release).
-- [ ] **REL-02 — Inventário da release:** Inventário verificável em docs/release-inventario-pr311.md. **Estado:** CONCLUÍDO.
+- [x] **REL-02 — Inventário da release:** Inventário verificável em docs/release-inventario-pr311.md. **Estado:** CONCLUÍDO.
 - [ ] **REL-03 — Auditoria de duplicidade:** Reconciliar roadmap de 100 candidatos com funcionalidades existentes. **Estado:** PENDENTE.
 - [ ] **REL-04 — Correção de discagem internacional:** Validar prefixos e regra AstDB por tenant. **Estado:** PENDENTE.
 - [ ] **REL-05 — Rota alternativa:** Impedir bypass da política por gateway secundário. **Estado:** PENDENTE.
@@ -31,7 +31,7 @@
 
 **Parcial em código, não homologado:** REL-04, REL-05 e REL-06. **CI geral aprovada, homologação específica pendente:** REL-19. Não contar itens parciais como entregues.
 
-**CI mais recente:** commit `1e497425` com validação estática e laboratório Asterisk em execução no momento da consulta. O commit `e9c2feec` teve execuções canceladas por novas alterações. Não contar CI cancelada como aprovada.\n\n**Evidências:** PR #311; commits `467ebe04` (rota alternativa), `91861f02` (wizard), `9569364b` (sete testes estáticos); CI do último commit: 8/8 jobs estáticos e 8/8 jobs de laboratório Asterisk aprovados. Ainda falta teste funcional específico de bloqueio internacional.
+**Evidências atualizadas:** PR #311. O commit `3c15c703` concluiu 16/16 jobs com sucesso (validação estática e laboratório geral Asterisk). O commit `d9756baf` adicionou três verificações estáticas de política. O commit `00a7fc6f` acrescentou cinco regressões estáticas de autorização e rota alternativa. **As alterações mais recentes exigem nova CI.** Não confundir aprovação da suíte geral com homologação SIP específica de bloqueio internacional.
 
 ## Critério de encerramento
 
