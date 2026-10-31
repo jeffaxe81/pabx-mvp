@@ -39,7 +39,12 @@ def validate_user_input(data: dict, existing: list, editing_username: str = None
     edição, mantém o hash antigo (não força trocar senha pra editar
     outra coisa, tipo o papel).
     """
-    username = (data.get("username") or "").strip().lower()
+    if not isinstance(data, dict) or not isinstance(existing, list):
+        return False, "dados de usuário inválidos", None
+    requested = data.get("username")
+    if not isinstance(requested, str):
+        return False, "usuário inválido", None
+    username = requested.strip().lower()
     if not USERNAME_RE.match(username):
         return False, "usuário deve ter 3-30 caracteres (letras minúsculas, números, hífen, underscore)", None
 
