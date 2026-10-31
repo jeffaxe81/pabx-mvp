@@ -44,3 +44,19 @@ def test_preflight_falha_se_contexto_ausente(tmp_path):
     assert result.returncode == 1
     assert "contexto t2-internal ausente" in result.stderr
     assert "Pre-requisitos consultados" not in result.stdout
+
+
+def test_preflight_falha_se_politica_externa_ausente(tmp_path):
+    result = _run(tmp_path, missing="politica-externa")
+    assert result.returncode == 1
+    assert "contexto politica-externa ausente" in result.stderr
+
+
+def test_preflight_nao_modifica_astdb_ou_dialplan(tmp_path):
+    result = _run(tmp_path)
+    assert result.returncode == 0
+    script = SCRIPT.read_text()
+    assert "database put" not in script
+    assert "database del" not in script
+    assert "dialplan reload" not in script
+    assert "channel originate" not in script
