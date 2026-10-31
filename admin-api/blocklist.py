@@ -15,7 +15,7 @@ def validate_blocklist_number(raw: str):
     click-to-call: só dígitos, sem formatação). Retorna o número
     limpo, ou None se inválido.
     """
-    if not raw or not isinstance(raw, str):
+    if not raw or not isinstance(raw, str) or len(raw) > 128:
         return None
 
     if any(ord(ch) < 32 or ord(ch) == 127 for ch in raw):
