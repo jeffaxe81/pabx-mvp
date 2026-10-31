@@ -28,6 +28,8 @@ def validate_monitoring_pin_input(data: dict):
     pin = pin.strip()
     if not PIN_RE.fullmatch(pin):
         return False, "PIN deve ter de 4 a 10 dígitos numéricos", None
-    if len(set(pin)) == 1 or pin in {"1234", "4321", "123456", "654321"}:
+    sequences = ("0123456789", "9876543210")
+    if (len(set(pin)) == 1 or pin in {"1234", "4321", "123456", "654321"}
+            or any(pin in sequence for sequence in sequences)):
         return False, "PIN de monitoramento previsível; escolha outro", None
     return True, None, pin
