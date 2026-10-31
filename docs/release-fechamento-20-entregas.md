@@ -25,13 +25,13 @@
 - [ ] **REL-19 — CI e homologação:** Exigir pipelines verdes e evidência de laboratório. **Estado:** PENDENTE.
 - [ ] **REL-20 — Release candidate local:** Gerar tag/versão e checklist de aceite, sem publicar em produção. **Estado:** PENDENTE.
 
-## Barra de progresso — 2026-10-31
+## Barra de progresso — 2026-10-31 (atualização)
 
 `[##--------------------------------------] 5% (1/20)`
 
 **Parcial em código, não homologado:** REL-04, REL-05 e REL-06. **CI geral aprovada, homologação específica pendente:** REL-19. Não contar itens parciais como entregues.
 
-**Evidências:** PR #311; commits `467ebe04` (rota alternativa), `91861f02` (wizard), `9569364b` (sete testes estáticos); CI do último commit: 8/8 jobs estáticos e 8/8 jobs de laboratório Asterisk aprovados. Ainda falta teste funcional específico de bloqueio internacional.
+**CI mais recente:** commit `1e497425` com validação estática e laboratório Asterisk em execução no momento da consulta. O commit `e9c2feec` teve execuções canceladas por novas alterações. Não contar CI cancelada como aprovada.\n\n**Evidências:** PR #311; commits `467ebe04` (rota alternativa), `91861f02` (wizard), `9569364b` (sete testes estáticos); CI do último commit: 8/8 jobs estáticos e 8/8 jobs de laboratório Asterisk aprovados. Ainda falta teste funcional específico de bloqueio internacional.
 
 ## Critério de encerramento
 
