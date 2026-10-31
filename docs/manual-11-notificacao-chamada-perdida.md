@@ -89,4 +89,4 @@ funcionando normalmente — só a notificação externa fica desligada.
 
 ## Integridade e minimização do histórico (31/10/2026)
 
-O histórico em memória aceita exclusivamente os campos conhecidos: `caller_id_num`, `caller_id_name`, `destination`, `reason`, `source` e o timestamp gerado pelo servidor. Campos desconhecidos, objetos aninhados e valores de controle inesperados não entram no histórico, mesmo por gravação direta de APIs internas. Testes negativos cobrem a lista permitida e a preservação do objeto original. Sem alegação de execução com telefonia real.
+O histórico em memória aceita exclusivamente os campos conhecidos: `caller_id_num`, `caller_id_name`, `destination`, `reason`, `source`, `tenant` (validado no formato `tN`) e o timestamp gerado pelo servidor. A preservação do `tenant` é obrigatória para a filtragem HTTP entre empresas. Campos desconhecidos, objetos aninhados e valores de controle inesperados não entram no histórico, mesmo por gravação direta de APIs internas. Testes negativos cobrem a lista permitida e a preservação do objeto original. Sem alegação de execução com telefonia real.
