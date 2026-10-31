@@ -21,7 +21,8 @@ def _campaigns(records, tenant):
         if not isinstance(contacts, list) or len(contacts) > 1000:
             continue
         filtered = [
-            item for item in contacts if isinstance(item, dict)
+            {"status": item["status"], "attempts": item["attempts"]}
+            for item in contacts if isinstance(item, dict)
             and isinstance(item.get("status"), str)
             and item["status"] in KNOWN_STATUSES
             and type(item.get("attempts")) is int
