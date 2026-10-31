@@ -71,3 +71,22 @@ def test_t1_valida_destino_original_antes_de_escolher_rota_alternativa():
     route = section.index("?rota-alternativa,1)")
     assert policy < route
     assert section.index('GotoIf($["${GOSUB_RETVAL}" != "ALLOW"]?numero-bloqueado,1)', policy) < route
+
+
+def test_politica_nao_permite_destino_invalido_antes_de_allow():
+    context = POLICY.split("[politica-externa]", 1)[1]
+    allow = context.index("Set(GOSUB_RETVAL=ALLOW)")
+    assert context.index('GotoIf($["${DESTINO}" = ""]?negado)') < allow
+    assert context.index('REGEX("^[0-9]+$" ${DESTINO})') < allow
+
+
+def test_politica_internacional_consulta_tenant_corrente():
+    context = POLICY.split("[politica-externa]", 1)[1]
+    assert "DB(politica-externa-${TENANT}/internacional)" in context
+    assert 'REGEX("^t[0-9]+$" ${TENANT})' in context
+    assert context.index('REGEX("^t[0-9]+$" ${TENANT})') < context.index("DB(politica-externa-${TENANT}/internacional)")
+
+
+def test_politica_nega_sem_tenant_antes_de_permitir():
+    context = POLICY.split("[politica-externa]", 1)[1]
+    assert context.index('GotoIf($["${TENANT}" = ""]?negado)') < context.index("Set(GOSUB_RETVAL=ALLOW)")
