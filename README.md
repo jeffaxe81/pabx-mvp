@@ -183,7 +183,7 @@ ver `docs/manual-10-multi-chamada.md`.
 
 **E notificação de chamada perdida** (e-mail/WhatsApp, desligado por
 padrão até você configurar credenciais reais) — ver
-`docs/manual-11-notificacao-chamada-perdida.md`.
+`docs/manual-11-notificacao-chamada-perdida.md`. O histórico usa apenas campos de chamada explicitamente autorizados, rejeitando informações extras de eventos AMI.
 
 **E discagem por clique a partir do CRM**: um sistema externo chama
 uma API pra disparar ligação (liga primeiro pra telefonista, depois
