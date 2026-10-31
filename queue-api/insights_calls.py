@@ -15,6 +15,7 @@ def _calls(records, tenant):
         row for row in selected
         if isinstance(row.get("disposition"), str)
         and 0 < len(row["disposition"]) <= 32
+        and row["disposition"].isprintable()
     ]
 
 
