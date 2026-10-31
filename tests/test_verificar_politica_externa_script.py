@@ -104,3 +104,23 @@ def test_preflight_falha_quando_astdb_retorna_erro(tmp_path):
     assert result.returncode == 1
     assert "falha ao consultar AstDB do tenant t1" in result.stderr
     assert "Pre-requisitos consultados" not in result.stdout
+
+
+def test_preflight_falha_quando_dialplan_cli_retorna_erro(tmp_path):
+    fake = tmp_path / "asterisk"
+    fake.write_text(
+        '#!/usr/bin/env bash\n'
+        'case "$2" in\n'
+        '  "dialplan show politica-externa") echo "Asterisk indisponivel" >&2; exit 3 ;;\n'
+        '  *) echo "nao deveria executar" ;;\n'
+        'esac\n'
+    )
+    fake.chmod(0o755)
+    result = subprocess.run(
+        ["bash", str(SCRIPT)],
+        env={**os.environ, "ASTERISK_BIN": str(fake)},
+        text=True, capture_output=True, check=False, timeout=10,
+    )
+    assert result.returncode == 1
+    assert "falha ao consultar dialplan do contexto politica-externa" in result.stderr
+    assert "contexto politica-externa ausente" not in result.stderr
