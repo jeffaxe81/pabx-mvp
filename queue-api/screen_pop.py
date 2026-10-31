@@ -10,6 +10,7 @@ atendida. Lógica pura de parsing/montagem aqui; o envio de rede fica
 isolado (mesma separação já usada em notifiers.py).
 """
 import json
+import re
 import urllib.request
 
 
@@ -24,7 +25,7 @@ def parse_dial_begin_event(event: dict):
 
     caller_id_num = event.get("CallerIDNum")
     if (not isinstance(caller_id_num, str) or not 0 < len(caller_id_num) <= 64
-            or not caller_id_num.isprintable() or caller_id_num.isspace()):
+            or re.fullmatch(r"\+?[0-9]{3,20}", caller_id_num) is None):
         return None
 
     def optional_ami_text(key, max_length):
@@ -49,8 +50,7 @@ def build_webhook_payload(call_info: dict) -> dict:
     if (not isinstance(call_info, dict)
             or not isinstance(call_info.get("caller_id_num"), str)
             or not 0 < len(call_info["caller_id_num"]) <= 64
-            or not call_info["caller_id_num"].isprintable()
-            or call_info["caller_id_num"].isspace()):
+            or re.fullmatch(r"\+?[0-9]{3,20}", call_info["caller_id_num"]) is None):
         raise ValueError("dados de screen-pop inválidos")
     return {
         "event": "incoming_call",
