@@ -8,7 +8,7 @@ from voicemail_pin_audit import audit_voicemail_text, audit_voicemail_files
 def snapshots():
     return {
         "version": {"code": 0, "output": "Asterisk 22.1.0"},
-        "transports": {"code": 0, "output": "transport-tls\ntransport-wss"},
+        "transports": {"code": 0, "output": "Transport: transport-tls tls\nTransport: transport-wss wss"},
         "endpoints": {"code": 0, "output": "Endpoint: t1-1001/1001\nEndpoint: t2-1001/1001"},
         "dialplan": {"code": 0, "output": "tenant-did/\ndid-desconhecido\nHangup(21)"},
         "channels": {"code": 0, "output": "0 active channels"},
