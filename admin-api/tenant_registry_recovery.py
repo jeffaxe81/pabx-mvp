@@ -4,6 +4,8 @@ import stat
 
 from conf_publisher import _restore_snapshot
 
+MAX_REGISTRY_SNAPSHOT_BYTES = 4 * 1024 * 1024
+
 
 def snapshot_registry(path):
     target = Path(path)
@@ -16,6 +18,8 @@ def snapshot_registry(path):
     metadata = target.stat()
     if not stat.S_ISREG(metadata.st_mode):
         raise ValueError("registro de tenants não é arquivo regular")
+    if metadata.st_size > MAX_REGISTRY_SNAPSHOT_BYTES:
+        raise ValueError("registro de tenants excede limite de snapshot")
     return (target.read_bytes(), stat.S_IMODE(metadata.st_mode))
 
 
