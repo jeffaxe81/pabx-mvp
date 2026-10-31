@@ -119,7 +119,7 @@ class QualityLog:
         return True
 
     def list(self, limit=20, only_poor=False):
-        if type(limit) is not int or limit <= 0:
+        if type(limit) is not int or limit <= 0 or type(only_poor) is not bool:
             return []
         entries = list(reversed(self._entries))
         if only_poor:
