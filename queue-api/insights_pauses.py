@@ -1,6 +1,7 @@
 """Cinco visões de histórico de pausa já encerrada, por empresa."""
 from collections import defaultdict
 from datetime import datetime
+from math import isfinite
 
 from insights_common import tenant_rows, valid_seconds
 
@@ -21,7 +22,8 @@ def _pauses(records, tenant):
             reason = "outros"
         timestamp = row.get("started_at")
         day = None
-        if type(timestamp) in (int, float) and 0 <= timestamp <= 4102444800:
+        if (type(timestamp) in (int, float) and isfinite(timestamp)
+                and 0 <= timestamp <= 4102444800):
             try:
                 day = datetime.fromtimestamp(timestamp).date().isoformat()
             except (ValueError, OverflowError, OSError):
