@@ -183,7 +183,7 @@ ver `docs/manual-10-multi-chamada.md`.
 
 **E notificação de chamada perdida** (e-mail/WhatsApp, desligado por
 padrão até você configurar credenciais reais) — ver
-`docs/manual-11-notificacao-chamada-perdida.md`.
+`docs/manual-11-notificacao-chamada-perdida.md (segurança: [frente 10](docs/manual-11-notificacao-chamada-perdida.md))`.
 
 **E discagem por clique a partir do CRM**: um sistema externo chama
 uma API pra disparar ligação (liga primeiro pra telefonista, depois

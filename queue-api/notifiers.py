@@ -111,14 +111,14 @@ def dispatch_notifications(missed_call: dict, notify_config: dict):
         try:
             subject, body = build_email_message(missed_call, notify_config)
             send_email(notify_config["smtp"], subject, body)
-        except Exception as exc:  # noqa: BLE001 - queremos capturar qualquer falha de rede/config
-            errors.append(f"email: {exc}")
+        except Exception:  # noqa: BLE001 - erros de rede podem conter segredos de conexão
+            errors.append("email: falha no envio")
 
     if "whatsapp" in channels and notify_config.get("whatsapp"):
         try:
             payload = build_whatsapp_payload(missed_call, notify_config["whatsapp"])
             send_whatsapp(notify_config["whatsapp"], payload)
-        except Exception as exc:  # noqa: BLE001
-            errors.append(f"whatsapp: {exc}")
+        except Exception:  # noqa: BLE001 - evitar dados sensíveis em respostas HTTP
+            errors.append("whatsapp: falha no envio")
 
     return errors

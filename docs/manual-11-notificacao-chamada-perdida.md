@@ -86,3 +86,8 @@ funcionando normalmente — só a notificação externa fica desligada.
   dialplan, inclusive chamadas puramente internas entre ramais (ex:
   `1001` ligando pra `1002` sem atender) — se isso gerar notificações
   demais no seu uso real, vale filtrar por destino antes de disparar
+
+
+## Endurecimento de 31/10/2026 — frente 10/10
+
+Remover segredos de mensagens de erro de notificadores. Regressões de entrada sensível/erro foram adicionadas, mantendo a operação anterior quando os dados são válidos. Não substitui testes reais nem altera o gate de produção.
