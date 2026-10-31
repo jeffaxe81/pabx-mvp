@@ -188,7 +188,7 @@ padrão até você configurar credenciais reais) — ver
 **E discagem por clique a partir do CRM**: um sistema externo chama
 uma API pra disparar ligação (liga primeiro pra telefonista, depois
 completa pro cliente) — protegida por chave de API, desligada por
-padrão — ver `docs/manual-12-click-to-call.md`.
+padrão — ver `docs/manual-12-click-to-call.md (proteção: [frente 4](docs/manual-112-pickup-isolamento-tenant.md))`.
 
 **E dashboard de métricas do dia** (painel "Métricas de hoje" no
 webphone): chamadas totais, atendidas, perdidas, TMA e taxa de

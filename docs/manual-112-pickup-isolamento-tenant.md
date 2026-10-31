@@ -51,3 +51,8 @@ python3 -m pytest -q tests/test_pickup_tenant_boundary.py tests/test_pickup.py
 
 A CI estática e o laboratório Asterisk da revisão do PR precisam concluir
 antes do aceite de código. O ambiente real do cliente continua pendente.
+
+
+## Correção 31/10/2026 — frente 4/10
+
+Validar allowlist tipada e canais do pickup. A API preserva o contrato de respostas válidas e recusa entradas ambíguas. Testes negativos adicionados na suíte do serviço. Homologação operacional e produção continuam pendentes.
