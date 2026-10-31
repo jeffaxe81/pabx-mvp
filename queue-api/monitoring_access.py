@@ -58,6 +58,6 @@ def scoped_monitoring_entries(entries, tenant):
     if not isinstance(entries, list):
         return []
     return [
-        entry for entry in entries
+        dict(entry) for entry in entries
         if isinstance(entry, dict) and entry.get("tenant") == tenant
     ]
