@@ -66,7 +66,7 @@ def verify_totp(secret_b32: str, code: str, timestamp: float = None, step: int =
 
     for offset in range(-window, window + 1):
         try:
-            if _hotp(secret_b32, counter + offset, DEFAULT_DIGITS) == code:
+            if hmac.compare_digest(_hotp(secret_b32, counter + offset, DEFAULT_DIGITS), code):
                 return True
         except Exception:  # noqa: BLE001 - segredo malformado não deve derrubar o login
             return False
