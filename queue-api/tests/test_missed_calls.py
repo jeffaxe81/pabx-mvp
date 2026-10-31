@@ -164,3 +164,25 @@ def test_30_missed_list_returns_detached_copy_and_true_timestamp():
     log.append({"caller_id_num": "second"})
     log.append({"caller_id_num": "third"})
     assert [x["caller_id_num"] for x in log.list()] == ["third", "second"]
+
+
+def test_log_does_not_persist_unexpected_nested_or_sensitive_fields():
+    log = MissedCallsLog()
+    inserted = {"caller_id_num": "123", "reason": "BUSY",
+                "tenant_token": "nao-registrar",
+                "nested": {"secret": ["nunca", "persistir"]},
+                "source": "dial", "destination": "1000"}
+    assert log.append(inserted) is True
+    row = log.list()[0]
+    assert set(row) == {"caller_id_num", "reason", "source", "destination", "timestamp"}
+    assert "nao-registrar" not in str(row)
+    assert "nunca" not in str(row)
+
+
+def test_log_sanitizes_known_fields_without_mutating_caller_input():
+    log = MissedCallsLog()
+    raw = {"caller_id_num": "12\nHeader: malicious", "source": {"unexpected": True}}
+    assert log.append(raw) is True
+    assert log.list()[0]["caller_id_num"] == "desconhecido"
+    assert log.list()[0]["source"] == ""
+    assert raw["source"] == {"unexpected": True}

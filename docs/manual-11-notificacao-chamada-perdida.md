@@ -86,3 +86,7 @@ funcionando normalmente — só a notificação externa fica desligada.
   dialplan, inclusive chamadas puramente internas entre ramais (ex:
   `1001` ligando pra `1002` sem atender) — se isso gerar notificações
   demais no seu uso real, vale filtrar por destino antes de disparar
+
+## Integridade e minimização do histórico (31/10/2026)
+
+O histórico em memória aceita exclusivamente os campos conhecidos: `caller_id_num`, `caller_id_name`, `destination`, `reason`, `source` e o timestamp gerado pelo servidor. Campos desconhecidos, objetos aninhados e valores de controle inesperados não entram no histórico, mesmo por gravação direta de APIs internas. Testes negativos cobrem a lista permitida e a preservação do objeto original. Sem alegação de execução com telefonia real.
