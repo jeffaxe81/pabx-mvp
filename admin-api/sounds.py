@@ -20,7 +20,7 @@ def is_safe_sound_filename(filename: str) -> bool:
     qualquer outro arquivo do sistema) via
     GET /api/sounds/<filename escolhido pelo cliente>.
     """
-    return bool(SAFE_FILENAME_RE.match(filename or ""))
+    return isinstance(filename, str) and bool(SAFE_FILENAME_RE.fullmatch(filename))
 
 
 def list_sound_files(directory) -> list:
