@@ -18,7 +18,7 @@ def validate_blocklist_number(raw: str):
     if not raw or not isinstance(raw, str) or len(raw) > 128:
         return None
 
-    if any(ord(ch) < 32 or ord(ch) == 127 for ch in raw):
+    if not raw.isprintable() or any(ord(ch) < 32 or ord(ch) == 127 for ch in raw):
         return None
     digits = re.sub(r"[^0-9]", "", raw.strip())
     return digits if NUMBER_RE.match(digits) else None
