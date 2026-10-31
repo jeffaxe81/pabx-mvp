@@ -186,3 +186,13 @@ def test_log_sanitizes_known_fields_without_mutating_caller_input():
     assert log.list()[0]["caller_id_num"] == "desconhecido"
     assert log.list()[0]["source"] == ""
     assert raw["source"] == {"unexpected": True}
+
+
+def test_tenant_correlation_is_preserved_but_invalid_tenants_are_discarded():
+    log = MissedCallsLog()
+    for tenant in ("t1", "t10"):
+        assert log.append({"tenant": tenant, "caller_id_num": "123"})
+    assert [x["tenant"] for x in log.list()] == ["t10", "t1"]
+    for tenant in ("t0", "t01", "t1\\nInjected", {"name": "t1"}, "t1" * 100):
+        log.append({"tenant": tenant, "caller_id_num": "123"})
+        assert "tenant" not in log.list()[0]
