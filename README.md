@@ -216,7 +216,7 @@ ver `docs/manual-17-painel-operacional.md`.
 
 **E relatórios históricos** por atendente e tenant, com filtro de
 período — diferente das métricas do dia (que zeram à meia-noite), fica
-persistido em disco — ver `docs/manual-18-relatorios.md`.
+persistido em disco — ver `docs/manual-18-relatorios.md (robustez: [frente 7](docs/manual-18-relatorios.md))`.
 
 **E screen-pop pro CRM** (PABX→CRM): link clicável na interface + webhook
 opcional do servidor, avisando quem está ligando assim que a chamada

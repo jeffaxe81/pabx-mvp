@@ -60,7 +60,7 @@ def tenant_rows(rows, tenant, *, from_agent=False):
                 continue
         elif row.get("tenant") != tenant:
             continue
-        selected.append(row)
+        selected.append(dict(row))
     return selected
 
 
