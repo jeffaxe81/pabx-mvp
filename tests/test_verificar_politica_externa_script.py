@@ -81,3 +81,26 @@ def test_preflight_aceita_cabecalho_asterisk_real(tmp_path):
     )
     assert result.returncode == 0, result.stderr
     assert result.stdout.count("OK contexto ") == 3
+
+
+def test_preflight_falha_quando_astdb_retorna_erro(tmp_path):
+    fake = tmp_path / "asterisk"
+    fake.write_text(
+        '#!/usr/bin/env bash\n'
+        'case "$2" in\n'
+        '  "dialplan show politica-externa") echo "[politica-externa]" ;;\n'
+        '  "dialplan show t1-internal") echo "[t1-internal]" ;;\n'
+        '  "dialplan show t2-internal") echo "[t2-internal]" ;;\n'
+        '  "database get politica-externa-t1 internacional") echo "Falha na AstDB" >&2; exit 3 ;;\n'
+        '  *) echo "Database entry not found." ;;\n'
+        'esac\n'
+    )
+    fake.chmod(0o755)
+    result = subprocess.run(
+        ["bash", str(SCRIPT)],
+        env={**os.environ, "ASTERISK_BIN": str(fake)},
+        text=True, capture_output=True, check=False, timeout=10,
+    )
+    assert result.returncode == 1
+    assert "falha ao consultar AstDB do tenant t1" in result.stderr
+    assert "Pre-requisitos consultados" not in result.stdout
