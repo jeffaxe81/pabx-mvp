@@ -1,0 +1,37 @@
+name: AXE PABX | regressao da politica externa
+
+on:
+  pull_request:
+    paths:
+      - 'asterisk/**'
+      - 'admin-api/tenants.py'
+      - 'scripts/verificar-politica-externa.sh'
+      - 'tests/test_politica_externa_release.py'
+      - 'tests/test_verificar_politica_externa_script.py'
+      - 'tests/test_preflight_contextos_30_cenarios.py'
+      - '.github/workflows/pabx-politica-regressao.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  politica-externa:
+    name: Politica externa | testes isolados e 30 cenarios
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Instalar pytest
+        run: python -m pip install pytest
+      - name: Validar sintaxe do preflight
+        run: bash -n scripts/verificar-politica-externa.sh
+      - name: Executar testes especificos da politica
+        run: |
+          python -m pytest -q \
+            tests/test_politica_externa_release.py \
+            tests/test_verificar_politica_externa_script.py \
+            tests/test_preflight_contextos_30_cenarios.py
