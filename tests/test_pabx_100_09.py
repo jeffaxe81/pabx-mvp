@@ -8,8 +8,8 @@ def blocks(name):
     return parse_blocks(ROOT/name)
 
 def item(name,section,kind):
-    return next(row for row in blocks(name)
-                if row["name"]==section and get_key(row["text"],"type")==kind)
+    return next(row for row in blocks_by_type(blocks(name),kind)
+                if row["name"]==section)
 
 def test_081_udp_sip_transport_exists():
     assert get_key(item("pjsip.conf","transport-udp","transport")["text"],"protocol")=="udp"
