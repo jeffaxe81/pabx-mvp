@@ -8,7 +8,7 @@ run() { "$ASTERISK_BIN" -rx "$1"; }
 check_context() {
   local ctx="$1" output
   output="$(run "dialplan show $ctx")"
-  if ! grep -Fq "$ctx" <<<"$output"; then
+  if ! grep -Fq "[$ctx]" <<<"$output"; then
     echo "FALHA: contexto $ctx ausente" >&2
     exit 1
   fi
