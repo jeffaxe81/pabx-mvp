@@ -264,7 +264,7 @@ documentado — ver `docs/manual-28-backup-disponibilidade.md`.
 
 **E monitoramento de qualidade de chamada**: jitter, perda de pacotes
 e RTT capturados via RTCP nas chamadas da telefonista, com alerta
-automático — ver `docs/manual-29-monitoramento-qualidade.md`.
+automático — ver `docs/manual-29-monitoramento-qualidade.md (proteção: [frente 2](docs/manual-29-monitoramento-qualidade.md))`.
 
 Com isso, os **itens de infraestrutura do backlog (31-34) estão
 completos** — resta a Fase 3 (recursos de IA/ML).
