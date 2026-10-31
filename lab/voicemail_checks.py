@@ -53,10 +53,26 @@ def inspected_voicemail_channel(raw, endpoint, tenant):
     if len(matching) != 1 or len(matching[0]) < 7:
         return negative
     row = matching[0]
+    # Se o snapshot CLI contém outro canal em VoiceMailMain, ele também
+    # precisa acessar exclusivamente sua própria mailbox. Uma linha
+    # correta não mascara um acesso cruzado simultâneo.
+    foreign_access = False
+    for observed in rows:
+        if len(observed) >= 7 and observed[5] == "VoiceMailMain":
+            identity = re.fullmatch(r"PJSIP/(t[1-9][0-9]*-[a-z0-9_-]+)-[0-9a-f]+", observed[0])
+            if identity is None:
+                foreign_access = True
+                break
+            observed_endpoint = identity.group(1)
+            observed_tenant = observed_endpoint.split("-", 1)[0]
+            if (observed[6] != observed_endpoint + "@" + observed_tenant
+                    or observed[1] != observed_tenant + "-internal"):
+                foreign_access = True
+                break
     exact = (row[1] == tenant + "-internal" and row[2] == "*97"
              and row[4] == "Up" and row[5] == "VoiceMailMain"
              and row[6] == endpoint + "@" + tenant)
-    return {"exact": exact, "no_foreign": exact}
+    return {"exact": exact, "no_foreign": exact and not foreign_access}
 
 
 def required_voicemail_dtmf_checks():
