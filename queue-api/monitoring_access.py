@@ -3,6 +3,7 @@
 Somente identificadores completos derivados do AMI (fila ou channel
 provisionado) são usados. Origem não atribuível nunca aparece na API.
 """
+import copy
 import re
 
 from pickup import queue_tenant
@@ -58,6 +59,6 @@ def scoped_monitoring_entries(entries, tenant):
     if not isinstance(entries, list):
         return []
     return [
-        dict(entry) for entry in entries
+        copy.deepcopy(entry) for entry in entries
         if isinstance(entry, dict) and entry.get("tenant") == tenant
     ]
