@@ -28,4 +28,10 @@ def restore_registry(path, snapshot):
     target = Path(path)
     if target.is_symlink():
         raise ValueError("registro de tenants tornou-se link simbólico")
+    if snapshot is not None:
+        if (not isinstance(snapshot, tuple) or len(snapshot) != 2
+                or not isinstance(snapshot[0], bytes)
+                or len(snapshot[0]) > MAX_REGISTRY_SNAPSHOT_BYTES
+                or type(snapshot[1]) is not int or not 0 <= snapshot[1] <= 0o777):
+            raise ValueError("snapshot do registro de tenants inválido")
     _restore_snapshot(target, snapshot)
