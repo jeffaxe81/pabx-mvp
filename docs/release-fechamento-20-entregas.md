@@ -1,10 +1,10 @@
 # AXE PABX — 20 entregas de fechamento da release
 
-**Estado:** plano de fechamento; itens pendentes até evidência verificável. **Não declarar release concluída apenas por registrar esta lista.**
+**Estado:** acompanhamento em andamento (1/20 concluída, 5%). Itens restantes exigem evidência verificável. **Não declarar release concluída apenas por registrar esta lista.**
 
 **Escopo:** PABX puro. Contact Center e IA permanecem no backlog. Implantação inicial local; produção exige aceite específico.
 
-- [ ] **REL-01 — Escopo congelado:** Confirmar PABX puro; CC e IA fora da release. **Estado:** PENDENTE.
+- [x] **REL-01 — Escopo congelado:** PABX puro; CC e IA fora da release. **Estado:** CONCLUÍDO (escopo confirmado nesta release).
 - [ ] **REL-02 — Inventário da release:** Listar commits, módulos e configurações alteradas. **Estado:** PENDENTE.
 - [ ] **REL-03 — Auditoria de duplicidade:** Reconciliar roadmap de 100 candidatos com funcionalidades existentes. **Estado:** PENDENTE.
 - [ ] **REL-04 — Correção de discagem internacional:** Validar prefixos e regra AstDB por tenant. **Estado:** PENDENTE.
@@ -24,6 +24,14 @@
 - [ ] **REL-18 — Segurança de configuração:** Revisar senhas padrão, TLS e permissões. **Estado:** PENDENTE.
 - [ ] **REL-19 — CI e homologação:** Exigir pipelines verdes e evidência de laboratório. **Estado:** PENDENTE.
 - [ ] **REL-20 — Release candidate local:** Gerar tag/versão e checklist de aceite, sem publicar em produção. **Estado:** PENDENTE.
+
+## Barra de progresso — 2026-10-31
+
+`[##--------------------------------------] 5% (1/20)`
+
+**Parcial em código, não homologado:** REL-04, REL-05 e REL-06. **CI geral aprovada, homologação específica pendente:** REL-19. Não contar itens parciais como entregues.
+
+**Evidências:** PR #311; commits `467ebe04` (rota alternativa), `91861f02` (wizard), `9569364b` (sete testes estáticos); CI do último commit: 8/8 jobs estáticos e 8/8 jobs de laboratório Asterisk aprovados. Ainda falta teste funcional específico de bloqueio internacional.
 
 ## Critério de encerramento
 
