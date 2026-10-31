@@ -90,3 +90,8 @@ cada 5 segundos igual ao resto do painel.
 - **Custo por minuto é um valor fixo global**, não reflete tarifas
   reais por destino (nacional vs. internacional vs. celular teriam
   custos bem diferentes na vida real)
+
+
+## Correção 31/10/2026 — frente 3/10
+
+Isolar leitura e limites de alertas de fraude. A API preserva o contrato de respostas válidas e recusa entradas ambíguas. Testes negativos adicionados na suíte do serviço. Homologação operacional e produção continuam pendentes.
