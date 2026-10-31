@@ -85,7 +85,7 @@ def is_poor_quality(quality: dict, jitter_threshold_ms: float = 30.0,
     return False
 
 
-_QUALITY_TENANT = re.compile(r"t[1-9][0-9]*\\Z")
+_QUALITY_TENANT = re.compile(r"t[1-9][0-9]*\Z")
 
 class QualityLog:
     """Histórico de relatórios de qualidade, mesmo padrão do FraudAlertsLog."""
