@@ -62,3 +62,8 @@ existentes", logo abaixo do formulário de geração.
   documentada pro resto do projeto (aqui, especificamente: nunca
   confirmado que o arquivo listado realmente reproduz corretamente
   quando o Asterisk toca via `Playback()`)
+
+
+## Correção independente de 31/10/2026 — frente 5/10
+
+Rejeitar tipos inválidos em nomes de áudios. O comportamento esperado é preservado e entradas inválidas são recusadas com testes negativos no serviço correspondente. CI obrigatória; sem homologação real ou implantação.

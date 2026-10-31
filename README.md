@@ -402,7 +402,7 @@ t1/t2 de remoção acidental — ver `docs/manual-52-remocao-tenant.md`.
 documentada (manual 48) — a seção de TTS agora mostra todo `.wav`
 existente em `asterisk/sounds/custom/`, com nome, tamanho e data,
 atualizando automaticamente após gerar um áudio novo — ver
-`docs/manual-53-lista-audios.md`.
+`docs/manual-53-lista-audios.md (robustez: [frente 5](docs/manual-53-lista-audios.md))`.
 
 **E, fechando outra lacuna documentada no próprio manual 52**:
 remover um tenant agora também limpa os ramais dinâmicos criados
