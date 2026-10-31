@@ -60,3 +60,24 @@ def test_preflight_nao_modifica_astdb_ou_dialplan(tmp_path):
     assert "database del" not in script
     assert "dialplan reload" not in script
     assert "channel originate" not in script
+
+
+def test_preflight_aceita_cabecalho_asterisk_real(tmp_path):
+    fake = tmp_path / "asterisk"
+    fake.write_text(
+        '#!/usr/bin/env bash\n'
+        'case "$2" in\n'
+        '  "dialplan show politica-externa") echo "[ Context \'politica-externa\' created by \'pbx_config\' ]" ;;\n'
+        '  "dialplan show t1-internal") echo "[ Context \'t1-internal\' created by \'pbx_config\' ]" ;;\n'
+        '  "dialplan show t2-internal") echo "[ Context \'t2-internal\' created by \'pbx_config\' ]" ;;\n'
+        '  *) echo "Database entry not found." ;;\n'
+        'esac\n'
+    )
+    fake.chmod(0o755)
+    result = subprocess.run(
+        ["bash", str(SCRIPT)],
+        env={**os.environ, "ASTERISK_BIN": str(fake)},
+        text=True, capture_output=True, check=False, timeout=10,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.count("OK contexto ") == 3
