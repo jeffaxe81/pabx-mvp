@@ -61,6 +61,8 @@ class FraudAlertsLog:
     """Histórico de alertas de fraude, mesmo padrão do MissedCallsLog (queue_state.py)."""
 
     def __init__(self, max_size=100):
+        if type(max_size) is not int or not 1 <= max_size <= 10000:
+            raise ValueError("limite de alertas inválido")
         self._entries = []
         self._max_size = max_size
 
@@ -77,7 +79,9 @@ class FraudAlertsLog:
             self._entries.pop(0)
 
     def list(self, limit=20):
-        return list(reversed(self._entries))[:limit]
+        if type(limit) is not int or limit <= 0:
+            return []
+        return [dict(entry) for entry in reversed(self._entries)][:min(limit, self._max_size)]
 
 
 def is_external_call(event: dict) -> bool:

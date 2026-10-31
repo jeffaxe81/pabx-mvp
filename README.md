@@ -255,7 +255,7 @@ Com isso, a **Fase 2 do backlog está completa**.
 **E detecção de fraude**: alerta de volume anormal de chamadas
 externas, bloqueio automático de destino suspeito (reaproveitando a
 lista de bloqueio existente) e limite de gasto diário por ramal — ver
-`docs/manual-27-deteccao-fraude.md`.
+`docs/manual-27-deteccao-fraude.md (proteção: [frente 3](docs/manual-27-deteccao-fraude.md))`.
 
 **E backup automático** (não é alta disponibilidade de verdade — ver
 o aviso honesto logo no início do manual): empacota configuração e
