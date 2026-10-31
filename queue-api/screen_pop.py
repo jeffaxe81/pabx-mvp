@@ -85,5 +85,5 @@ def dispatch_screen_pop(event: dict, webhook_url: str):
     try:
         send_webhook(webhook_url, build_webhook_payload(call_info))
         return None
-    except Exception as exc:  # noqa: BLE001
-        return f"screen-pop: {exc}"
+    except Exception:  # noqa: BLE001 - mensagens HTTP podem conter credenciais
+        return "screen-pop: falha ao notificar CRM"

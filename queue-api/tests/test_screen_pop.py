@@ -63,7 +63,7 @@ def test_dispatch_returns_error_message_on_failure_without_raising():
     with patch("screen_pop.send_webhook", side_effect=ConnectionError("crm fora do ar")):
         error = dispatch_screen_pop(event, webhook_url="https://crm.exemplo.com/webhook")
     assert error is not None
-    assert "crm fora do ar" in error
+    assert error == "screen-pop: falha ao notificar CRM"
 
 
 def test_screen_pop_rejects_invalid_ami_caller_without_sending():
