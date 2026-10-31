@@ -1,6 +1,7 @@
 """Remoção compensável de tenant e seus ramais, sem transação distribuída."""
 from contextlib import contextmanager
 from pathlib import Path
+import re
 import stat
 
 from conf_publisher import published_conf_batch, _restore_snapshot
@@ -9,6 +10,9 @@ from store import load_store, save_store
 from tenants import save_tenants
 from tenant_provisioning import RELOAD_COMPONENTS
 from tenant_registry_recovery import snapshot_registry, restore_registry
+
+
+_SAFE_TENANT_ID = re.compile(r"t[1-9][0-9]*\Z")
 
 
 class TenantRemovalError(RuntimeError):
@@ -22,6 +26,10 @@ class FileRestoreError(RuntimeError):
 
 
 def tenant_config_paths(root, tenant_id):
+    if (not isinstance(tenant_id, str)
+            or _SAFE_TENANT_ID.fullmatch(tenant_id) is None
+            or len(tenant_id) > 32):
+        raise ValueError("tenant inválido para desprovisionamento")
     root = Path(root)
     return [
         *(root / subdir / f"{tenant_id}.conf" for subdir in (
