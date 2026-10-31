@@ -1,11 +1,11 @@
 # AXE PABX — 20 entregas de fechamento da release
 
-**Estado:** acompanhamento em andamento (1/20 concluída, 5%). Itens restantes exigem evidência verificável. **Não declarar release concluída apenas por registrar esta lista.**
+**Estado:** acompanhamento em andamento (2/20 concluídas, 10%). Itens restantes exigem evidência verificável. **Não declarar release concluída apenas por registrar esta lista.**
 
 **Escopo:** PABX puro. Contact Center e IA permanecem no backlog. Implantação inicial local; produção exige aceite específico.
 
 - [x] **REL-01 — Escopo congelado:** PABX puro; CC e IA fora da release. **Estado:** CONCLUÍDO (escopo confirmado nesta release).
-- [ ] **REL-02 — Inventário da release:** Listar commits, módulos e configurações alteradas. **Estado:** PENDENTE.
+- [ ] **REL-02 — Inventário da release:** Inventário verificável em docs/release-inventario-pr311.md. **Estado:** CONCLUÍDO.
 - [ ] **REL-03 — Auditoria de duplicidade:** Reconciliar roadmap de 100 candidatos com funcionalidades existentes. **Estado:** PENDENTE.
 - [ ] **REL-04 — Correção de discagem internacional:** Validar prefixos e regra AstDB por tenant. **Estado:** PENDENTE.
 - [ ] **REL-05 — Rota alternativa:** Impedir bypass da política por gateway secundário. **Estado:** PENDENTE.
@@ -27,7 +27,7 @@
 
 ## Barra de progresso — 2026-10-31 (atualização)
 
-`[##--------------------------------------] 5% (1/20)`
+`[##--------------------------------------] 10% (2/20)`
 
 **Parcial em código, não homologado:** REL-04, REL-05 e REL-06. **CI geral aprovada, homologação específica pendente:** REL-19. Não contar itens parciais como entregues.
 
