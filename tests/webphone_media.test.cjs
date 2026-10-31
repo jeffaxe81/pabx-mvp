@@ -82,3 +82,71 @@ test('a synchronous autoplay failure never crashes the SIP track handler', () =>
   assert.doesNotThrow(() => bindSessionAudio(session,audio,()=>true,Stream));
   assert.equal(audio.srcObject.getAudioTracks()[0],track);
 });
+
+function mediaPeer(track) {
+  const pc = new EventEmitter();
+  pc.addEventListener = pc.on.bind(pc);
+  pc.getReceivers = () => [{ track }];
+  return pc;
+}
+
+test('WebRTC termination clears only the media owned by that call', () => {
+  const { bindSessionAudio } = require('../webphone/remote-audio.js');
+  const audio = { play: () => Promise.resolve() };
+  const first = { kind:'audio', readyState:'live', id:'first' };
+  const second = { kind:'audio', readyState:'live', id:'second' };
+  const a = new EventEmitter(), b = new EventEmitter();
+  a.connection = mediaPeer(first); b.connection = mediaPeer(second);
+  bindSessionAudio(a, audio, () => true, Stream);
+  bindSessionAudio(b, audio, () => true, Stream);
+  assert.equal(audio.srcObject.getAudioTracks()[0], second);
+  a.emit('ended');
+  assert.equal(audio.srcObject.getAudioTracks()[0], second);
+  b.emit('failed');
+  assert.equal(audio.srcObject, null);
+});
+
+test('late peer events cannot restore audio after termination', () => {
+  const { bindSessionAudio } = require('../webphone/remote-audio.js');
+  const track = { kind:'audio', readyState:'live' }, pc = mediaPeer(track);
+  const session = new EventEmitter(), audio = { play: () => Promise.resolve() };
+  session.connection = pc;
+  const refresh = bindSessionAudio(session,audio,()=>true,Stream);
+  session.emit('ended');
+  session.connection = null;
+  pc.emit('track',{track});
+  refresh();
+  assert.equal(audio.srcObject, null);
+});
+
+test('ended track clears itself, but cannot erase a replacement track', () => {
+  const { bindSessionAudio } = require('../webphone/remote-audio.js');
+  const oldTrack = new EventEmitter(), newTrack = new EventEmitter();
+  for (const track of [oldTrack,newTrack]) {
+    track.kind='audio'; track.readyState='live';
+    track.addEventListener=track.on.bind(track);
+  }
+  const session = new EventEmitter();
+  session.connection = mediaPeer(oldTrack);
+  const audio = { play: () => Promise.resolve() };
+  bindSessionAudio(session,audio,()=>true,Stream);
+  const nextPc = mediaPeer(newTrack);
+  session.connection = nextPc;
+  session.emit('peerconnection',{peerconnection:nextPc});
+  oldTrack.emit('ended');
+  assert.equal(audio.srcObject.getAudioTracks()[0],newTrack);
+  newTrack.emit('ended');
+  assert.equal(audio.srcObject,null);
+});
+
+test('a disconnected old peer event cannot replay stale media', () => {
+  const { bindSessionAudio } = require('../webphone/remote-audio.js');
+  const session = new EventEmitter(), oldTrack = {kind:'audio',readyState:'live'};
+  const oldPc = mediaPeer(oldTrack), audio = {play:() => Promise.resolve()};
+  session.connection = oldPc;
+  bindSessionAudio(session,audio,()=>true,Stream);
+  session.connection = null;
+  audio.srcObject = null;
+  oldPc.emit('track',{track:oldTrack});
+  assert.equal(audio.srcObject,null);
+});

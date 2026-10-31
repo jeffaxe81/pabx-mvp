@@ -190,3 +190,5 @@ registrado como regra permanente no prompt master
 137. [Download HTTP de WAV real com ACL, CDR e revogação por empresa](manual-137-http-gravacao-real-tenant.md)
 138. [MixMonitor das rotas diretas 1010/1011 com chamada SIP real](manual-138-rotas-1010-1011-mixmonitor.md)
 139. [Timeout e transbordo real de filas por empresa](manual-139-queue-overflow-runtime.md)
+
+140. [Ciclo de vida do áudio WebRTC e cache PWA](manual-140-audio-webrtc-lifecycle.md)
