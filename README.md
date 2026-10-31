@@ -224,7 +224,7 @@ começa a tocar — ver `docs/manual-19-crm-screen-pop.md`.
 
 **E regras de discagem externa**: bloqueio de números via AstDB
 (gerenciável pelo painel de administração), rota alternativa por
-prefixo, segundo tronco (`gateway-tdm-2`) — ver `docs/manual-20-discagem-externa.md`.
+prefixo, segundo tronco (`gateway-tdm-2`) — ver `docs/manual-20-discagem-externa.md (robustez: [frente 8](docs/manual-20-discagem-externa.md))`.
 
 **E busca de gravações por número/atendente/período**, com expurgo
 automático configurável (desligado por padrão) — ver

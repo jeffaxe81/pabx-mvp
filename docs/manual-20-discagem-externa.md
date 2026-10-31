@@ -84,3 +84,8 @@ Em `asterisk/pjsip.conf`, seção `[gateway-tdm-2]` — mesmo padrão do
   regras de prefixo (ex: internacional vs. celular vs. fixo em rotas
   diferentes), o dialplan precisaria de mais branches, seguindo o
   mesmo padrão
+
+
+## Endurecimento de 31/10/2026 — frente 8/10
+
+Limitar entrada bruta da lista de bloqueio. Mudança limitada ao módulo, regressão negativa em `admin-api/tests/test_wave10_8.py`. Sem execução contra ambiente operacional; gate de produção permanece bloqueado.
