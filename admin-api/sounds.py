@@ -32,7 +32,7 @@ def list_sound_files(directory) -> list:
     load_tenants/load_presence).
     """
     directory = Path(directory)
-    if not directory.exists():
+    if directory.is_symlink() or not directory.exists():
         return []
 
     entries = []
@@ -44,11 +44,14 @@ def list_sound_files(directory) -> list:
             continue
         if path.resolve().parent != base:
             continue
-        stat = path.stat()
+        try:
+            metadata = path.stat()
+        except OSError:  # Arquivo pode desaparecer entre listagem e consulta.
+            continue
         entries.append({
             "filename": path.name,
-            "size_bytes": stat.st_size,
-            "modified_at": stat.st_mtime,
+            "size_bytes": metadata.st_size,
+            "modified_at": metadata.st_mtime,
         })
 
     entries.sort(key=lambda e: e["modified_at"], reverse=True)
