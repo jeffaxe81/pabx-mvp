@@ -8,6 +8,7 @@ imediato, sem precisar de nenhum mecanismo novo no Asterisk.
 
 Lógica pura, sem rede - 100% testável.
 """
+import math
 import time
 
 from reports import extract_operator
@@ -102,12 +103,24 @@ def compute_daily_cost(records: list, cost_per_minute: float) -> float:
     registros de chamada (ver reports.py) e converte pra custo
     estimado, dado um valor por minuto.
     """
-    total_seconds = sum(r.get("billable_seconds", 0) for r in records if r.get("disposition") == "ANSWERED")
-    return round((total_seconds / 60) * cost_per_minute, 2)
+    if (not isinstance(records, (list, tuple))
+            or type(cost_per_minute) not in (int, float)
+            or not math.isfinite(cost_per_minute) or cost_per_minute < 0):
+        return 0.0
+    seconds = 0
+    for record in records:
+        if not isinstance(record, dict) or record.get("disposition") != "ANSWERED":
+            continue
+        duration = record.get("billable_seconds")
+        if (type(duration) in (int, float) and math.isfinite(duration)
+                and 0 <= duration <= 30 * 86400):
+            seconds += duration
+    return round((seconds / 60) * cost_per_minute, 2)
 
 
 def is_over_spending_limit(records: list, cost_per_minute: float, daily_limit: float) -> bool:
     """daily_limit <= 0 desabilita a checagem (opt-in, como o resto do projeto)."""
-    if daily_limit <= 0:
+    if (type(daily_limit) not in (int, float)
+            or not math.isfinite(daily_limit) or daily_limit <= 0):
         return False
     return compute_daily_cost(records, cost_per_minute) > daily_limit
