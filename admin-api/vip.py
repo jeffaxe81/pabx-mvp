@@ -20,7 +20,7 @@ def validate_vip_input(data: dict):
     if not isinstance(data, dict):
         return False, "dados VIP inválidos", None
     raw_number = data.get("number") or ""
-    if not isinstance(raw_number, str):
+    if not isinstance(raw_number, str) or len(raw_number) > 128:
         return False, "número de telefone inválido", None
     if any(ord(ch) < 32 or ord(ch) == 127 for ch in raw_number):
         return False, "número de telefone inválido", None

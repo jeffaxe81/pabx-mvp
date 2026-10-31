@@ -285,7 +285,7 @@ participou da chamada — ver `docs/manual-32-pesquisa-satisfacao.md`.
 **E transferência inteligente por regra**: cliente VIP identificado
 pelo número roteia direto pro ramal escolhido (prioridade máxima), e
 retorno automático de verdade pra fila geral quando ninguém atende —
-ver `docs/manual-33-transferencia-inteligente.md`.
+ver `docs/manual-33-transferencia-inteligente.md (segurança: [frente 9](docs/manual-33-transferencia-inteligente.md))`.
 
 **E presença corporativa avançada**: cada telefonista marca
 manualmente ausente/em reunião/férias (com nota), sobrepondo o BLF
