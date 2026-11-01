@@ -1,6 +1,6 @@
 # AXE PABX — 20 entregas de fechamento da release
 
-**Estado:** 13/20 concluídas (65%) após reconciliação documental dos 100 candidatos do roadmap (REL-03) e CI 16/16 aprovada na PR #338. Itens restantes exigem evidência verificável. **Não declarar release concluída apenas por registrar esta lista.**
+**Estado:** 14/20 concluídas (70%) após ensaio de rollback de arquivos e volumes Docker efêmeros (REL-17), condicionado à aprovação da PR #337. Itens restantes exigem evidência verificável. **Não declarar release concluída apenas por registrar esta lista.**
 
 **Escopo:** PABX puro. Contact Center e IA permanecem no backlog. Implantação inicial local; produção exige aceite específico.
 
@@ -20,14 +20,14 @@
 - [ ] **REL-14 — Regressão de troncos:** Validar gateway principal e alternativo. **Estado:** PENDENTE.
 - [x] **REL-15 — Regressão de provisionamento:** Gerador real executado em diretório temporário com dois tenants, verificando separação por MAC, ramal, credencial e servidor e substituição de placeholders; validações existentes de MAC inválido/duplicado. Evidência: PR #318 integrada (squash c8bd18e1aa8ad342d9adf32145dbfad040489c0d) após 16/16 jobs SUCCESS: CI estática 41306495977 (8/8) e laboratório geral 41306495837 (8/8). **Estado:** CONCLUÍDO no escopo de geração e isolamento local automatizados; provisionamento em aparelhos físicos não foi testado.
 - [x] **REL-16 — Backup pré-release:** Geração e validação de arquivo tar.gz com `backup/backup.sh` em sandbox, abrangendo configurações e diretórios de dados `admin_data` e `queue_api_data` simulados, extração e conferência de conteúdo e rejeição de arquivo incompleto. PR #331 integrada (squash `5421de1948a4a2e0cc37bc4e1f3c8d929f43059b`), CI estática 41314283263 e laboratório geral 41314283416 (16/16 SUCCESS). **Estado:** CONCLUÍDO para backup/recuperação em sandbox; consistência transacional dos volumes Docker em operação e restauração integral no host-alvo NÃO comprovadas (REL-17 e gate produtivo seguem pendentes).
-- [ ] **REL-17 — Rollback:** Documentar e testar retorno à versão anterior. **Estado:** PENDENTE.
+- [x] **REL-17 — Rollback:** Procedimento documentado em `docs/rel17-rollback-ensaio-local.md`, teste de arquivos em sandbox PR #330 e ensaio com backup real, `restore.sh` real e dois volumes Docker efêmeros via `scripts/rel17_docker_restore_lab.py` na PR #337. Testa cancelamento, retorno de conteúdo anterior e limpeza dos volumes isolados. **Estado:** CONCLUÍDO apenas para rollback automatizado de laboratório; consistência transacional de volumes em operação, RTO/RPO e validação do host de produção continuam pendentes e bloqueiam GO.
 - [ ] **REL-18 — Segurança de configuração:** Revisar senhas padrão, TLS e permissões. **Estado:** PENDENTE.
 - [x] **REL-19 — CI geral e laboratório automatizado:** 18/18 jobs aprovados no head da PR #311: workflow 41255379752 (8/8 laboratório Asterisk), 41255379878 (8/8 validação estática), 41255379848 (1/1 política), 41255379887 (1/1 auditoria). **Estado:** CONCLUÍDO no escopo de CI/laboratório geral; não substitui homologação SIP específica REL-12 a REL-14 nem produção.
 - [ ] **REL-20 — Release candidate local:** Gerar tag/versão e checklist de aceite, sem publicar em produção. **Estado:** PENDENTE.
 
 ## Barra de progresso — 2026-11-01 (meta intermediária)
 
-`[##########################--------------] 65% (13/20)`
+`[##########################--------------] 70% (14/20)`
 
 **Parcial em código, não homologado:** REL-04 e REL-17; REL-05 concluída para proteção estática de rotas, não para chamadas reais de troncos; REL-08 concluída apenas para entradas e preflight, não para chamadas SIP de política internacional. **CI específica, CI geral e laboratório automatizado aprovados (REL-19); homologação SIP específica ainda pendente:** REL-12 a REL-14. Não contar itens parciais como entregues.
 
@@ -48,3 +48,6 @@ Cada entrega exige referência a commit/PR, evidência de teste aplicável e apr
 
 
 **Fechamento de 65% (2026-11-01):** REL-03 — reconciliação conservadora dos 100 itens (6 existentes, 24 parciais, 70 sem evidência direta). PR #338 integrada após 16/16 CI SUCCESS (41324056505/41324056484). Não afirmar inexistência em código dos 70 não comprovados; bloquear contagem como nova função até conferência caso a caso. REL-17 permanece pendente de prova Docker isolada; produção NO-GO.
+
+
+**Fechamento de 70% (2026-11-01):** REL-17 aceita apenas no escopo de rollback isolado de arquivos e volumes Docker efêmeros, PR #337, CI estática e laboratório incluindo job dedicado de Docker. Sem dados reais, sem garantia de consistência transacional, sem homologação de produção. Itens REL-04, REL-12, REL-13, REL-14, REL-18 e REL-20 permanecem pendentes.
