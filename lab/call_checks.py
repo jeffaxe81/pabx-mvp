@@ -35,7 +35,7 @@ def prepare_calls(root, prepared, source_commit):
     helper.chmod(0o600)
     generator = load_file('lab_conf_generator', helper)
     extensions = []
-    for tenant, number in (('t1','1003'), ('t2','1002'), ('t2','1003'), ('t3','1001'), ('t3','1002')):
+    for tenant, number in (('t1','1103'), ('t2','1002'), ('t2','1103'), ('t3','1001'), ('t3','1002')):
         name = tenant+'-'+number
         password = secrets.token_urlsafe(32)
         prepared['credentials'][name] = password
