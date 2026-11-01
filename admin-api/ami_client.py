@@ -132,6 +132,19 @@ class AMIClient:
             statuses[component] = status
         return statuses
 
+    def set_international_block(self, tenant: str, blocked: bool):
+        """Altera a política de saída de um tenant validado."""
+        if not isinstance(tenant, str) or not tenant.startswith("t") or not tenant[1:].isdigit():
+            raise ValueError("tenant inválido")
+        if type(blocked) is not bool:
+            raise ValueError("estado inválido")
+        fields = {"Family": f"politica-externa-{tenant}", "Key": "internacional"}
+        if blocked:
+            fields.update({"Action": "DBPut", "Val": "bloquear"})
+        else:
+            fields["Action"] = "DBDel"
+        return self._send_required_db_action(fields)
+
     def block_number(self, number: str, tenant: str = "t1"):
         """Adiciona um número na família 'blocklist-{tenant}' do AstDB (usado pelo dialplan)."""
         return self._send_action({

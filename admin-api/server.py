@@ -462,6 +462,8 @@ class Handler(BaseHTTPRequestHandler):
             self._handle_add_to_blocklist()
         elif self.path == "/api/vip":
             self._handle_add_vip()
+        elif self.path == "/api/config/politica-internacional":
+            self._handle_set_international_policy()
         elif self.path == "/api/config/modo-feriado":
             self._handle_set_holiday_mode()
         elif self.path == "/api/config/overflow-timeout":
@@ -730,6 +732,29 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json(200, {"seconds": cleaned_seconds, "tenant": tenant})
         except Exception as exc:  # noqa: BLE001
             self._send_json(502, {"error": f"falha ao consultar AMI: {exc}"})
+        finally:
+            client.close()
+
+    def _handle_set_international_policy(self):
+        """Somente admin pode modificar a política de saída por empresa."""
+        if not self._require_role({"admin"}):
+            return
+        data = self._read_json_body()
+        if not isinstance(data, dict):
+            self._send_json(400, {"error": "JSON inválido"})
+            return
+        tenant = validate_tenant(data.get("tenant"))
+        blocked = data.get("blocked")
+        if not tenant or type(blocked) is not bool:
+            self._send_json(400, {"error": "tenant ou estado inválido"})
+            return
+        client = AMIClient(AMI_HOST, AMI_PORT, AMI_USERNAME, AMI_SECRET)
+        try:
+            client.connect_and_login()
+            client.set_international_block(tenant, blocked)
+            self._send_json(200, {"tenant": tenant, "blocked": blocked})
+        except Exception:
+            self._send_json(502, {"error": "alteração de política não confirmada"})
         finally:
             client.close()
 
