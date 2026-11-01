@@ -88,6 +88,8 @@ def inspect(root):
         lab = lab_image(read_text(root / "lab/asterisk_lab.py"))
     except (OSError, UnicodeError, SyntaxError, ValueError) as exc:
         return {"ok": False, "reason": "arquivo ou formato de configuração inválido"}
+    if ":latest@" in compose or ":latest@" in lab:
+        return {"ok": False, "reason": "tag latest mutável não permitida para RC operacional"}
     if not IMAGE_RE.fullmatch(compose) or not IMAGE_RE.fullmatch(lab):
         return {"ok": False, "reason": "imagem sem tag versionada e digest sha256 fixo"}
     if compose != lab:
