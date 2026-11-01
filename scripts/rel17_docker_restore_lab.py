@@ -49,7 +49,7 @@ def copy_volume_to_host(name, target):
 
 def restore_volume(name, source):
     docker("run", "--rm", "-v", name + ":/data", "-v", str(source) + ":/backup:ro",
-           IMAGE, "sh", "-c", "rm -f /data/proof.txt && cp -a /backup/. /data/")
+           IMAGE, "sh", "-c", "set -eu; rm -f /data/proof.txt; cp -R /backup/. /data/; cmp /backup/proof.txt /data/proof.txt")
 
 
 def run_lab():
