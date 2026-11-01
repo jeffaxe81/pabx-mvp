@@ -14,6 +14,9 @@ on:
       - 'tests/test_isolamento_multitenant_pabx.py'
       - 'tests/test_rel07_rel06_tenants_runtime.py'
       - '.github/workflows/pabx-politica-regressao.yml'
+  push:
+    branches:
+      - 'test/rel06-rel07-wizard-runtime-ci'
   workflow_dispatch:
 
 permissions:
