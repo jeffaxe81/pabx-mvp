@@ -277,3 +277,25 @@ jobs:
           path: lab-results/rel04-routes.json
           if-no-files-found: error
           retention-days: 14
+
+  rel14-sip-trunk-loopback:
+    name: Asterisk | troncos SIP principal e alternativo no loopback
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Provar INVITEs SIP reais e bloqueios em dois gateways efêmeros
+        run: python3 -m lab.asterisk_lab --trunks --report lab-results/rel14-sip-trunks.json
+      - name: Preservar resultado sanitizado sem tráfego externo
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rel14-sip-trunks-loopback-${{ github.sha }}
+          path: lab-results/rel14-sip-trunks.json
+          if-no-files-found: error
+          retention-days: 14

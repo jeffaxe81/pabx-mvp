@@ -188,7 +188,7 @@ def cleanup_owned(name, ownership):
     return result
 
 
-def summarize(checks, *, calls=False, webrtc=False, dids=False, isolation=False, voicemail=False, voicemail_dtmf=False, ami=False, queues=False, policy=False, routes=False):
+def summarize(checks, *, calls=False, webrtc=False, dids=False, isolation=False, voicemail=False, voicemail_dtmf=False, ami=False, queues=False, policy=False, routes=False, trunks=False):
     required = {'real_runtime', 'tls_transport', 'wss_transport', 'container_removed',
                 'checkout_clean', 'runtime_mounts', 'source_label'}
     required.update(name+':'+tid for tid in ('t1', 't2', 't3')
@@ -225,12 +225,15 @@ def summarize(checks, *, calls=False, webrtc=False, dids=False, isolation=False,
     if routes:
         from .outbound_route_checks import required_route_checks
         required.update(required_route_checks())
+    if trunks:
+        from .trunk_sip_loopback_checks import required_trunk_checks
+        required.update(required_trunk_checks())
     passed = sum(value is True for value in checks.values())
     return {'passed': passed, 'total': len(checks),
             'success': set(checks) == required and passed == len(required)}
 
 
-def run(root, report, *, calls=False, webrtc=False, dids=False, isolation=False, voicemail=False, voicemail_dtmf=False, ami=False, queues=False, policy=False, routes=False):
+def run(root, report, *, calls=False, webrtc=False, dids=False, isolation=False, voicemail=False, voicemail_dtmf=False, ami=False, queues=False, policy=False, routes=False, trunks=False):
     if webrtc and not calls:
         raise ValueError('WebRTC requer o modo de chamadas')
     if dids and not calls:
@@ -282,6 +285,10 @@ def run(root, report, *, calls=False, webrtc=False, dids=False, isolation=False,
     if routes:
         report.update(schema_version=11, kind='real_asterisk_outbound_routes_local_lab',
                       routes_prefix_and_astdb_tested=False, external_operator_trunks_tested=False)
+    if trunks:
+        report.update(schema_version=12, kind='real_asterisk_sip_trunks_loopback_lab',
+                      sip_loopback_gateway_routing_tested=False,
+                      real_operator_gateway_tested=False)
     clean = command(['git', '-C', str(root), 'diff', '--quiet', 'HEAD', '--',
                      'asterisk', 'admin-api/tenants.py', 'admin-api/conf_generator.py',
                      'scripts/secrets_generator.py', 'lab','webphone','package.json','package-lock.json',
@@ -294,6 +301,7 @@ def run(root, report, *, calls=False, webrtc=False, dids=False, isolation=False,
     attempted_create = False
     retain_staging = False
     folder = Path(tempfile.mkdtemp(prefix='axe-pabx-lab-'))
+    prepared = None
     try:
         prepared = prepare(root, folder/'private', source)
         # Preparar o overflow antes de salvar o snapshot das rotas diretas:
@@ -307,6 +315,9 @@ def run(root, report, *, calls=False, webrtc=False, dids=False, isolation=False,
         if routes:
             from .outbound_route_checks import prepare_routes
             prepare_routes(prepared)
+        if trunks:
+            from .trunk_sip_loopback_checks import prepare_trunks
+            prepare_trunks(prepared)
         if calls:
             from .call_checks import prepare_calls
             prepare_calls(root, prepared, source)
@@ -397,6 +408,9 @@ def run(root, report, *, calls=False, webrtc=False, dids=False, isolation=False,
         if routes:
             from .outbound_route_checks import exercise_routes
             exercise_routes(container_id, report)
+        if trunks:
+            from .trunk_sip_loopback_checks import exercise_trunks
+            exercise_trunks(container_id, prepared, report)
         if calls:
             from .call_checks import exercise_calls
             exercise_calls(container_id, prepared, report)
@@ -421,6 +435,9 @@ def run(root, report, *, calls=False, webrtc=False, dids=False, isolation=False,
             exercise_queues(container_id, prepared, report)
             exercise_queue_overflow(container_id, prepared, report)
     finally:
+        if trunks:
+            from .trunk_sip_loopback_checks import close_trunks
+            close_trunks(prepared)
         if attempted_create:
             cleaned = cleanup_owned(name, ownership)
             report['checks']['container_removed'] = cleaned['removed']
@@ -429,7 +446,7 @@ def run(root, report, *, calls=False, webrtc=False, dids=False, isolation=False,
         report['private_staging_retained'] = retain_staging
         if not retain_staging:
             shutil.rmtree(folder)
-    report.update(summarize(report['checks'], calls=calls,webrtc=webrtc,dids=dids,isolation=isolation,voicemail=voicemail,voicemail_dtmf=voicemail_dtmf,ami=ami,queues=queues,policy=policy,routes=routes))
+    report.update(summarize(report['checks'], calls=calls,webrtc=webrtc,dids=dids,isolation=isolation,voicemail=voicemail,voicemail_dtmf=voicemail_dtmf,ami=ami,queues=queues,policy=policy,routes=routes,trunks=trunks))
     return report['success']
 
 
@@ -447,6 +464,7 @@ def main(argv=None):
     parser.add_argument('--queues', action='store_true', help='validar fila exata t1/t2/t3 via SIP real')
     parser.add_argument('--policy', action='store_true', help='validar GOSUB e AstDB com Local/ descartável')
     parser.add_argument('--routes', action='store_true', help='validar bloqueio e seleção de rota com Dial interceptado em sandbox')
+    parser.add_argument('--trunks', action='store_true', help='validar INVITE SIP real a dois troncos no loopback')
     args = parser.parse_args(argv)
     if args.webrtc and not args.calls:
         parser.error('--webrtc requer --calls')
@@ -477,6 +495,8 @@ def main(argv=None):
             kwargs['policy'] = True
         if args.routes:
             kwargs['routes'] = True
+        if args.trunks:
+            kwargs['trunks'] = True
         success = run(Path(__file__).resolve().parents[1], report, **kwargs)
     except Exception as exc:
         success = False
