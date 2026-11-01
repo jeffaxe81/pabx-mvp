@@ -104,7 +104,8 @@ def test_politica_so_consulta_bloqueio_apos_identificar_prefixo_internacional():
 
 def test_politica_retorna_explicitamente_nos_dois_caminhos():
     context = POLICY.split("[politica-externa]", 1)[1]
-    assert context.count("Return()") >= 2
+    assert context.count("Return(ALLOW)") == 1
+    assert context.count("Return(DENY)") == 1
     assert "n(negado),NoOp(" in context
     assert "n(permitido),Set(GOSUB_RETVAL=ALLOW)" in context
 
@@ -122,3 +123,13 @@ def test_tenant_t2_nao_seleciona_rota_alternativa_t1():
     section = DIALPLAN[start:end if end >= 0 else None]
     assert "Gosub(politica-externa,s,1)" in section
     assert "gateway-tdm-2" not in section
+
+
+def test_retorno_da_politica_nao_herda_resultado_de_chamada_anterior():
+    """Return(valor) deve definir GOSUB_RETVAL em ambos os caminhos."""
+    context = POLICY.split("[politica-externa]", 1)[1]
+    allow = context.index("n(permitido),Set(GOSUB_RETVAL=ALLOW)")
+    deny = context.index("n(negado),NoOp(")
+    assert allow < context.index("Return(ALLOW)") < deny
+    assert deny < context.index("Return(DENY)")
+    assert context.index("Set(GOSUB_RETVAL=DENY)") < allow

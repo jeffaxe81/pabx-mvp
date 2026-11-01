@@ -41,3 +41,26 @@ def test_wizard_gera_senhas_distintas_e_contextos_corretos():
         for password in credentials.values():
             assert len(password) >= 32
             assert password in rendered
+
+
+def test_wizard_recusa_did_estatico_e_id_de_outro_tenant():
+    data = {"tenant_id": "t4", "did": "11999990000", "display_name": "Empresa B"}
+    ok, error, _ = module.validate_tenant_creation_input(data, [], reserved_dids={"11999990000"})
+    assert not ok and "rota estática" in error
+    data["did"] = "11999990001"
+    data["tenant_id"] = "t1"
+    ok, error, _ = module.validate_tenant_creation_input(data, [])
+    assert not ok and "t3" in error
+
+
+def test_politica_por_tenant_no_dialplan_gerado_e_sem_bypass():
+    for tenant in ("t3", "t4", "t99"):
+        dial = module.render_tenant_extensions(tenant)
+        section = dial.split(f"[{tenant}-internal]", 1)[1].split(f"[{tenant}-hints]", 1)[0]
+        assert section.count("Gosub(politica-externa,s,1)") >= 1
+        outbound = section.split("exten => _0.,1,", 1)[1].split("exten => numero-bloqueado,1", 1)[0]
+        assert outbound.index(f"Set(TENANT={tenant})") < outbound.index("Gosub(politica-externa,s,1)")
+        assert outbound.index("Gosub(politica-externa,s,1)") < outbound.index('GOSUB_RETVAL') < outbound.index("Dial(PJSIP/")
+        assert f"DB(blocklist-{tenant}/" in outbound
+        assert "DB(blocklist-t1/" not in outbound
+        assert "DB(blocklist-t2/" not in outbound
