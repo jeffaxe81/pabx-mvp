@@ -16,6 +16,38 @@ TENANT = re.compile(r"t[1-9][0-9]*\Z")
 MAILBOX = re.compile(r"t[1-9][0-9]*-[a-z0-9][a-z0-9_-]*\Z")
 
 
+def generate_verified_lab_pin_map(names, generate, *, attempts_per_pin=64):
+    """PINs locais únicos e fortes; tentativas limitadas e nenhum valor nos erros.
+
+    Uma amostra aleatória fraca não é falha do Asterisk. Descartá-la
+    ANTES de escrever o staging evita flakiness do preflight do voicemail.
+    Inclui requisitos adicionais do gerador dinâmico de tenant.
+    """
+    if (not isinstance(names, (tuple, list)) or not names
+            or len(set(names)) != len(names)
+            or any(not isinstance(name, str) or not name for name in names)
+            or not callable(generate)
+            or type(attempts_per_pin) is not int or not 1 <= attempts_per_pin <= 256):
+        raise ValueError("lista de caixas ou limite de tentativas de PIN inválido")
+    used = set()
+    result = {}
+    for name in names:
+        for _ in range(attempts_per_pin):
+            pin = generate()
+            if (not isinstance(pin, str) or PIN.fullmatch(pin) is None
+                    or pin in used or len(set(pin)) < 3 or pin in KNOWN_WEAK
+                    or any(pin == pin[:size] * (8 // size) for size in (1, 2, 4))
+                    or pin in "01234567890123456789"
+                    or pin in "98765432109876543210"):
+                continue
+            result[name] = pin
+            used.add(pin)
+            break
+        else:
+            raise ValueError("não foi possível gerar PIN seguro único no laboratório")
+    return result
+
+
 def validate_prepared_voicemail(*contents):
     """Somente contagens booleanas; nenhuma credencial no retorno."""
     found = {tenant: set() for tenant in EXPECTED}
