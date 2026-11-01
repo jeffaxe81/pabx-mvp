@@ -10,7 +10,9 @@ Este lote adiciona `provisioning/mtls_server.py`: serviço HTTPS com certificado
 
 - Bind obrigatório em `127.0.0.1:8443`, **sem porta de rede externa**, sem alteração do Docker Compose.
 - TLS mínimo 1.2, CA de clientes configurável, `ssl.CERT_REQUIRED` e certificado de servidor/chave definidos por argumentos.
-- Cadastro privado em JSON 0600; chave TLS deve ser privada 0600, sem links simbólicos.
+- Cadastro privado em JSON 0600 (schema **v2**); chave TLS deve ser privada 0600, sem links simbólicos.
+- Cadastro de cada MAC/certificado exige **valid_from**, **valid_until** (segundos Unix, janela máxima 30 dias) e **revoked** booleano. Sem campos ou datas válidas, a aplicação nega a leitura.
+- Política privada recarregada **a cada GET**: revogar, expirar ou deixar o cadastro inacessível bloqueia novos downloads sem reiniciar o servidor. TLS ainda precisa verificar a validade do certificado e a cadeia da CA.
 - Autorização fail-closed por SHA-256 de certificado cliente DER, MAC canônico de 12 hexadecimais e tenant confirmado por `ramal` do gerador; MAC e certificado não podem ser duplicados.
 - Apenas `GET /<mac-lowercase>.cfg`, com método, rota e query estritamente validados; não há listagem de diretório.
 - Diretório aberto em POSIX com `O_DIRECTORY | O_NOFOLLOW`; arquivos abertos relativamente ao FD do diretório, com `O_NOFOLLOW`; somente arquivo regular de até 512 KiB.
@@ -22,7 +24,7 @@ Este lote adiciona `provisioning/mtls_server.py`: serviço HTTPS com certificado
 ### Forma de iniciar — apenas laboratório local autorizado
 
 1. Gere **fora do repositório** uma CA de teste e certificados para o servidor e cada telefone/simulador; mantenha cada chave privada com permissão 0600. A autoridade de certificação do cliente usada aqui **não** pode ser a CA pública não relacionada ao provisioning.
-2. Em um diretório privado (0600), crie o cadastro com `schema_version:1` e entradas que vinculem `mac`, `tenant`, `client_sha256` ao SHA-256 dos bytes DER do certificado cliente. O MAC deve estar em minúsculas e constar em `devices.json` com um `ramal` cujo prefixo seja o mesmo tenant.
+2. Em diretório privado (0600), crie o cadastro com `schema_version:2` e entradas com `mac`, `tenant`, `client_sha256`, `valid_from`, `valid_until` e `revoked`. O hash é o SHA-256 dos bytes DER do certificado cliente. O MAC em minúsculas deve constar em `devices.json` com `ramal` do mesmo tenant. Cadastros antigos v1 **não são aceitos**; migrar explicitamente antes de iniciar o laboratório.
 3. Gere arquivos no `provisioning/files` como de costume; certifique-se de que os nomes estejam em minúsculas, correspondendo aos MACs cadastrados.
 4. Execute a ferramenta **somente na máquina de testes**, com chaves e cadastro fora da pasta pública:
 
@@ -41,8 +43,30 @@ O laboratório é acessível apenas em loopback; qualquer uso externo, túnel, r
 
 ## Restrições e itens NÃO concluídos
 
-**Produção NO-GO**. A configuração `.cfg` continua sendo gerada por padrão com modo 0644 por compatibilidade legada e pode ser lida por usuários locais autorizados ao sistema de arquivos; antes de produção, migrar a saída para diretório privado com permissões/identidade de serviço restritas. Não há token de uso único, CRL/OCSP, rotação automática de certificado, proteção contra negação de serviço, política de expiração de credenciais SIP, integração com rede corporativa nem gestão operacional de chaves. A revogação por exclusão do cadastro depende de reinício do processo. Não foi homologado se o firmware Yealink disponibiliza certificado de cliente mTLS no fluxo de provisioning HTTPS.
+**Produção NO-GO**. A configuração `.cfg` continua sendo gerada por padrão com modo 0644 por compatibilidade legada e pode ser lida por usuários locais autorizados ao sistema de arquivos; antes de produção, migrar a saída para diretório privado com permissões/identidade de serviço restritas. Não há token de uso único, CRL/OCSP, rotação automática de certificado, proteção contra negação de serviço, política de expiração de credenciais SIP, integração com rede corporativa nem gestão operacional de chaves. Revogação por marcação `revoked=true`, exclusão do dispositivo ou expiração do cadastro **não exige reiniciar**; é efetiva nos próximos GETs. Não substitui revogação de certificados pela CA em outros sistemas e não interrompe transferência já iniciada. Não foi homologado se o firmware Yealink disponibiliza certificado de cliente mTLS no fluxo de provisioning HTTPS.
 
 O serviço não é incluído no `docker-compose.yml` nem publicado remotamente. A issue #344 permanece **aberta** até evidência com aparelho físico, autenticação/ACL operacional por tenant/MAC, segredos não expostos no host e revisão de suporte do fabricante.
 
 **Não utilizar os resultados automáticos para elevar a homologação operacional ou autorizar deployment.**
+
+## Formato v2 de registro privado (exemplo com valores fictícios)
+
+O exemplo abaixo não contém credenciais reais e usa campos de validade ilustrativos. Antes de qualquer ensaio, gere datas Unix futuras com intervalo máximo de 30 dias e fingerprints reais do laboratório.
+
+```json
+{
+  "schema_version": 2,
+  "devices": [
+    {
+      "mac": "aabbccddeeff",
+      "tenant": "t1",
+      "client_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "valid_from": 1793400000,
+      "valid_until": 1793486400,
+      "revoked": false
+    }
+  ]
+}
+```
+
+A alteração do arquivo deve ser atômica e restrita ao responsável pelo laboratório; guardar backup protegido e nunca versionar esses dados no GitHub. O serviço lê o arquivo a cada requisição e retorna 404 genérico diante de revogação, expiração, cadastro faltante ou inválido. O acesso a certificados e chaves de cliente ainda requer controles operacionais independentes.
