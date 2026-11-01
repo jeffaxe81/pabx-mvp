@@ -94,3 +94,22 @@ def test_prepare_esgota_tentativas_sem_expor_credencial_nem_subir_container(tmp_
         lab.prepare(ROOT, tmp_path / "private", stage_report=stage)
     assert stage["phase"] == "staging:voicemail_pin_generation"
     assert "12345678" not in str(err.value)
+
+
+
+def test_relatorio_futuro_identifica_etapa_sem_exibir_pin(monkeypatch, tmp_path):
+    import json
+
+    def rejected(root, report, **kwargs):
+        report["phase"] = "staging:voicemail_pin_generation"
+        report["checks"] = {"checkout_clean": True}
+        raise ValueError("não foi possível gerar PIN seguro único no laboratório")
+
+    monkeypatch.setattr(lab, "run", rejected)
+    output = tmp_path / "registration.json"
+    assert lab.main(["--report", str(output)]) == 1
+    diagnostic = json.loads(output.read_text())
+    assert diagnostic["error_type"] == "ValueError"
+    assert diagnostic["error_reason"] == "voicemail_pin_entropy_exhausted"
+    assert diagnostic["phase"] == "staging:voicemail_pin_generation"
+    assert "12345678" not in output.read_text()
