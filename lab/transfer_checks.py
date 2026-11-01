@@ -25,7 +25,7 @@ def same_tenant_channel_lines(raw, tenant):
     if not isinstance(raw, str):
         return False
     channels = [row.split("!", 1)[0] for row in raw.splitlines()]
-    names = [f"PJSIP/{tenant}-{n}-" for n in ("1001", "1003")]
+    names = [f"PJSIP/{tenant}-{n}-" for n in ("1001", "1103")]
     return all(any(line.startswith(name) for line in channels) for name in names)
 
 
@@ -42,7 +42,7 @@ def exercise_transfers(container, prepared, report):
         with ExitStack() as stack, ThreadPoolExecutor(max_workers=2) as executor:
             endpoints = {}
             media = {}
-            for suffix in ("1001", "1002", "1003"):
+            for suffix in ("1001", "1002", "1103"):
                 name = tenant + "-" + suffix
                 peer = CallPeer("127.0.0.1", 5061, prepared["ca"], name,
                                 prepared["credentials"][name])
@@ -63,18 +63,18 @@ def exercise_transfers(container, prepared, report):
                 caller_dialog and transfer_dialog
             )
             target_answer = executor.submit(
-                endpoints["1003"].answer, media["1003"]
+                endpoints["1103"].answer, media["1103"]
             )
             checks["refer_202:" + tenant] = (
-                endpoints["1002"].blind_transfer(transfer_dialog, "1003") == 202
+                endpoints["1002"].blind_transfer(transfer_dialog, "1103") == 202
             )
-            # Não contar somente resposta 202: um novo INVITE ao ramal 1003
+            # Não contar somente resposta 202: um novo INVITE ao ramal 1103
             # precisa chegar e ser atendido pelo terminal SIP de laboratorio.
-            dialog_1003 = target_answer.result(timeout=15)
+            dialog_1103 = target_answer.result(timeout=15)
             checks["target_answer:" + tenant] = (
-                dialog_1003 is not None
-                and "invite_received" in endpoints["1003"].events
-                and "ack_received" in endpoints["1003"].events
+                dialog_1103 is not None
+                and "invite_received" in endpoints["1103"].events
+                and "ack_received" in endpoints["1103"].events
             )
             deadline = time.monotonic() + 4
             observed = ""
