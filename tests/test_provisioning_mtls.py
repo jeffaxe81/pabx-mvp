@@ -8,6 +8,7 @@ import shutil
 import ssl
 import subprocess
 import threading
+import time
 from types import SimpleNamespace
 import urllib.error
 import urllib.request
@@ -28,9 +29,12 @@ def config(tmp_path):
     device_registry = tmp_path / "devices.json"
     folder = tmp_path / "cfg"
     folder.mkdir()
-    cert_registry.write_text(json.dumps({"schema_version": 1, "devices": [
-        {"mac": MAC1, "tenant": "t1", "client_sha256": hashlib.sha256(CLIENT1).hexdigest()},
-        {"mac": MAC2, "tenant": "t2", "client_sha256": hashlib.sha256(CLIENT2).hexdigest()},
+    now = int(time.time())
+    cert_registry.write_text(json.dumps({"schema_version": 2, "devices": [
+        {"mac": MAC1, "tenant": "t1", "client_sha256": hashlib.sha256(CLIENT1).hexdigest(),
+         "valid_from": now - 60, "valid_until": now + 3600, "revoked": False},
+        {"mac": MAC2, "tenant": "t2", "client_sha256": hashlib.sha256(CLIENT2).hexdigest(),
+         "valid_from": now - 60, "valid_until": now + 3600, "revoked": False},
     ]}), encoding="utf-8")
     cert_registry.chmod(0o600)
     device_registry.write_text(json.dumps({"devices": [
@@ -75,8 +79,8 @@ def test_rejeita_cadastro_divergente_ou_duplicado(tmp_path, item, field, value):
 @pytest.mark.parametrize("bad", [
     {"devices": []},
     {"schema_version": 0, "devices": []},
-    {"schema_version": 1, "devices": "nao e lista"},
-    {"schema_version": 1, "devices": [{"tenant": "t1", "mac": MAC1}]},
+    {"schema_version": 2, "devices": "nao e lista"},
+    {"schema_version": 2, "devices": [{"tenant": "t1", "mac": MAC1}]},
 ])
 def test_cadastro_incompleto_falha_fechado(tmp_path, bad):
     registry, devices, _ = config(tmp_path)
@@ -94,7 +98,7 @@ def test_rejeita_permissoes_publicas_do_cadastro_privado(tmp_path):
 
 def test_rejeita_json_com_chaves_repetidas_e_symlink(tmp_path):
     registry, devices, _ = config(tmp_path)
-    registry.write_text('{"schema_version":1,"schema_version":1,"devices":[]}', encoding="utf-8")
+    registry.write_text('{"schema_version":2,"schema_version":2,"devices":[]}', encoding="utf-8")
     with pytest.raises(ValueError, match="duplicada"):
         pv.load_policy(registry, devices)
     registry.unlink()
@@ -164,11 +168,12 @@ class FakeTLS:
         return self.cert
 
 
-def handler_request(path, cert, root, policy):
+def handler_request(path, cert, root, registry, devices):
     handler = pv.ProvisioningHandler.__new__(pv.ProvisioningHandler)
     handler.path = path
     handler.connection = FakeTLS(cert)
-    handler.server = SimpleNamespace(policy=policy, config_dir=str(root))
+    handler.server = SimpleNamespace(registry_path=str(registry),
+                                     devices_path=str(devices), config_dir=str(root))
     handler.calls = []
     handler._respond = lambda code, data=b"": handler.calls.append((code, data))
     handler.do_GET()
@@ -182,18 +187,16 @@ def handler_request(path, cert, root, policy):
 ])
 def test_rejeita_travessia_listagem_url_com_query_e_maiuscula(tmp_path, path):
     registry, devices, folder = config(tmp_path)
-    policy = pv.load_policy(registry, devices)
-    assert handler_request(path, CLIENT1, folder, policy) == [(404, b"")]
+    assert handler_request(path, CLIENT1, folder, registry, devices) == [(404, b"")]
 
 
 def test_http_retorna_config_apenas_para_certificado_do_mac(tmp_path):
     registry, devices, folder = config(tmp_path)
-    policy = pv.load_policy(registry, devices)
-    assert handler_request("/" + MAC1 + ".cfg", CLIENT1, folder, policy) == [
+    assert handler_request("/" + MAC1 + ".cfg", CLIENT1, folder, registry, devices) == [
         (200, b"user=t1-1001\npassword=secret-t1")]
-    assert handler_request("/" + MAC1 + ".cfg", CLIENT2, folder, policy) == [(404, b"")]
-    assert handler_request("/" + MAC2 + ".cfg", CLIENT1, folder, policy) == [(404, b"")]
-    assert handler_request("/" + MAC1 + ".cfg", None, folder, policy) == [(404, b"")]
+    assert handler_request("/" + MAC1 + ".cfg", CLIENT2, folder, registry, devices) == [(404, b"")]
+    assert handler_request("/" + MAC2 + ".cfg", CLIENT1, folder, registry, devices) == [(404, b"")]
+    assert handler_request("/" + MAC1 + ".cfg", None, folder, registry, devices) == [(404, b"")]
 
 
 def test_resposta_impede_cache_publico_e_never_logs():
@@ -247,7 +250,8 @@ def test_tls_real_certificado_e_restricao_tenant_mac(tmp_path):
     context.load_verify_locations(cafile=str(tmp_path / "ca.crt"))
     server = ThreadingHTTPServer(("127.0.0.1", 0), pv.ProvisioningHandler)
     server.daemon_threads = True
-    server.policy = policy
+    server.registry_path = str(registry)
+    server.devices_path = str(devices)
     server.config_dir = str(folder)
     server.socket = context.wrap_socket(server.socket, server_side=True)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
