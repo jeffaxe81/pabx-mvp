@@ -31,3 +31,10 @@ def test_substituicao_exclusiva_no_dialplan_temporario():
     assert "channel originate Local/" in source
     assert "external_operator_trunks_tested" in source
     assert len(MODULE.required_route_checks()) == 12
+
+
+def test_selector_regex_t1_usa_argumento_sem_virgula():
+    dialplan = (ROOT / "asterisk/extensions.conf").read_text(encoding="utf-8")
+    assert 'REGEX("^0" ${DESTINO})' in dialplan
+    assert 'REGEX("^0" ,${DESTINO})' not in dialplan
+    assert dialplan.index('Gosub(politica-externa,s,1)') < dialplan.index('REGEX("^0" ${DESTINO})')
