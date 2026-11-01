@@ -160,8 +160,9 @@ def test_template_is_private_and_not_overwritten(tmp_path, capsys):
     assert packet.main(["--init", str(path), "--sha", SHA]) == 2
     assert path.read_bytes() == saved
     assert packet.main(["--evaluate", str(path), "--sha", SHA]) == 1
-    report = json.loads(capsys.readouterr().out.split("}\n")[-1] + "}") if False else None
-    assert report is None
+    captured = capsys.readouterr()
+    assert "PENDING_EVIDENCE_NO_GO" in captured.out
+    assert "Pacote rejeitado" in captured.err
 
 
 def test_cli_declared_success_is_still_not_go(tmp_path, capsys):
@@ -171,3 +172,15 @@ def test_cli_declared_success_is_still_not_go(tmp_path, capsys):
     report = json.loads(capsys.readouterr().out)
     assert report["ready_for_independent_review"]
     assert report["operational_go_authorized"] is False
+
+
+def test_homologation_evidence_is_opaque_and_not_secret():
+    source = complete_claims()
+    source["homologation"]["checks"]["internal_call"]["evidence"] = "token=secret"
+    with pytest.raises(ValueError, match="referencia"):
+        packet.evaluate(source, SHA)
+
+
+def test_completeness_does_not_assert_engineering_rc_approval():
+    output = packet.evaluate(complete_claims(), SHA)
+    assert output["engineering_rc_verified_by_tool"] is False
