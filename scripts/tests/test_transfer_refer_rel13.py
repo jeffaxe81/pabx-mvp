@@ -39,17 +39,17 @@ def dialogue():
 
 def test_refer_restringe_destino_e_preserva_dialogo():
     client, dialog = peer(), dialogue()
-    assert client.blind_transfer(dialog, "1003") == 202
+    assert client.blind_transfer(dialog, "1103") == 202
     wire = client.connection.wires[0].decode("ascii")
     assert wire.startswith("REFER sip:asterisk@127.0.0.1:5061;transport=tls SIP/2.0\r\n")
-    assert "\r\nRefer-To: <sip:1003@127.0.0.1:5061;transport=tls>\r\n" in wire
+    assert "\r\nRefer-To: <sip:1103@127.0.0.1:5061;transport=tls>\r\n" in wire
     assert "\r\nCall-ID: sintetico@localhost\r\n" in wire
     assert "\r\nCSeq: 3 REFER\r\n" in wire
     assert client.events == ["refer_sent", "refer_accepted"]
 
 
-@pytest.mark.parametrize("number", ["", "1003\r\nEvil: yes", "t2-1001",
-                                    "001198765432", "../../1003", 1003])
+@pytest.mark.parametrize("number", ["", "1103\r\nEvil: yes", "t2-1001",
+                                    "001198765432", "../../1103", 1103])
 def test_refer_rejeita_destinos_fora_do_escopo(number):
     client = peer()
     with pytest.raises(ValueError):
@@ -61,7 +61,7 @@ def test_refer_nao_conta_erro_sip_como_transferencia():
     from lab.sip_calls import CallRejected
     client = peer(403)
     with pytest.raises(CallRejected) as rejected:
-        client.blind_transfer(dialogue(), "1003")
+        client.blind_transfer(dialogue(), "1103")
     assert rejected.value.code == 403
     assert "refer_accepted" not in client.events
 
@@ -70,13 +70,13 @@ def test_refer_rejeita_peer_de_outro_perfil_e_uri_externa():
     client = peer()
     client.username = "gateway-tdm"
     with pytest.raises(ValueError):
-        client.blind_transfer(dialogue(), "1003")
+        client.blind_transfer(dialogue(), "1103")
     assert client.connection.wires == []
     client.username = "t1-1002"
     dialog = dialogue()
     dialog.uri = "sip:asterisk@192.0.2.21:5060"
     with pytest.raises(ValueError):
-        client.blind_transfer(dialog, "1003")
+        client.blind_transfer(dialog, "1103")
     assert client.connection.wires == []
 
 
