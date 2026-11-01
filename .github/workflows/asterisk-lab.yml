@@ -233,3 +233,25 @@ jobs:
           path: lab-results/rel17-docker-rollback.json
           if-no-files-found: error
           retention-days: 14
+
+  policy-astdb-runtime:
+    name: Asterisk | política AstDB em canais Local isolados
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Validar prefixos e decisões no dialplan real sem troncos
+        run: python3 -m lab.asterisk_lab --policy --report lab-results/rel12-policy.json
+      - name: Salvar evidência de política sanitizada
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rel12-policy-local-asterisk-${{ github.sha }}
+          path: lab-results/rel12-policy.json
+          if-no-files-found: error
+          retention-days: 14

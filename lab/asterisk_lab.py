@@ -188,7 +188,7 @@ def cleanup_owned(name, ownership):
     return result
 
 
-def summarize(checks, *, calls=False, webrtc=False, dids=False, isolation=False, voicemail=False, voicemail_dtmf=False, ami=False, queues=False):
+def summarize(checks, *, calls=False, webrtc=False, dids=False, isolation=False, voicemail=False, voicemail_dtmf=False, ami=False, queues=False, policy=False):
     required = {'real_runtime', 'tls_transport', 'wss_transport', 'container_removed',
                 'checkout_clean', 'runtime_mounts', 'source_label'}
     required.update(name+':'+tid for tid in ('t1', 't2', 't3')
@@ -219,12 +219,15 @@ def summarize(checks, *, calls=False, webrtc=False, dids=False, isolation=False,
         from .queue_overflow_checks import required_queue_overflow_checks
         required.update(required_queue_runtime_checks())
         required.update(required_queue_overflow_checks())
+    if policy:
+        from .policy_runtime_checks import required_policy_checks
+        required.update(required_policy_checks())
     passed = sum(value is True for value in checks.values())
     return {'passed': passed, 'total': len(checks),
             'success': set(checks) == required and passed == len(required)}
 
 
-def run(root, report, *, calls=False, webrtc=False, dids=False, isolation=False, voicemail=False, voicemail_dtmf=False, ami=False, queues=False):
+def run(root, report, *, calls=False, webrtc=False, dids=False, isolation=False, voicemail=False, voicemail_dtmf=False, ami=False, queues=False, policy=False):
     if webrtc and not calls:
         raise ValueError('WebRTC requer o modo de chamadas')
     if dids and not calls:
@@ -270,6 +273,9 @@ def run(root, report, *, calls=False, webrtc=False, dids=False, isolation=False,
     if queues:
         report.update(schema_version=8, kind='real_asterisk_tenant_queue_lab',
                       live_queue_tenant_routing_tested=False)
+    if policy:
+        report.update(schema_version=10, kind='real_asterisk_policy_local_channel_lab',
+                      policy_local_channels_tested=False, operator_trunk_tested=False)
     clean = command(['git', '-C', str(root), 'diff', '--quiet', 'HEAD', '--',
                      'asterisk', 'admin-api/tenants.py', 'admin-api/conf_generator.py',
                      'scripts/secrets_generator.py', 'lab','webphone','package.json','package-lock.json',
@@ -289,6 +295,9 @@ def run(root, report, *, calls=False, webrtc=False, dids=False, isolation=False,
         if queues:
             from .queue_overflow_checks import prepare_queue_overflow
             prepare_queue_overflow(prepared)
+        if policy:
+            from .policy_runtime_checks import prepare_policy
+            prepare_policy(prepared)
         if calls:
             from .call_checks import prepare_calls
             prepare_calls(root, prepared, source)
@@ -373,6 +382,9 @@ def run(root, report, *, calls=False, webrtc=False, dids=False, isolation=False,
                 peer.close()
         if dids:
             command(['docker','exec',container_id,'mkdir','-p','/var/log/asterisk/cel-custom'])
+        if policy:
+            from .policy_runtime_checks import exercise_policy
+            exercise_policy(container_id, report)
         if calls:
             from .call_checks import exercise_calls
             exercise_calls(container_id, prepared, report)
@@ -405,7 +417,7 @@ def run(root, report, *, calls=False, webrtc=False, dids=False, isolation=False,
         report['private_staging_retained'] = retain_staging
         if not retain_staging:
             shutil.rmtree(folder)
-    report.update(summarize(report['checks'], calls=calls,webrtc=webrtc,dids=dids,isolation=isolation,voicemail=voicemail,voicemail_dtmf=voicemail_dtmf,ami=ami,queues=queues))
+    report.update(summarize(report['checks'], calls=calls,webrtc=webrtc,dids=dids,isolation=isolation,voicemail=voicemail,voicemail_dtmf=voicemail_dtmf,ami=ami,queues=queues,policy=policy))
     return report['success']
 
 
@@ -421,6 +433,7 @@ def main(argv=None):
                         help='enviar DTMF sintético por SRTP no *97 (não autentica PIN)')
     parser.add_argument('--ami', action='store_true', help='verificar OriginateResponse no AMI real isolado')
     parser.add_argument('--queues', action='store_true', help='validar fila exata t1/t2/t3 via SIP real')
+    parser.add_argument('--policy', action='store_true', help='validar GOSUB e AstDB com Local/ descartável')
     args = parser.parse_args(argv)
     if args.webrtc and not args.calls:
         parser.error('--webrtc requer --calls')
@@ -447,6 +460,8 @@ def main(argv=None):
             kwargs['ami'] = True
         if args.queues:
             kwargs['queues'] = True
+        if args.policy:
+            kwargs['policy'] = True
         success = run(Path(__file__).resolve().parents[1], report, **kwargs)
     except Exception as exc:
         success = False
