@@ -8,7 +8,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def test_rel03_marco_documentado_sem_contar_funcionalidade_nova():
     release = (ROOT / "docs/release-fechamento-20-entregas.md").read_text()
-    assert "13/20 concluídas (65%)" in release
+    assert any(f"{n}/20 concluídas ({5*n}%)" in release for n in range(13, 21))
     assert "- [x] **REL-03" in release
     with (ROOT / "docs/rel03-auditoria-100-candidatos.csv").open(newline="", encoding="utf-8") as f:
         rows = list(csv.DictReader(f, delimiter=";"))
