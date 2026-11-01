@@ -274,6 +274,15 @@ def test_tls_real_certificado_e_restricao_tenant_mac(tmp_path):
         assert ex.value.code == 404
         body, _ = get(MAC2 + ".cfg", "client2")
         assert b"secret-t2" in body
+        # Revogar com servidor TLS ativo: proximo GET nao libera o .cfg.
+        updated = json.loads(registry.read_text(encoding="utf-8"))
+        updated["devices"][0]["revoked"] = True
+        registry.write_text(json.dumps(updated), encoding="utf-8")
+        with pytest.raises(urllib.error.HTTPError) as revoked:
+            get(MAC1 + ".cfg", "client1")
+        assert revoked.value.code == 404
+        body, _ = get(MAC2 + ".cfg", "client2")
+        assert b"secret-t2" in body
         with pytest.raises((urllib.error.URLError, ssl.SSLError, ConnectionError)):
             get(MAC1 + ".cfg", None)
     finally:
