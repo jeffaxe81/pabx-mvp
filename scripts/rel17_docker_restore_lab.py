@@ -39,7 +39,8 @@ def docker(*args):
 
 
 def volume_marker(name):
-    return docker("run", "--rm", "-v", name + ":/data", IMAGE, "cat", "/data/proof.txt").strip()
+    return docker("run", "--rm", "-v", name + ":/data", IMAGE,
+                  "sh", "-c", "if [ -f /data/proof.txt ]; then cat /data/proof.txt; else printf '__MISSING__'; fi").strip()
 
 
 def copy_volume_to_host(name, target):
@@ -170,6 +171,7 @@ def run_lab():
                 observed = volume_marker(names[label])
                 if observed != value:
                     PHASE = ("volume_restore_verify_old_state" if observed == "estado-novo"
+                             else "volume_restore_verify_missing" if observed == "__MISSING__"
                              else "volume_restore_verify_empty" if not observed
                              else "volume_restore_verify_other")
                     raise RuntimeError("restauração de volume divergente")
