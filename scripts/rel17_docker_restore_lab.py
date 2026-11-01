@@ -160,8 +160,13 @@ def run_lab():
             for label, value in DATA.items():
                 if volume_marker(names[label]) != "estado-novo":
                     raise RuntimeError("mutação de volume não ocorreu")
-                PHASE = "volume_restore"
-                restore_volume(names[label], staging / "pabx" / label)
+                PHASE = "archive_volume_data"
+                volume_path = staging / "pabx" / label
+                if (volume_path / "proof.txt").read_text() != value:
+                    raise RuntimeError("dados divergentes no arquivo restaurável")
+                PHASE = "volume_restore_command"
+                restore_volume(names[label], volume_path)
+                PHASE = "volume_restore_verify"
                 if volume_marker(names[label]) != value:
                     raise RuntimeError("restauração de volume divergente")
             status["docker_volumes_restored"] = True
