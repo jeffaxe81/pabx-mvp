@@ -15,7 +15,7 @@ priv_key_file=/etc/asterisk/certs/asterisk.key
 """
 
 
-def _tree(tmp_path, pjsip=TLS, manager="[api]\\nsecret = senha-forte-irrepetivel\\n",
+def _tree(tmp_path, pjsip=TLS, manager="[api]\\nsecret = senha-forte-irrepetivel\\ndeny = 0.0.0.0/0.0.0.0\\npermit = 127.0.0.1/255.255.255.255\\n",
           compose='services:\\n  queue-api:\\n    environment:\\n      AMI_SECRET: "senha-forte-irrepetivel"\\n'):
     ast = tmp_path / "asterisk"
     (ast / "certs").mkdir(parents=True)
@@ -83,3 +83,28 @@ def test_arquivo_essencial_ausente_e_reportado(tmp_path):
     tree = _tree(tmp_path)
     (tree / "docker-compose.yml").unlink()
     assert any("docker-compose.yml: arquivo ausente" in m for m in inspect(tree))
+
+
+def test_ami_sem_deny_geral_e_bloqueado(tmp_path):
+    tree = _tree(tmp_path, manager="[api]\\nsecret = senha-forte-irrepetivel\\npermit = 127.0.0.1/255.255.255.255\\n")
+    assert any("ACL AMI sem deny geral" in m for m in inspect(tree))
+
+
+def test_ami_sem_permit_loopback_e_bloqueado(tmp_path):
+    tree = _tree(tmp_path, manager="[api]\\nsecret = senha-forte-irrepetivel\\ndeny = 0.0.0.0/0.0.0.0\\n")
+    assert any("ACL AMI sem permit loopback" in m for m in inspect(tree))
+
+
+def test_secret_vazio_nao_passa_preflight(tmp_path):
+    tree = _tree(tmp_path, manager="[api]\\nsecret = \\ndeny = 0.0.0.0/0.0.0.0\\npermit = 127.0.0.1/255.255.255.255\\n")
+    assert any("credencial vazia ou curta" in m for m in inspect(tree))
+
+
+def test_secret_curto_nao_passa_preflight(tmp_path):
+    tree = _tree(tmp_path, compose="services:\\n  queue-api:\\n    environment:\\n      AMI_SECRET: curta123\\n")
+    assert any("credencial vazia ou curta" in m for m in inspect(tree))
+
+
+def test_acl_comentada_nao_comprova_isolamento(tmp_path):
+    tree = _tree(tmp_path, manager="[api]\\nsecret = senha-forte-irrepetivel\\n; deny = 0.0.0.0/0.0.0.0\\npermit = 127.0.0.1/255.255.255.255\\n")
+    assert any("ACL AMI sem deny geral" in m for m in inspect(tree))
