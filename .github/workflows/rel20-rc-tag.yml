@@ -1,0 +1,78 @@
+name: AXE PABX | tag da release candidate local REL-20
+
+"on":
+  push:
+    branches:
+      - main
+    paths:
+      - RELEASE_VERSION
+      - docs/rel20-release-candidate.md
+      - docs/release-fechamento-20-entregas.md
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: axe-pabx-rel20-rc-local
+  cancel-in-progress: false
+
+jobs:
+  tag-release-candidate:
+    name: Release candidate | validar checklist e criar tag anotada
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Validar REL-01..REL-20 e bloqueio produtivo
+        run: python3 scripts/rel20_release_candidate.py --root .
+      - name: Conferir main e criar tag da RC local
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="$(cat RELEASE_VERSION)"
+          [[ "$tag" == "v0.1.0-rc.1" ]] || { echo "Tag inesperada"; exit 1; }
+          sha="$(git rev-parse HEAD)"
+          [[ "$sha" == "$GITHUB_SHA" ]] || { echo "SHA de checkout divergente"; exit 1; }
+          remote_main="$(git ls-remote origin refs/heads/main | cut -f1)"
+          [[ "$remote_main" == "$sha" ]] || { echo "main mudou; recusar tag em commit antigo"; exit 1; }
+          found="$(git ls-remote origin "refs/tags/$tag^{}" | cut -f1)"
+          if [[ -n "$found" ]]; then
+            [[ "$found" == "$sha" ]] || { echo "tag RC pertence a outro commit"; exit 1; }
+            echo "Tag anotada existente no mesmo commit"
+          else
+            [[ -z "$(git ls-remote origin "refs/tags/$tag")" ]] || { echo "tag leve/ambígua já existente"; exit 1; }
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git tag -a "$tag" -m "AXE PABX release candidate local; GO operacional bloqueado"
+            git push origin "refs/tags/$tag"
+          fi
+          checked="$(git ls-remote origin "refs/tags/$tag^{}" | cut -f1)"
+          [[ "$checked" == "$sha" ]] || { echo "Falha na verificação da tag remota"; exit 1; }
+          echo "RC local tag=$tag commit=$sha (produção NO-GO)"
+      - name: Registrar release como rascunho e pré-lançamento, não como GA
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="$(cat RELEASE_VERSION)"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "Registro de release já existente; conferir manualmente"
+            gh release view "$tag" --json isDraft,isPrerelease,tagName --jq 'select(.isDraft == true and .isPrerelease == true) | .tagName' | grep -Fx "$tag"
+          else
+            gh release create "$tag" --draft --prerelease \
+              --title "AXE PABX $tag — RC local (produção NO-GO)" \
+              --notes-file docs/rel20-release-candidate.md \
+              --verify-tag
+          fi
+          echo "Release candidate registrada somente como rascunho; publicação produtiva proibida"
