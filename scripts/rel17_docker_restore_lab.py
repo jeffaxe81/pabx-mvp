@@ -178,6 +178,7 @@ def run_lab():
                 PHASE = "volume_restore_verify"
                 observed = volume_marker(names[label])
                 if observed != value:
+                    print("REL-17 DEBUG synthetic expected=", repr(value), "actual=", repr(observed), file=sys.stderr)
                     PHASE = ("volume_restore_verify_old_state" if observed == "estado-novo"
                              else "volume_restore_verify_missing" if observed == "__MISSING__"
                              else "volume_restore_verify_empty" if not observed
