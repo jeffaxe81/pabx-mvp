@@ -211,3 +211,25 @@ jobs:
           path: lab-results/queue-tenants.json
           if-no-files-found: error
           retention-days: 14
+
+  rollback-docker-volumes:
+    name: Docker | rollback de arquivos e volumes isolados
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Restaurar arquivos reais e dois volumes Docker efêmeros
+        run: python3 scripts/rel17_docker_restore_lab.py --report lab-results/rel17-docker-rollback.json
+      - name: Guardar somente prova sanitizada de rollback
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rel17-isolated-docker-rollback-${{ github.sha }}
+          path: lab-results/rel17-docker-rollback.json
+          if-no-files-found: error
+          retention-days: 14
