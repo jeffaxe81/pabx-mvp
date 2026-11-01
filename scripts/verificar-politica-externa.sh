@@ -12,7 +12,7 @@ check_context() {
     exit 1
   fi
   # Asterisk CLI: [ Context 'nome' created by ... ]; mocks: [nome].
-  if ! grep -Fxq "[$ctx]" <<<"$output" && ! grep -Eq "^\[ Context '\${ctx}' created by '[^']+' \]$" <<<"$output"; then
+  if ! grep -Fxq "[$ctx]" <<<"$output" && ! grep -Eq "^\[ Context '${ctx}' created by '[^']+' \]$" <<<"$output"; then
     echo "FALHA: contexto $ctx ausente" >&2
     exit 1
   fi
