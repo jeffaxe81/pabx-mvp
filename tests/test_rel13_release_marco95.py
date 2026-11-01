@@ -23,6 +23,6 @@ def test_rel13_distingue_transferencia_sip_real_de_homologacao_de_producao():
     row = next(line for line in content.splitlines() if line.startswith("- [x] **REL-13"))
     for evidence in ("PR #351", "PR #356", "21/21", "174/174", "REFER", "1103"):
         assert evidence in row
-    for limitation in ("operadora externa", "produção", "mídia renegociado"):
+    for limitation in ("operadora externa", "produção", "áudio renegociado"):
         assert limitation in row
     assert "**Resta REL-20" in content
