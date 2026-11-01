@@ -126,6 +126,18 @@ def evaluate(packet, expected_sha, root=ROOT):
         raise ValueError("versao, SHA ou politica NO-GO inconsistente")
 
     homologation = packet["homologation"]
+    if not isinstance(homologation, dict) or not isinstance(homologation.get("checks"), dict):
+        raise ValueError("homologacao malformada")
+    for record in homologation["checks"].values():
+        if not isinstance(record, dict) or set(record) != {"status", "evidence"}:
+            raise ValueError("cenario de homologacao malformado")
+        state, ref = record["status"], record["evidence"]
+        if not isinstance(state, str) or state not in STATES:
+            raise ValueError("estado de homologacao invalido")
+        if not isinstance(ref, str) or (ref and not EVIDENCE_REF.fullmatch(ref)):
+            raise ValueError("referencia de homologacao invalida")
+        if (state == "passed" and not ref) or (state == "pending" and ref):
+            raise ValueError("referencia incoerente com status da homologacao")
     result = summarize_homologation(homologation)
     if result["source_commit"] != sha:
         raise ValueError("homologacao nao corresponde ao SHA do pacote")
@@ -154,7 +166,7 @@ def evaluate(packet, expected_sha, root=ROOT):
     return {
         "schema_version": 1,
         "source_commit": sha,
-        "engineering_rc_completed": True,
+        "engineering_rc_verified_by_tool": False,
         "homologation_declared_passed": result["counts"]["passed"],
         "homologation_total": result["total"],
         "homologation_declared_percent": result["coverage_percent"],
