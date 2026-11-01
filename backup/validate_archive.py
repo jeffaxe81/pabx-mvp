@@ -11,6 +11,8 @@ REQUIRED = (
     "pabx/webphone/",
     "pabx/provisioning/",
     "pabx/recordings/",
+    "pabx/admin_data/",
+    "pabx/queue_api_data/",
     "pabx/docker-compose.yml",
     "pabx/prompt-base-pabx.md",
 )
