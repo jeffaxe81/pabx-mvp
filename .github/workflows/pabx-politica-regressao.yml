@@ -11,6 +11,7 @@ on:
       - 'tests/test_preflight_contextos_30_cenarios.py'
       - 'tests/test_politica_externa_isolamento.py'
       - 'tests/test_politica_externa_entradas.py'
+      - 'tests/test_isolamento_multitenant_pabx.py'
       - '.github/workflows/pabx-politica-regressao.yml'
   workflow_dispatch:
 
@@ -39,5 +40,7 @@ jobs:
             tests/test_preflight_contextos_30_cenarios.py
       - name: Validar entradas invalidas
         run: python -m pytest -q tests/test_politica_externa_entradas.py
+      - name: Validar isolamento entre empresas
+        run: python -m pytest -q tests/test_isolamento_multitenant_pabx.py
       - name: Validar isolamento dinamico
         run: python -m pytest -q tests/test_politica_externa_isolamento.py
