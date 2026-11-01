@@ -62,7 +62,7 @@ def volume_marker(name):
 
 def copy_volume_to_host(name, target):
     docker("run", "--rm", "-v", name + ":/data:ro", "-v", str(target) + ":/backup",
-           IMAGE, "sh", "-c", "cp -a /data/. /backup/")
+           IMAGE, "sh", "-c", "cp -r /data/. /backup/")
 
 
 def restore_volume(name, source):
@@ -194,6 +194,7 @@ def run_lab():
                              else "volume_restore_verify_other")
                     raise RuntimeError("restauração de volume divergente")
             status["docker_volumes_restored"] = True
+            PHASE = "temporary_directory_cleanup"
     finally:
         for name in reversed(created):
             # Cada nome foi gerado exclusivamente neste processo.
