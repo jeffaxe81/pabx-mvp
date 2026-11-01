@@ -22,6 +22,8 @@ COMMANDS = {
 CONTAINER_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,62}$")
 ENDPOINT_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,62}$")
 DEFAULT_ENDPOINTS = ("t1-1001", "t2-1001")
+MAX_SNAPSHOT_CHARS = 131072
+MAX_EXPECTED_ENDPOINTS = 30
 
 
 def collect_snapshots(runtime="docker", container="pabx-mvp", timeout=8):
@@ -50,22 +52,33 @@ def collect_snapshots(runtime="docker", container="pabx-mvp", timeout=8):
 
 def analyze_snapshots(snapshots, expected_endpoints=DEFAULT_ENDPOINTS):
     """Avalia evidências sem expor saída completa do CLI ou credenciais."""
-    if not all(ENDPOINT_RE.fullmatch(e) for e in expected_endpoints):
-        raise ValueError("Nome de endpoint inválido")
+    if (not isinstance(snapshots, dict)
+            or not isinstance(expected_endpoints, (list, tuple))
+            or not 1 <= len(expected_endpoints) <= MAX_EXPECTED_ENDPOINTS
+            or any(not isinstance(e, str) or not ENDPOINT_RE.fullmatch(e)
+                   for e in expected_endpoints)
+            or len(set(expected_endpoints)) != len(expected_endpoints)):
+        raise ValueError("evidência SIP ou endpoints esperados inválidos")
     checks = {}
     def record(name, ok, description):
         checks[name] = {"ok": bool(ok), "description": description}
 
     def output(name):
         result = snapshots.get(name, {})
-        return result.get("output", "") if result.get("code") == 0 else ""
+        if (not isinstance(result, dict) or type(result.get("code")) is not int
+                or result["code"] != 0):
+            return ""
+        value = result.get("output")
+        return value if isinstance(value, str) and len(value) <= MAX_SNAPSHOT_CHARS else ""
 
     version = output("version")
     record("asterisk_cli", "Asterisk" in version,
            "CLI local do Asterisk acessível")
     transports = output("transports")
     for name in ("transport-tls", "transport-wss"):
-        record(name, bool(re.search(r"\b" + re.escape(name) + r"\b", transports)),
+        record(name, bool(re.search(
+            r"(?im)^\s*Transport\s*:\s*" + re.escape(name) + r"(?:\s|$)",
+            transports)),
                "Transporte PJSIP listado pelo Asterisk")
     endpoints = output("endpoints")
     for name in expected_endpoints:
