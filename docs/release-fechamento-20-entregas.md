@@ -1,6 +1,6 @@
 # AXE PABX — 20 entregas de fechamento da release
 
-**Estado:** 10/20 concluídas (50%) após integração e CI das proteções da rota alternativa REL-05 e auditoria de decisões REL-10. Itens restantes exigem evidência verificável. **Não declarar release concluída apenas por registrar esta lista.**
+**Estado:** 11/20 concluídas (55%) após integração do controle administrativo da política internacional REL-09. Itens restantes exigem evidência verificável. **Não declarar release concluída apenas por registrar esta lista.**
 
 **Escopo:** PABX puro. Contact Center e IA permanecem no backlog. Implantação inicial local; produção exige aceite específico.
 
@@ -12,7 +12,7 @@
 - [x] **REL-06 — Tenant dinâmico:** O wizard gera para t3/t4/t99 o contexto de saída com TENANT explícito, Gosub(politica-externa,s,1), validação de GOSUB_RETVAL e Dial apenas após autorização. Testes executáveis de geração/validação aprovados na PR #312 (CI de política 41257306083; CI estática 41257306065). Laboratório Asterisk da mesma PR validou SIP geral com t3, mas não chamadas SIP específicas de bloqueio internacional. **Estado:** CONCLUÍDO no escopo de integração do wizard.
 - [x] **REL-07 — Isolamento multiempresa:** Contextos t1/t2 possuem TENANT e famílias blocklist independentes; a política consulta politica-externa-${TENANT}/internacional. Testes de isolamento e geração t3/t4/t99 aprovados na PR #312 (41257306083), e laboratório Asterisk da mesma PR validou tentativas SIP cruzadas entre empresas (41257306027). **Estado:** CONCLUÍDO para isolamento de contextos/identidade e segregação das chaves AstDB no código; não equivale a ensaio SIP específico de política de bloqueio, ainda pendente em REL-12/14.
 - [x] **REL-08 — Segurança de entradas:** Validações de TENANT e DESTINO no dialplan antes da AstDB; rejeição de contexto SIP ausente, semelhante ou mencionado apenas em diagnóstico no preflight CLI. Evidências: PRs #314, #315, #316 e #317 integradas, com regressões de entradas inválidas e CI aprovadas (PR #317: workflow estático 41305580656 e laboratório geral 41305580664, ambos SUCCESS após reexecução do job de caixa postal). **Estado:** CONCLUÍDO para validação de entradas e preflight. Não equivale a chamadas SIP reais de bloqueio internacional (REL-12/14 pendentes).
-- [ ] **REL-09 — Permissões administrativas:** Restringir quem pode alterar políticas de saída. **Estado:** PENDENTE.
+- [x] **REL-09 — Permissões administrativas:** Alteração de política internacional restrita ao papel admin, com validação do tenant cadastrado e do booleano de bloqueio; escrita AMI somente na família de política do tenant. PR #328 integrada, commit f627db5121d58215249241166bbd4303d271996b, CI 41311753710 e 41311753885 (16/16 jobs aprovados). **Estado:** CONCLUÍDO no escopo de autorização e escrita validada no código; ensaio específico de chamada SIP permanece REL-12.
 - [x] **REL-10 — Logs e auditoria:** Eventos NoOp AUDIT_POLITICA_EXTERNA para decisões ALLOW e DENY identificam tenant sem incluir DESTINO, CallerID, credenciais ou valor AstDB; testes de conteúdo e ordem antes do Return. PR #323 integrada (squash cb386191e829eef5e4307ad60794563a92e6d71d), CI política 41310613158, estática 41310613102 e laboratório geral 41310613115, 17/17 SUCCESS. **Estado:** CONCLUÍDO para emissão de eventos no dialplan; retenção e exportação a SIEM não foram homologadas.
 - [x] **REL-11 — Testes unitários inéditos:** Cobertura estática de decisões ALLOW/DENY e entradas inválidas, testes isolados do preflight e 30 cenários parametrizados de reconhecimento de contextos. **Estado:** CONCLUÍDO NO ESCOPO DE TESTES AUTOMATIZADOS, com CI específica aprovada; NÃO comprova comportamento de chamadas SIP reais (REL-12 permanece pendente). Evidência: commit `ebd79c3a`, workflow `41254672287`, job `124695200214` SUCCESS.
 - [ ] **REL-12 — Testes de integração dialplan:** Executar chamadas simuladas em laboratório Asterisk. **Estado:** PENDENTE.
@@ -27,7 +27,7 @@
 
 ## Barra de progresso — 2026-10-31 (meta intermediária)
 
-`[####################--------------------] 50% (10/20)`
+`[####################--------------------] 55% (11/20)`
 
 **Parcial em código, não homologado:** REL-04 e REL-17; REL-05 concluída para proteção estática de rotas, não para chamadas reais de troncos; REL-08 concluída apenas para entradas e preflight, não para chamadas SIP de política internacional. **CI específica, CI geral e laboratório automatizado aprovados (REL-19); homologação SIP específica ainda pendente:** REL-12 a REL-14. Não contar itens parciais como entregues.
 
