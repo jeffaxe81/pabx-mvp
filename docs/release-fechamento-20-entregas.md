@@ -1,6 +1,6 @@
 # AXE PABX — 20 entregas de fechamento da release
 
-**Estado:** acompanhamento em andamento (3/20 concluídas, 15%). Itens restantes exigem evidência verificável. **Não declarar release concluída apenas por registrar esta lista.**
+**Estado:** acompanhamento em andamento (4/20 concluídas, 20%). Itens restantes exigem evidência verificável. **Não declarar release concluída apenas por registrar esta lista.**
 
 **Escopo:** PABX puro. Contact Center e IA permanecem no backlog. Implantação inicial local; produção exige aceite específico.
 
@@ -22,14 +22,14 @@
 - [ ] **REL-16 — Backup pré-release:** Gerar e verificar backup restaurável. **Estado:** PENDENTE.
 - [ ] **REL-17 — Rollback:** Documentar e testar retorno à versão anterior. **Estado:** PENDENTE.
 - [ ] **REL-18 — Segurança de configuração:** Revisar senhas padrão, TLS e permissões. **Estado:** PENDENTE.
-- [ ] **REL-19 — CI e homologação:** Exigir pipelines verdes e evidência de laboratório. **Estado:** PENDENTE.
+- [x] **REL-19 — CI geral e laboratório automatizado:** 18/18 jobs aprovados no head da PR #311: workflow 41255379752 (8/8 laboratório Asterisk), 41255379878 (8/8 validação estática), 41255379848 (1/1 política), 41255379887 (1/1 auditoria). **Estado:** CONCLUÍDO no escopo de CI/laboratório geral; não substitui homologação SIP específica REL-12 a REL-14 nem produção.
 - [ ] **REL-20 — Release candidate local:** Gerar tag/versão e checklist de aceite, sem publicar em produção. **Estado:** PENDENTE.
 
 ## Barra de progresso — 2026-10-31 (atualização)
 
-`[######----------------------------------] 15% (3/20)`
+`[########--------------------------------] 20% (4/20)`
 
-**Parcial em código, não homologado:** REL-04, REL-05, REL-06 e REL-08 (novos testes de entradas inválidas). **CI específica da política e auditoria aprovadas; CI geral e homologação SIP específica pendentes:** REL-19. Não contar itens parciais como entregues.
+**Parcial em código, não homologado:** REL-04, REL-05, REL-06 e REL-08 (novos testes de entradas inválidas). **CI específica, CI geral e laboratório automatizado aprovados (REL-19); homologação SIP específica ainda pendente:** REL-12 a REL-14. Não contar itens parciais como entregues.
 
 **Auditoria automatizada REL-03:** workflow `41255085879` aprovado; artefato `auditoria-roadmap-pabx` (ID `13062723149`) contém triagem dos 100 candidatos com status REVISAR_MANUALMENTE. Isto não conclui REL-03, pois a revisão manual e deduplicação ainda faltam.\n\n**Evidências atualizadas:** PR #311. O commit `24462cc7` passou nas duas pipelines, com 16/16 jobs concluídos com sucesso (8 estáticos e 8 de laboratório Asterisk), incluindo Chromium WSS/DTLS-SRTP. A homologação funcional específica de política internacional permanece pendente. O commit `3c15c703` concluiu 16/16 jobs com sucesso (validação estática e laboratório geral Asterisk). O commit `d9756baf` adicionou três verificações estáticas de política. O commit `00a7fc6f` acrescentou cinco regressões estáticas de autorização e rota alternativa. **A CI específica da política externa passou no commit `ebd79c3a` (workflow `41254672287`); a CI geral e os testes SIP funcionais seguem separados e pendentes.** Não confundir aprovação da suíte geral com homologação SIP específica de bloqueio internacional.
 
