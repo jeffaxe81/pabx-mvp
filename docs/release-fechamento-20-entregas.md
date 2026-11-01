@@ -1,6 +1,6 @@
 # AXE PABX — 20 entregas de fechamento da release
 
-**Estado:** 15/20 concluídas (75%) após revisão e endurecimento do preflight de configuração (REL-18) em código e CI. Não equivale a homologação de produção. Itens restantes exigem evidência verificável. **Não declarar release concluída apenas por registrar esta lista.**
+**Estado:** 16/20 concluídas (80%) após regressão do dialplan e política externa em Asterisk real com canais Local/ em ambiente descartável (REL-12). Não equivale a homologação de produção. Itens restantes exigem evidência verificável. **Não declarar release concluída apenas por registrar esta lista.**
 
 **Escopo:** PABX puro. Contact Center e IA permanecem no backlog. Implantação inicial local; produção exige aceite específico.
 
@@ -15,7 +15,7 @@
 - [x] **REL-09 — Permissões administrativas:** Alteração de política internacional restrita ao papel admin, com validação do tenant cadastrado e do booleano de bloqueio; escrita AMI somente na família de política do tenant. PR #328 integrada, commit f627db5121d58215249241166bbd4303d271996b, CI 41311753710 e 41311753885 (16/16 jobs aprovados). **Estado:** CONCLUÍDO no escopo de autorização e escrita validada no código; ensaio específico de chamada SIP permanece REL-12.
 - [x] **REL-10 — Logs e auditoria:** Eventos NoOp AUDIT_POLITICA_EXTERNA para decisões ALLOW e DENY identificam tenant sem incluir DESTINO, CallerID, credenciais ou valor AstDB; testes de conteúdo e ordem antes do Return. PR #323 integrada (squash cb386191e829eef5e4307ad60794563a92e6d71d), CI política 41310613158, estática 41310613102 e laboratório geral 41310613115, 17/17 SUCCESS. **Estado:** CONCLUÍDO para emissão de eventos no dialplan; retenção e exportação a SIEM não foram homologadas.
 - [x] **REL-11 — Testes unitários inéditos:** Cobertura estática de decisões ALLOW/DENY e entradas inválidas, testes isolados do preflight e 30 cenários parametrizados de reconhecimento de contextos. **Estado:** CONCLUÍDO NO ESCOPO DE TESTES AUTOMATIZADOS, com CI específica aprovada; NÃO comprova comportamento de chamadas SIP reais (REL-12 permanece pendente). Evidência: commit `ebd79c3a`, workflow `41254672287`, job `124695200214` SUCCESS.
-- [ ] **REL-12 — Testes de integração dialplan:** Executar chamadas simuladas em laboratório Asterisk. **Estado:** PENDENTE.
+- [x] **REL-12 — Testes de integração dialplan:** Integração da sub-rotina real `politica-externa` com AstDB em Asterisk Docker descartável, por canais Local/ sem saída para operadoras. Casos t1/t2/t3 verificam decisão ALLOW/DENY, bloqueio internacional, independência de tenants, permissão nacional, entrada inválida e reconfiguração em runtime. PR #346 integrada, CI 18/18 SUCCESS, incluindo job específico `Asterisk | política AstDB em canais Local isolados`. **Estado:** CONCLUÍDO para chamadas simuladas em dialplan real; tráfego SIP externo, gateways/operadoras e regressão de telefonia permanecem REL-04, REL-13 e REL-14.
 - [ ] **REL-13 — Regressão de telefonia:** Conferir chamadas internas, externas e transferências. **Estado:** PENDENTE.
 - [ ] **REL-14 — Regressão de troncos:** Validar gateway principal e alternativo. **Estado:** PENDENTE.
 - [x] **REL-15 — Regressão de provisionamento:** Gerador real executado em diretório temporário com dois tenants, verificando separação por MAC, ramal, credencial e servidor e substituição de placeholders; validações existentes de MAC inválido/duplicado. Evidência: PR #318 integrada (squash c8bd18e1aa8ad342d9adf32145dbfad040489c0d) após 16/16 jobs SUCCESS: CI estática 41306495977 (8/8) e laboratório geral 41306495837 (8/8). **Estado:** CONCLUÍDO no escopo de geração e isolamento local automatizados; provisionamento em aparelhos físicos não foi testado.
@@ -27,7 +27,7 @@
 
 ## Barra de progresso — 2026-11-01 (meta intermediária)
 
-`[##############################----------] 75% (15/20)`
+`[################################--------] 80% (16/20)`
 
 **Parcial em código, não homologado:** REL-04 e operação real da REL-17/18; REL-05 concluída para proteção estática de rotas, não para chamadas reais de troncos; REL-08 concluída apenas para entradas e preflight, não para chamadas SIP de política internacional. **CI específica, CI geral e laboratório automatizado aprovados (REL-19); homologação SIP específica ainda pendente:** REL-12 a REL-14. Não contar itens parciais como entregues.
 
@@ -54,3 +54,6 @@ Cada entrega exige referência a commit/PR, evidência de teste aplicável e apr
 
 
 **Fechamento de 75% (2026-11-01):** REL-18 aceita exclusivamente para revisão/validações de configuração *em código*: preflight fail-closed para senhas de exemplo, credenciais curtas, ACL AMI, TLS e permissões, com PRs #333/#345 integradas e última CI 17/17. Não foram configurados certificados nem credenciais operacionais no host do usuário; não houve implantação. Próximas provas: REL-04, REL-12 a REL-14 e REL-20; GO continua bloqueado.
+
+
+**Fechamento de 80% (2026-11-01):** REL-12 validada em runtime Asterisk com canais Local e AstDB sintética, sem tronco real nem ligação para operadora. PR #346 integrada com 18/18 checks aprovados. Provas específicas de prefixo/rota, transferência, tronco externo e produção continuam REL-04, REL-13/14. GO ainda bloqueado.
