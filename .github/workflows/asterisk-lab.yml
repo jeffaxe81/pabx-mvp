@@ -299,3 +299,27 @@ jobs:
           path: lab-results/rel14-sip-trunks.json
           if-no-files-found: error
           retention-days: 14
+
+  rel13-sip-refer-transfer:
+    name: Asterisk | REL-13 transferencia SIP REFER em t1/t2
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Dependencias SRTP de laboratorio
+        run: python3 -m pip install -r lab/requirements.txt
+      - name: Regressao de chamada, rota simulada e transferencia REFER
+        run: python3 -m lab.asterisk_lab --calls --routes --transfers --report lab-results/rel13-transfer.json
+      - name: Evidencia sanitizada de transferencia
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rel13-sip-refer-lab-${{ github.sha }}
+          path: lab-results/rel13-transfer.json
+          if-no-files-found: error
+          retention-days: 14
