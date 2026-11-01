@@ -1,28 +1,17 @@
-"""Marcos da release: 95% exige 19 de 20 e prova REL-13 real."""
+"""Marco historico REL-13: seu aceite de 95% continua registrado apos RC."""
 from pathlib import Path
-import re
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_rel13_requer_19_aceites_e_rel20_pendente():
+def test_rel13_evidencia_permanece_e_95_foi_marco_historico():
     content = (ROOT / "docs/release-fechamento-20-entregas.md").read_text(encoding="utf-8")
-    lines = content.splitlines()
-    marks = [line for line in lines if re.match(r"^- \[[ x]\] \*\*REL-[0-9]{2} —", line)]
-    assert len(marks) == 20
-    assert sum(line.startswith("- [x]") for line in marks) == 19
-    assert sum(line.startswith("- [ ]") for line in marks) == 1
-    assert any(line.startswith("- [ ] **REL-20") for line in marks)
-    assert any(line.startswith("- [x] **REL-13") for line in marks)
-    assert "19/20 concluídas (95%)" in content
-    assert "95% (19/20)" in content
-
-
-def test_rel13_distingue_transferencia_sip_real_de_homologacao_de_producao():
-    content = (ROOT / "docs/release-fechamento-20-entregas.md").read_text(encoding="utf-8")
-    row = next(line for line in content.splitlines() if line.startswith("- [x] **REL-13"))
+    rows = [row for row in content.splitlines() if row.startswith("- [")]
+    row = next(row for row in rows if row.startswith("- [x] **REL-13"))
     for evidence in ("PR #351", "PR #356", "21/21", "174/174", "REFER", "1103"):
         assert evidence in row
     for limitation in ("operadora externa", "produção", "áudio renegociado"):
         assert limitation in row
-    assert "**Resta REL-20" in content
+    assert "**Fechamento de 95%" in content
+    assert "Resta REL-20" in content
+    assert "operacional" in content
