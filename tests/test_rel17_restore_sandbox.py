@@ -18,15 +18,18 @@ def make_archive(path):
         for folder in DIRS:
             info = tarfile.TarInfo(f"pabx/{folder}/")
             info.type = tarfile.DIRTYPE
+            info.mode = 0o755
             archive.addfile(info)
             data = b"previous-release"
             info = tarfile.TarInfo(f"pabx/{folder}/release-marker.txt")
             info.size = len(data)
+            info.mode = 0o644
             archive.addfile(info, io.BytesIO(data))
         for filename in FILES:
             data = b"previous-release"
             info = tarfile.TarInfo(f"pabx/{filename}")
             info.size = len(data)
+            info.mode = 0o644
             archive.addfile(info, io.BytesIO(data))
 
 
