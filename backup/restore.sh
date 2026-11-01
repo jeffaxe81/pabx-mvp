@@ -16,6 +16,9 @@ if [ ! -f "$ARCHIVE" ]; then
   exit 1
 fi
 
+# Falha antes de pedir confirmação ou sobrescrever qualquer arquivo.
+python3 "$(dirname "$0")/validate_archive.py" "$ARCHIVE"
+
 echo "Isso sobrescreve asterisk/, admin/, webphone/, provisioning/,"
 echo "recordings/ e docker-compose.yml com o conteúdo do backup."
 echo "Confirme que já rodou 'docker compose down' antes de continuar."
