@@ -161,14 +161,18 @@ services:
     volumes:
       - ./webphone:/usr/share/nginx/html:ro
 
-  # Servidor HTTP simples que entrega os arquivos de auto-provisionamento.
-  # Os telefones apontam para http://<ip-servidor>:8080/<MAC>.cfg
+  # INSEGURO / LABORATORIO APENAS: .cfg contem senhas SIP em texto claro.
+  # Nunca publicar por HTTP em interface de rede. O perfil nao e habilitado
+  # pelo "docker compose up" padrao; so para testes manuais NO MESMO HOST.
+  # Provisionamento de telefones reais depende de TLS + autenticacao/ACL
+  # por tenant/MAC e homologacao do fabricante (issue #344).
   provisioning:
+    profiles: ["insecure-lab-provisioning"]
     image: nginx:alpine
     container_name: pabx-provisioning
-    restart: unless-stopped
+    restart: "no"
     ports:
-      - "8080:80"
+      - "127.0.0.1:8080:80"
     volumes:
       - ./provisioning/files:/usr/share/nginx/html:ro
 
