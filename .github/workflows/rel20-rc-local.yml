@@ -1,0 +1,57 @@
+name: AXE PABX | REL-20 pacote RC local
+
+"on":
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pabx-rel20-rc-\${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rc-local:
+    name: REL-20 | versao, checklist e pacote SHA256
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - name: Checkout do SHA do evento, sem credenciais persistentes
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Validar versao e recusa de GO
+        run: |
+          python3 scripts/rel20_rc_gate.py
+          python3 -m pip install -r tests/requirements.txt
+          python3 -m pytest -q scripts/tests/test_rel20_rc_gate.py tests/test_rel20_release_100.py tests/test_rel13_release_marco95.py
+      - name: Gerar pacote local sem imagem Docker e sem deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(cat VERSION)" = "0.1.0-rc.1"
+          mkdir -p dist
+          SHA="$(git rev-parse --verify HEAD)"
+          SHORT="\${SHA:0:12}"
+          FILE="axe-pabx-0.1.0-rc.1-\${SHORT}.tar.gz"
+          git archive --format=tar HEAD | gzip -n > "dist/$FILE"
+          (
+            cd dist
+            sha256sum "$FILE" > SHA256SUMS
+            sha256sum -c SHA256SUMS
+          )
+          printf 'version=0.1.0-rc.1\nsource_sha=%s\nproduction_go_authorized=false\n' "$SHA" > dist/RC-METADATA.txt
+      - name: Publicar artefato do laboratorio por periodo limitado
+        uses: actions/upload-artifact@v4
+        with:
+          name: axe-pabx-rc-local-0.1.0-rc.1-\${{ github.sha }}
+          path: dist/
+          if-no-files-found: error
+          retention-days: 14
