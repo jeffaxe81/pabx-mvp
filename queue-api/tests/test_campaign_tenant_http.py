@@ -105,6 +105,22 @@ def request(base, path, token=None, key=None, method="GET", payload=None, origin
 def own(api, path, tenant="t1", method="GET", payload=None):
     return request(api[0], path, TOKENS[tenant], KEY, method, payload)
 
+def uppercase_invalid_callback_id(callback_id):
+    """Variacao invalida MESMO se o token hexadecimal sair so com digitos."""
+    candidate = callback_id.upper()
+    # secrets.token_hex(6) pode gerar 12 digitos, caso em que upper() nada faz.
+    if candidate == callback_id:
+        candidate = "A" + callback_id[1:]
+    return candidate
+
+
+@pytest.mark.parametrize("callback_id", ["ab34567890cd", "123456789012"])
+def test_uppercase_callback_id_mutation_always_changes_path(callback_id):
+    invalid = uppercase_invalid_callback_id(callback_id)
+    assert invalid != callback_id
+    assert any(ch in "ABCDEF" for ch in invalid)
+
+
 
 @pytest.mark.parametrize("path,method,payload", [
     ("/api/campaigns", "GET", None),
@@ -491,7 +507,7 @@ def test_callback_cancel_rejects_unrecognized_path_without_mutation(api):
     for path in (
         "/api/callbacks/" + entry["id"] + "/cancel/extra",
         "/api/callbacks/" + entry["id"] + "/cancel?tenant=t2",
-        "/api/callbacks/" + entry["id"].upper() + "/cancel",
+        "/api/callbacks/" + uppercase_invalid_callback_id(entry["id"]) + "/cancel",
         "/api/callbacks/" + entry["id"] + "/cancel/",
     ):
         assert own(api, path, method="POST")[0] == 404
