@@ -9,7 +9,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 RESTORE = ROOT / "backup/restore.sh"
-DIRS = ("asterisk", "admin", "webphone", "provisioning", "recordings")
+DIRS = ("asterisk", "admin", "webphone", "provisioning", "recordings", "admin_data", "queue_api_data")
 FILES = ("docker-compose.yml", "prompt-base-pabx.md")
 
 
