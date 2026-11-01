@@ -4,8 +4,8 @@
 
 - **Chamadas internas:** reutiliza `lab/call_checks.py`, com SIP TLS, SRTP autenticado, CDR e desconexão nos tenants t1/t2/t3.
 - **Decisão de saída:** executa `lab/outbound_route_checks.py` com dialplan Asterisk verdadeiro e interceptação do `Dial()` exclusivamente na cópia temporária dos testes; não chama operadora.
-- **Transferência:** novo `lab/transfer_checks.py` faz A (1001) chamar B (1002), B emitir SIP REFER para 1003 e verifica recebimento e atendimento real do novo INVITE pelo terminal C, nos tenants t1 e t2.
-- **Isolamento:** credenciais e ramais 1003 são gerados somente no sandbox, não publicados no PABX real. A CI remove o container de teste usando token de propriedade.
+- **Transferência:** novo `lab/transfer_checks.py` faz A (1001) chamar B (1002), B emitir SIP REFER para 1103 e verifica recebimento e atendimento real do novo INVITE pelo terminal C, nos tenants t1 e t2.
+- **Isolamento:** credenciais e ramais 1103 são gerados somente no sandbox, não publicados no PABX real. A CI remove o container de teste usando token de propriedade.
 
 ## Critérios de aceite
 
