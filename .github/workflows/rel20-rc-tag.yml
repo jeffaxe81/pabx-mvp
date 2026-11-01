@@ -1,0 +1,72 @@
+name: AXE PABX | publicar tag RC local sem GO de producao
+
+"on":
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/rel20-rc-tag.yml
+      - docs/releases/rc-0.1.0-rc.1-checklist.md
+
+permissions:
+  contents: read
+
+concurrency:
+  group: axe-pabx-rc-annotated-tag-v0.1.0-rc.1
+  cancel-in-progress: false
+
+jobs:
+  tag-rc:
+    name: Tag RC | conferir SHA e registrar release rascunho
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Preflight de RC de engenharia, sem GO operacional
+        run: python3 scripts/rel20_rc_gate.py
+      - name: Criar e verificar somente a tag anotada do commit do merge
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(cat VERSION)"
+          [[ "$version" == "0.1.0-rc.1" ]] || { echo "Versao inesperada"; exit 1; }
+          tag="v$version"
+          commit="$(git rev-parse HEAD)"
+          [[ "$commit" == "$GITHUB_SHA" ]] || { echo "SHA diferente do evento"; exit 1; }
+          resolved="$(git ls-remote origin "refs/tags/$tag^{}" | cut -f1)"
+          if [[ -n "$resolved" ]]; then
+            [[ "$resolved" == "$commit" ]] || { echo "Tag aponta para outro commit"; exit 1; }
+            echo "Tag anotada ja existe nesse commit"
+          else
+            [[ -z "$(git ls-remote origin "refs/tags/$tag")" ]] || { echo "Tag ja existe mas nao e anotada"; exit 1; }
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git tag -a "$tag" -m "AXE PABX RC local; producao NO-GO"
+            git push origin "refs/tags/$tag"
+          fi
+          [[ "$(git ls-remote origin "refs/tags/$tag^{}" | cut -f1)" == "$commit" ]] || { echo "Falha em confirmar a tag remota"; exit 1; }
+          echo "TAG_VERIFICADA=$tag sha=$commit; sem producao"
+      - name: Registrar candidato como DRAFT/PRE-RELEASE, nunca GA
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="v$(cat VERSION)"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release view "$tag" --json isDraft,isPrerelease,tagName --jq 'select(.isDraft == true and .isPrerelease == true) | .tagName' | grep -Fx "$tag"
+          else
+            gh release create "$tag" --draft --prerelease --verify-tag \
+              --title "AXE PABX $tag — RC LOCAL (NO-GO)" \
+              --notes-file docs/releases/rc-0.1.0-rc.1-checklist.md
+          fi
+          echo "RC registrada como rascunho; nenhum deploy ou publicacao GA"
