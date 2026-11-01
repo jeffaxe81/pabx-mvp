@@ -16,7 +16,7 @@ def test_gerador_rejeita_pins_fracos_repetidos_e_sequenciais_sem_expor_valores()
     attempts = iter([
         "12345678",  # previsível
         "11223344",  # lista de PINs rejeitados
-        "12345679",  # forte no preflight antigo, sequência no tenant dinâmico
+        "23456789",  # sequência que o tenant dinâmico rejeita
         "35679124",  # permitido
         "35679124",  # repetido
         "46791325",  # permitido
