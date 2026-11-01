@@ -1,6 +1,6 @@
 # AXE PABX — 20 entregas de fechamento da release
 
-**Estado:** 7/20 concluídas (35%) após evidência de validação estática de entradas e preflight SIP da REL-08. Itens restantes exigem evidência verificável. **Não declarar release concluída apenas por registrar esta lista.**
+**Estado:** 8/20 concluídas (40%) após homologação de entradas/preflight REL-08 e regressão local de provisionamento REL-15. Itens restantes exigem evidência verificável. **Não declarar release concluída apenas por registrar esta lista.**
 
 **Escopo:** PABX puro. Contact Center e IA permanecem no backlog. Implantação inicial local; produção exige aceite específico.
 
@@ -18,7 +18,7 @@
 - [ ] **REL-12 — Testes de integração dialplan:** Executar chamadas simuladas em laboratório Asterisk. **Estado:** PENDENTE.
 - [ ] **REL-13 — Regressão de telefonia:** Conferir chamadas internas, externas e transferências. **Estado:** PENDENTE.
 - [ ] **REL-14 — Regressão de troncos:** Validar gateway principal e alternativo. **Estado:** PENDENTE.
-- [ ] **REL-15 — Regressão de provisionamento:** Confirmar geração e isolamento de terminais. **Estado:** PENDENTE.
+- [x] **REL-15 — Regressão de provisionamento:** Gerador real executado em diretório temporário com dois tenants, verificando separação por MAC, ramal, credencial e servidor e substituição de placeholders; validações existentes de MAC inválido/duplicado. Evidência: PR #318 integrada (squash c8bd18e1aa8ad342d9adf32145dbfad040489c0d) após 16/16 jobs SUCCESS: CI estática 41306495977 (8/8) e laboratório geral 41306495837 (8/8). **Estado:** CONCLUÍDO no escopo de geração e isolamento local automatizados; provisionamento em aparelhos físicos não foi testado.
 - [ ] **REL-16 — Backup pré-release:** Gerar e verificar backup restaurável. **Estado:** PENDENTE.
 - [ ] **REL-17 — Rollback:** Documentar e testar retorno à versão anterior. **Estado:** PENDENTE.
 - [ ] **REL-18 — Segurança de configuração:** Revisar senhas padrão, TLS e permissões. **Estado:** PENDENTE.
@@ -27,7 +27,7 @@
 
 ## Barra de progresso — 2026-10-31 (meta intermediária)
 
-`[##############--------------------------] 35% (7/20)`
+`[################------------------------] 40% (8/20)`
 
 **Parcial em código, não homologado:** REL-04 e REL-05; REL-08 concluída apenas para entradas e preflight, não para chamadas SIP de política internacional. **CI específica, CI geral e laboratório automatizado aprovados (REL-19); homologação SIP específica ainda pendente:** REL-12 a REL-14. Não contar itens parciais como entregues.
 
@@ -36,3 +36,6 @@
 ## Critério de encerramento
 
 Cada entrega exige referência a commit/PR, evidência de teste aplicável e aprovação. O item REL-20 só fecha depois de REL-01 a REL-19 aprovados; não confundir CI de documentação com homologação funcional.
+
+
+**Fechamento de 40% (2026-11-01):** REL-08 concluída para validação de TENANT/DESTINO e preflight de contexto SIP (PR #319, CI 41306573482 e 41306573484: 16/16 SUCCESS), REL-15 concluída para provisionamento local automatizado de dois tenants (PR #318, CI 41306495837 e 41306495977: 16/16 SUCCESS). Os ensaios SIP específicos de política externa, troncos reais e dispositivos físicos permanecem fora dessas evidências e pendentes nos itens aplicáveis. Sem implantação em produção.
