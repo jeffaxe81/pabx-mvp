@@ -29,8 +29,16 @@ def command(args, **kwargs):
         timeout=90, check=False, **kwargs
     )
     if result.returncode:
-        # Não expor qualquer valor incidental de stdout/stderr do Docker/backup.
-        raise RuntimeError("etapa isolada falhou: " + str(args[0]))
+        # Apenas categorias fixas; nunca incluir stderr bruto, caminhos ou dados.
+        stderr = (result.stderr or "").lower()
+        category = (
+            "permission" if "permission denied" in stderr else
+            "missing" if any(x in stderr for x in ("not found", "no such file", "cannot stat")) else
+            "mount" if any(x in stderr for x in ("mount", "invalid volume")) else
+            "image" if "image" in stderr else
+            "other"
+        )
+        raise RuntimeError("etapa isolada falhou: " + str(args[0]) + ":" + category)
     return result.stdout
 
 
@@ -208,9 +216,11 @@ def main():
         # Saída sanitizada: não incluir saída de comando nem nomes de volume.
         report["error_type"] = type(exc).__name__
         report["failed_phase"] = PHASE
+        reason = str(exc).rsplit(":", 1)[-1]
+        report["error_category"] = reason if reason in ("permission", "missing", "mount", "image", "other") else "other"
     args.report.parent.mkdir(parents=True, exist_ok=True)
     args.report.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
-    print("REL-17 volumes Docker isolados:", "OK" if report["success"] else "FALHOU", report.get("failed_phase", ""))
+    print("REL-17 volumes Docker isolados:", "OK" if report["success"] else "FALHOU", report.get("failed_phase", ""), report.get("error_category", ""))
     return 0 if report["success"] else 1
 
 
