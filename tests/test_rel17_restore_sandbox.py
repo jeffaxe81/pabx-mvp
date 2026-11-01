@@ -9,13 +9,14 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 RESTORE = ROOT / "backup/restore.sh"
-DIRS = ("asterisk", "admin", "webphone", "provisioning", "recordings", "admin_data", "queue_api_data")
+DIRS = ("asterisk", "admin", "webphone", "provisioning", "recordings")
+VOLUME_DIRS = ("admin_data", "queue_api_data")
 FILES = ("docker-compose.yml", "prompt-base-pabx.md")
 
 
 def make_archive(path):
     with tarfile.open(path, "w:gz") as archive:
-        for folder in DIRS:
+        for folder in DIRS + VOLUME_DIRS:
             info = tarfile.TarInfo(f"pabx/{folder}/")
             info.type = tarfile.DIRTYPE
             info.mode = 0o755
