@@ -75,8 +75,12 @@ def inspect(root):
             if line.lstrip().startswith(("#", ";")):
                 continue
             match = ASSIGNMENT.match(line)
-            if match and DEFAULT_SECRET.fullmatch(_value(match.group(1))):
-                findings.append(f"{relative}:{number}: credencial padrão (valor omitido)")
+            if match:
+                secret = _value(match.group(1))
+                if DEFAULT_SECRET.fullmatch(secret):
+                    findings.append(f"{relative}:{number}: credencial padrão (valor omitido)")
+                elif not secret or (len(secret) < 16 and not secret.startswith("${")):
+                    findings.append(f"{relative}:{number}: credencial vazia ou curta (valor omitido)")
 
     pjsip = root / "asterisk/pjsip.conf"
     if pjsip.is_file():
@@ -100,7 +104,20 @@ def inspect(root):
             if field == "priv_key_file":
                 _sensitive_permissions(local, relative, findings)
 
-    _sensitive_permissions(root / "asterisk/manager.conf", "asterisk/manager.conf", findings)
+    # Sem ACL restritiva, bindaddr público do AMI expõe comandos de telefonia.
+    manager = root / "asterisk/manager.conf"
+    if manager.is_file():
+        raw = manager.read_text(encoding="utf-8")
+        effective = [line.strip().lower() for line in raw.splitlines()
+                     if line.strip() and not line.lstrip().startswith((";", "#"))]
+        # Exigir negação geral e permissão de loopback, sem aceitar valores em comentário.
+        if not any(re.fullmatch(r"deny\\s*=\\s*0\\.0\\.0\\.0/0\\.0\\.0\\.0", line)
+                   for line in effective):
+            findings.append("asterisk/manager.conf: ACL AMI sem deny geral")
+        if not any(re.fullmatch(r"permit\\s*=\\s*127\\.0\\.0\\.1/255\\.255\\.255\\.255", line)
+                   for line in effective):
+            findings.append("asterisk/manager.conf: ACL AMI sem permit loopback")
+    _sensitive_permissions(manager, "asterisk/manager.conf", findings)
     return findings
 
 
