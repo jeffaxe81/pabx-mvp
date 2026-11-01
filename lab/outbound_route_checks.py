@@ -95,6 +95,8 @@ def exercise_routes(container, report):
         report["route_cases"][case] = {"expected": expected, "observed": value,
                                         "pass": value == expected}
         if value != expected:
+            # Apenas números e classificações SINTÉTICOS gerados neste teste.
+            print("REL04_ROUTE_MISMATCH", case, "expected", expected, "observed", value, flush=True)
             raise RuntimeError("roteamento REL-04 divergente do esperado")
     checks["routes_tenant_policy_isolated"] = all(
         checks["route_decision:" + key] for key in (
