@@ -170,6 +170,42 @@ class CallPeer(SipTLS):
                 or tag(single(headers, 'from')) != tag(dialog.remote)):
             raise ValueError('requisição de outro diálogo SIP')
 
+    def blind_transfer(self, dialog, number):
+        """REFER autenticado em diálogo existente, apenas destino de ramal.
+
+        Esta operação é destinada exclusivamente ao Asterisk isolado de CI.
+        O sucesso SIP 202 não comprova por si só que o destino atendeu.
+        """
+        if not isinstance(number, str) or not re.fullmatch(r'[0-9]{3,6}', number):
+            raise ValueError('destino de transferencia de laboratorio invalido')
+        if not re.fullmatch(r't[1-9][0-9]*-[0-9]{3,6}', self.username):
+            raise ValueError('origem de transferencia de laboratorio invalida')
+        if not re.fullmatch(r'sip:(?:[A-Za-z0-9_.-]+@)?127\.0\.0\.1(?::[0-9]{1,5})?(?:;transport=(?i:tls))?', dialog.uri):
+            raise ValueError('URI de transferencia fora do loopback')
+        dialog.cseq += 1
+        branch = 'z9hG4bK'+secrets.token_hex(12)
+        refer_to = f'<sip:{number}@127.0.0.1:{self.target_port};transport=tls>'
+        lines = [
+            f'REFER {dialog.uri} SIP/2.0',
+            f'Via: SIP/2.0/TLS 127.0.0.1:{self.port};branch={branch};rport;alias',
+            'Max-Forwards: 70',
+            'From: '+dialog.local, 'To: '+dialog.remote,
+            'Call-ID: '+dialog.call_id, f'CSeq: {dialog.cseq} REFER',
+            f'Contact: <sip:{self.username}@127.0.0.1:{self.port};transport=tls>',
+            'Refer-To: '+refer_to,
+            'User-Agent: AXE-Private-Lab',
+            'Content-Length: 0', '', '',
+        ]
+        self.connection.sendall('\r\n'.join(lines).encode('ascii'))
+        self.events.append('refer_sent')
+        code, headers, _ = self.final_response(dialog, 'REFER', branch)
+        if tag(single(headers, 'to')) != tag(dialog.remote):
+            raise ValueError('resposta REFER de outro dialogo SIP')
+        if code != 202:
+            raise CallRejected(code)
+        self.events.append('refer_accepted')
+        return code
+
     def hangup(self, dialog):
         dialog.cseq += 1
         branch = self.send_request(dialog, 'BYE')
