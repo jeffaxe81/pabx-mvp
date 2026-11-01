@@ -8,6 +8,7 @@ import shutil
 import ssl
 import subprocess
 import threading
+import time
 from types import SimpleNamespace
 import urllib.error
 import urllib.request
@@ -28,9 +29,12 @@ def config(tmp_path):
     device_registry = tmp_path / "devices.json"
     folder = tmp_path / "cfg"
     folder.mkdir()
-    cert_registry.write_text(json.dumps({"schema_version": 1, "devices": [
-        {"mac": MAC1, "tenant": "t1", "client_sha256": hashlib.sha256(CLIENT1).hexdigest()},
-        {"mac": MAC2, "tenant": "t2", "client_sha256": hashlib.sha256(CLIENT2).hexdigest()},
+    now = int(time.time())
+    cert_registry.write_text(json.dumps({"schema_version": 2, "devices": [
+        {"mac": MAC1, "tenant": "t1", "client_sha256": hashlib.sha256(CLIENT1).hexdigest(),
+         "valid_from": now - 60, "valid_until": now + 3600, "revoked": False},
+        {"mac": MAC2, "tenant": "t2", "client_sha256": hashlib.sha256(CLIENT2).hexdigest(),
+         "valid_from": now - 60, "valid_until": now + 3600, "revoked": False},
     ]}), encoding="utf-8")
     cert_registry.chmod(0o600)
     device_registry.write_text(json.dumps({"devices": [
@@ -75,8 +79,8 @@ def test_rejeita_cadastro_divergente_ou_duplicado(tmp_path, item, field, value):
 @pytest.mark.parametrize("bad", [
     {"devices": []},
     {"schema_version": 0, "devices": []},
-    {"schema_version": 1, "devices": "nao e lista"},
-    {"schema_version": 1, "devices": [{"tenant": "t1", "mac": MAC1}]},
+    {"schema_version": 2, "devices": "nao e lista"},
+    {"schema_version": 2, "devices": [{"tenant": "t1", "mac": MAC1}]},
 ])
 def test_cadastro_incompleto_falha_fechado(tmp_path, bad):
     registry, devices, _ = config(tmp_path)
@@ -94,7 +98,7 @@ def test_rejeita_permissoes_publicas_do_cadastro_privado(tmp_path):
 
 def test_rejeita_json_com_chaves_repetidas_e_symlink(tmp_path):
     registry, devices, _ = config(tmp_path)
-    registry.write_text('{"schema_version":1,"schema_version":1,"devices":[]}', encoding="utf-8")
+    registry.write_text('{"schema_version":2,"schema_version":2,"devices":[]}', encoding="utf-8")
     with pytest.raises(ValueError, match="duplicada"):
         pv.load_policy(registry, devices)
     registry.unlink()
@@ -164,11 +168,12 @@ class FakeTLS:
         return self.cert
 
 
-def handler_request(path, cert, root, policy):
+def handler_request(path, cert, root, registry, devices):
     handler = pv.ProvisioningHandler.__new__(pv.ProvisioningHandler)
     handler.path = path
     handler.connection = FakeTLS(cert)
-    handler.server = SimpleNamespace(policy=policy, config_dir=str(root))
+    handler.server = SimpleNamespace(registry_path=str(registry),
+                                     devices_path=str(devices), config_dir=str(root))
     handler.calls = []
     handler._respond = lambda code, data=b"": handler.calls.append((code, data))
     handler.do_GET()
@@ -182,18 +187,16 @@ def handler_request(path, cert, root, policy):
 ])
 def test_rejeita_travessia_listagem_url_com_query_e_maiuscula(tmp_path, path):
     registry, devices, folder = config(tmp_path)
-    policy = pv.load_policy(registry, devices)
-    assert handler_request(path, CLIENT1, folder, policy) == [(404, b"")]
+    assert handler_request(path, CLIENT1, folder, registry, devices) == [(404, b"")]
 
 
 def test_http_retorna_config_apenas_para_certificado_do_mac(tmp_path):
     registry, devices, folder = config(tmp_path)
-    policy = pv.load_policy(registry, devices)
-    assert handler_request("/" + MAC1 + ".cfg", CLIENT1, folder, policy) == [
+    assert handler_request("/" + MAC1 + ".cfg", CLIENT1, folder, registry, devices) == [
         (200, b"user=t1-1001\npassword=secret-t1")]
-    assert handler_request("/" + MAC1 + ".cfg", CLIENT2, folder, policy) == [(404, b"")]
-    assert handler_request("/" + MAC2 + ".cfg", CLIENT1, folder, policy) == [(404, b"")]
-    assert handler_request("/" + MAC1 + ".cfg", None, folder, policy) == [(404, b"")]
+    assert handler_request("/" + MAC1 + ".cfg", CLIENT2, folder, registry, devices) == [(404, b"")]
+    assert handler_request("/" + MAC2 + ".cfg", CLIENT1, folder, registry, devices) == [(404, b"")]
+    assert handler_request("/" + MAC1 + ".cfg", None, folder, registry, devices) == [(404, b"")]
 
 
 def test_resposta_impede_cache_publico_e_never_logs():
@@ -247,7 +250,8 @@ def test_tls_real_certificado_e_restricao_tenant_mac(tmp_path):
     context.load_verify_locations(cafile=str(tmp_path / "ca.crt"))
     server = ThreadingHTTPServer(("127.0.0.1", 0), pv.ProvisioningHandler)
     server.daemon_threads = True
-    server.policy = policy
+    server.registry_path = str(registry)
+    server.devices_path = str(devices)
     server.config_dir = str(folder)
     server.socket = context.wrap_socket(server.socket, server_side=True)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -270,9 +274,113 @@ def test_tls_real_certificado_e_restricao_tenant_mac(tmp_path):
         assert ex.value.code == 404
         body, _ = get(MAC2 + ".cfg", "client2")
         assert b"secret-t2" in body
+        # Revogar com servidor TLS ativo: proximo GET nao libera o .cfg.
+        updated = json.loads(registry.read_text(encoding="utf-8"))
+        updated["devices"][0]["revoked"] = True
+        registry.write_text(json.dumps(updated), encoding="utf-8")
+        with pytest.raises(urllib.error.HTTPError) as revoked:
+            get(MAC1 + ".cfg", "client1")
+        assert revoked.value.code == 404
+        body, _ = get(MAC2 + ".cfg", "client2")
+        assert b"secret-t2" in body
         with pytest.raises((urllib.error.URLError, ssl.SSLError, ConnectionError)):
             get(MAC1 + ".cfg", None)
     finally:
         server.shutdown()
         server.server_close()
         thread.join(timeout=3)
+
+
+# Controles de ciclo de vida do certificado — cadastro v2; NO-GO operacional.
+def test_schema_antigo_v1_nao_pode_eludir_expiracao(tmp_path):
+    registry, devices, _ = config(tmp_path)
+    payload = json.loads(registry.read_text(encoding="utf-8"))
+    payload["schema_version"] = 1
+    registry.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(ValueError, match="schema"):
+        pv.load_policy(registry, devices)
+
+
+@pytest.mark.parametrize("field,value", [
+    ("valid_from", 0),
+    ("valid_from", True),
+    ("valid_from", "2026-11-01"),
+    ("valid_until", 0),
+    ("valid_until", False),
+    ("valid_until", 1.5),
+    ("revoked", "false"),
+    ("revoked", 0),
+    ("revoked", None),
+])
+def test_janela_e_recurso_de_revogacao_malformados_falham_fechado(tmp_path, field, value):
+    registry, devices, _ = config(tmp_path)
+    payload = json.loads(registry.read_text(encoding="utf-8"))
+    payload["devices"][0][field] = value
+    registry.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(ValueError, match="validade|revogacao"):
+        pv.load_policy(registry, devices)
+
+
+def test_janela_maxima_30_dias_e_sem_campos_extras(tmp_path):
+    registry, devices, _ = config(tmp_path)
+    payload = json.loads(registry.read_text(encoding="utf-8"))
+    payload["devices"][0]["valid_until"] = payload["devices"][0]["valid_from"] + 31 * 86400
+    registry.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(ValueError, match="validade"):
+        pv.load_policy(registry, devices)
+    payload["devices"][0]["valid_until"] = payload["devices"][0]["valid_from"] + 3600
+    payload["devices"][0]["production_go_authorized"] = True
+    registry.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(ValueError, match="invalido"):
+        pv.load_policy(registry, devices)
+
+
+def test_autorizacao_nao_aceita_antes_ou_no_instante_do_vencimento(tmp_path):
+    registry, devices, _ = config(tmp_path)
+    payload = json.loads(registry.read_text(encoding="utf-8"))
+    start = payload["devices"][0]["valid_from"]
+    end = payload["devices"][0]["valid_until"]
+    policy = pv.load_policy(registry, devices)
+    assert not pv.authorized(policy, MAC1, CLIENT1, now=start - 1)
+    assert pv.authorized(policy, MAC1, CLIENT1, now=start)
+    assert pv.authorized(policy, MAC1, CLIENT1, now=end - 1)
+    assert not pv.authorized(policy, MAC1, CLIENT1, now=end)
+    assert not pv.authorized(policy, MAC1, CLIENT1, now=end + 1)
+
+
+def test_revogacao_no_cadastro_e_aplicada_no_proximo_get_sem_restart(tmp_path):
+    registry, devices, folder = config(tmp_path)
+    path = "/" + MAC1 + ".cfg"
+    expected = [(200, b"user=t1-1001\npassword=secret-t1")]
+    assert handler_request(path, CLIENT1, folder, registry, devices) == expected
+
+    payload = json.loads(registry.read_text(encoding="utf-8"))
+    payload["devices"][0]["revoked"] = True
+    registry.write_text(json.dumps(payload), encoding="utf-8")
+    assert handler_request(path, CLIENT1, folder, registry, devices) == [(404, b"")]
+    # O segundo tenant nao e revogado por engano.
+    assert handler_request("/" + MAC2 + ".cfg", CLIENT2, folder, registry, devices)[0][0] == 200
+
+
+def test_expiracao_e_cadastro_indisponivel_falham_fechado_sem_restart(tmp_path):
+    registry, devices, folder = config(tmp_path)
+    path = "/" + MAC1 + ".cfg"
+    assert handler_request(path, CLIENT1, folder, registry, devices)[0][0] == 200
+    payload = json.loads(registry.read_text(encoding="utf-8"))
+    now = int(time.time())
+    payload["devices"][0]["valid_from"] = now - 100
+    payload["devices"][0]["valid_until"] = now - 1
+    registry.write_text(json.dumps(payload), encoding="utf-8")
+    assert handler_request(path, CLIENT1, folder, registry, devices) == [(404, b"")]
+    registry.unlink()
+    assert handler_request(path, CLIENT1, folder, registry, devices) == [(404, b"")]
+
+
+def test_replay_de_fingerprint_revogado_em_outro_tenant_e_rejeitado(tmp_path):
+    registry, devices, _ = config(tmp_path)
+    payload = json.loads(registry.read_text(encoding="utf-8"))
+    payload["devices"][0]["revoked"] = True
+    payload["devices"][1]["client_sha256"] = payload["devices"][0]["client_sha256"]
+    registry.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(ValueError, match="duplicado"):
+        pv.load_policy(registry, devices)

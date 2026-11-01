@@ -14,6 +14,7 @@ from pathlib import Path
 import re
 import ssl
 import stat
+import time
 
 MAX_JSON = 1024 * 1024
 MAX_CFG = 512 * 1024
@@ -55,7 +56,7 @@ def load_policy(registry_path, devices_path):
     """Vincula o certificado cliente ao MAC e ao tenant dos dados de origem."""
     registry = read_json(registry_path, private=True)
     devices = read_json(devices_path)
-    if not isinstance(registry, dict) or registry.get("schema_version") != 1:
+    if not isinstance(registry, dict) or registry.get("schema_version") != 2:
         raise ValueError("schema do cadastro de certificados invalido")
     bindings = registry.get("devices")
     if not isinstance(bindings, list) or not 1 <= len(bindings) <= MAX_DEVICES:
@@ -81,9 +82,16 @@ def load_policy(registry_path, devices_path):
     policy = {}
     fingerprints = set()
     for entry in bindings:
-        if not isinstance(entry, dict) or set(entry) != {"mac", "tenant", "client_sha256"}:
+        if (not isinstance(entry, dict) or set(entry) != {
+                "mac", "tenant", "client_sha256", "valid_from",
+                "valid_until", "revoked"}):
             raise ValueError("vinculo de certificado invalido")
         mac, tenant, digest = entry["mac"], entry["tenant"], entry["client_sha256"]
+        start, end, revoked = entry["valid_from"], entry["valid_until"], entry["revoked"]
+        if (type(start) is not int or type(end) is not int
+                or type(revoked) is not bool or start <= 0 or end <= start
+                or end - start > 30 * 86400):
+            raise ValueError("janela de validade ou revogacao invalida")
         if (not isinstance(mac, str) or not MAC_RE.fullmatch(mac)
                 or not isinstance(tenant, str) or not TENANT_RE.fullmatch(tenant)
                 or not isinstance(digest, str) or not FINGERPRINT_RE.fullmatch(digest)):
@@ -93,19 +101,25 @@ def load_policy(registry_path, devices_path):
         if manifest.get(mac) != (tenant, "yealink"):
             raise ValueError("vinculo MAC/tenant diverge da fonte de provisionamento")
         fingerprints.add(digest)
-        policy[mac] = digest
+        policy[mac] = (digest, start, end, revoked)
     return policy
 
 
-def authorized(policy, mac, client_der):
+def authorized(policy, mac, client_der, *, now=None):
+    """Validade/revogacao rechecadas no instante de cada consulta."""
     if (not isinstance(mac, str) or not MAC_RE.fullmatch(mac)
             or not isinstance(client_der, bytes) or not client_der):
         return False
-    expected = policy.get(mac)
-    if expected is None:
+    claim = policy.get(mac)
+    if claim is None:
+        return False
+    digest, start, end, revoked = claim
+    moment = time.time() if now is None else now
+    if (type(moment) not in (int, float) or not (start <= moment < end)
+            or revoked):
         return False
     from hmac import compare_digest
-    return compare_digest(expected, hashlib.sha256(client_der).hexdigest())
+    return compare_digest(digest, hashlib.sha256(client_der).hexdigest())
 
 
 def read_cfg(directory, mac):
@@ -165,10 +179,13 @@ class ProvisioningHandler(BaseHTTPRequestHandler):
         # da requisicao HTTP se nao apresentar certificado assinado pela CA.
         try:
             cert = self.connection.getpeercert(binary_form=True)
-            if not authorized(self.server.policy, mac, cert):
+            # Revogacao em arquivo passa a valer no proximo GET, sem restart.
+            # Problema de leitura/cadastro invalido falha fechado, sem cfg.
+            policy = load_policy(self.server.registry_path, self.server.devices_path)
+            if not authorized(policy, mac, cert):
                 return self._respond(404)
             content = read_cfg(self.server.config_dir, mac)
-        except (ValueError, OSError):
+        except (ValueError, OSError, TypeError):
             return self._respond(404)
         self._respond(200, content)
 
@@ -185,7 +202,7 @@ class ProvisioningHandler(BaseHTTPRequestHandler):
         self._respond(405)
 
 
-def serve(policy, config_dir, cert_path, key_path, ca_path, *, port=8443):
+def serve(registry_path, devices_path, config_dir, cert_path, key_path, ca_path, *, port=8443):
     """Sempre em 127.0.0.1, sem porta publica, sem carregamento de Docker."""
     for path in (cert_path, key_path, ca_path):
         path = Path(path)
@@ -203,7 +220,8 @@ def serve(policy, config_dir, cert_path, key_path, ca_path, *, port=8443):
     context.options |= getattr(ssl, "OP_NO_COMPRESSION", 0)
     server = ThreadingHTTPServer(("127.0.0.1", port), ProvisioningHandler)
     server.daemon_threads = True
-    server.policy = dict(policy)
+    server.registry_path = str(registry_path)
+    server.devices_path = str(devices_path)
     server.config_dir = str(config_dir)
     server.socket = context.wrap_socket(server.socket, server_side=True)
     try:
@@ -224,9 +242,9 @@ def main(argv=None):
     parser.add_argument("--port", type=int, default=8443)
     args = parser.parse_args(argv)
     try:
-        policy = load_policy(args.registry, args.devices)
-        serve(policy, args.files, args.server_cert, args.server_key,
-              args.client_ca, port=args.port)
+        load_policy(args.registry, args.devices)  # startup fail-closed
+        serve(args.registry, args.devices, args.files, args.server_cert,
+              args.server_key, args.client_ca, port=args.port)
     except (ValueError, OSError, ssl.SSLError) as exc:
         parser.exit(2, "Provisionamento mTLS bloqueado: " + type(exc).__name__ + "\n")
     return 0
