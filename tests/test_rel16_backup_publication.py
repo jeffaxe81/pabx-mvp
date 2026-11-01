@@ -5,9 +5,9 @@ SCRIPT = (Path(__file__).resolve().parents[1] / "backup/backup.sh").read_text(en
 
 
 def test_publicacao_ocorre_apos_validacao():
-    assert SCRIPT.index('tar czf "$PARTIAL"') < SCRIPT.index("validate_archive.py")
+    assert SCRIPT.index('tar czf "$PARTIAL"') < SCRIPT.index('python3 "$VALIDATOR" "$PARTIAL"')
     assert SCRIPT.index("validate_archive.py") < SCRIPT.index('mv -n "$PARTIAL" "$ARCHIVE"')
-    assert SCRIPT.index('mv -n "$PARTIAL" "$ARCHIVE"') < SCRIPT.index("retention.py")
+    assert SCRIPT.index('mv -n "$PARTIAL" "$ARCHIVE"') < SCRIPT.index('python3 "$RETENTION" "$BACKUP_DIR"')
 
 
 def test_arquivo_parcial_e_removido_em_falha():

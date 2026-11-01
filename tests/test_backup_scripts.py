@@ -24,7 +24,7 @@ def test_backup_and_restore_scripts_exist_and_are_executable():
 def test_backup_script_calls_retention_after_archiving():
     content = (BACKUP_DIR / "backup.sh").read_text(encoding="utf-8")
     tar_pos = content.index("tar czf")
-    retention_pos = content.index("retention.py")
+    retention_pos = content.index('python3 "$RETENTION" "$BACKUP_DIR"')
     assert tar_pos < retention_pos, "backup.sh deveria arquivar antes de rodar a retenção"
 
 
