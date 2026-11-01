@@ -29,7 +29,7 @@
 
 `[######----------------------------------] 15% (3/20)`
 
-**Parcial em código, não homologado:** REL-04, REL-05 e REL-06. **CI específica da política e auditoria aprovadas; CI geral e homologação SIP específica pendentes:** REL-19. Não contar itens parciais como entregues.
+**Parcial em código, não homologado:** REL-04, REL-05, REL-06 e REL-08 (novos testes de entradas inválidas). **CI específica da política e auditoria aprovadas; CI geral e homologação SIP específica pendentes:** REL-19. Não contar itens parciais como entregues.
 
 **Auditoria automatizada REL-03:** workflow `41255085879` aprovado; artefato `auditoria-roadmap-pabx` (ID `13062723149`) contém triagem dos 100 candidatos com status REVISAR_MANUALMENTE. Isto não conclui REL-03, pois a revisão manual e deduplicação ainda faltam.\n\n**Evidências atualizadas:** PR #311. O commit `24462cc7` passou nas duas pipelines, com 16/16 jobs concluídos com sucesso (8 estáticos e 8 de laboratório Asterisk), incluindo Chromium WSS/DTLS-SRTP. A homologação funcional específica de política internacional permanece pendente. O commit `3c15c703` concluiu 16/16 jobs com sucesso (validação estática e laboratório geral Asterisk). O commit `d9756baf` adicionou três verificações estáticas de política. O commit `00a7fc6f` acrescentou cinco regressões estáticas de autorização e rota alternativa. **A CI específica da política externa passou no commit `ebd79c3a` (workflow `41254672287`); a CI geral e os testes SIP funcionais seguem separados e pendentes.** Não confundir aprovação da suíte geral com homologação SIP específica de bloqueio internacional.
 
