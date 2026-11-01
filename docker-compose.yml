@@ -2,7 +2,9 @@ version: "3.8"
 
 services:
   asterisk:
-    image: andrius/asterisk:latest
+    # Mesmo digest testado no laboratório Asterisk; não use :latest em homologação.
+    # A mudança só afeta novos pulls/recreates, não realiza deploy automático.
+    image: andrius/asterisk:22.11.0_debian-trixie@sha256:d6333b8b331563c5887b98b12da9371ef48317e657d17d81770fe085f335041d
     container_name: pabx-mvp
     restart: unless-stopped
     network_mode: host   # necessário para SIP/RTP funcionarem sem dor de cabeça com NAT

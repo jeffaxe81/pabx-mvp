@@ -459,3 +459,13 @@ def test_static_asterisk_includes_point_to_shared_generated_directory():
         text = (PROJECT_ROOT / "asterisk" / filename).read_text(encoding="utf-8")
         for name in included:
             assert f"#include generated/{name}" in text
+
+
+def test_asterisk_image_is_digest_pinned_to_ci_runtime():
+    """Impede que produção/homologação use :latest diferente da imagem testada."""
+    from lab.asterisk_lab import IMAGE
+
+    actual = load_compose()["services"]["asterisk"]["image"]
+    assert actual == IMAGE
+    assert actual.startswith("andrius/asterisk:22.11.0_debian-trixie@sha256:")
+    assert re.fullmatch(r"andrius/asterisk:[A-Za-z0-9_.-]+@sha256:[a-f0-9]{64}", actual)
