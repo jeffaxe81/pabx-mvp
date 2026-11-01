@@ -167,7 +167,11 @@ def run_lab():
                 PHASE = "volume_restore_command"
                 restore_volume(names[label], volume_path)
                 PHASE = "volume_restore_verify"
-                if volume_marker(names[label]) != value:
+                observed = volume_marker(names[label])
+                if observed != value:
+                    PHASE = ("volume_restore_verify_old_state" if observed == "estado-novo"
+                             else "volume_restore_verify_empty" if not observed
+                             else "volume_restore_verify_other")
                     raise RuntimeError("restauração de volume divergente")
             status["docker_volumes_restored"] = True
     finally:
