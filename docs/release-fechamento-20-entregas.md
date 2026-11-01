@@ -1,12 +1,12 @@
 # AXE PABX — 20 entregas de fechamento da release
 
-**Estado:** 12/20 concluídas (60%) após integração do backup verificado em sandbox (REL-16). Itens restantes exigem evidência verificável. **Não declarar release concluída apenas por registrar esta lista.**
+**Estado:** 13/20 concluídas (65%) após reconciliação documental dos 100 candidatos do roadmap (REL-03) e CI 16/16 aprovada na PR #338. Itens restantes exigem evidência verificável. **Não declarar release concluída apenas por registrar esta lista.**
 
 **Escopo:** PABX puro. Contact Center e IA permanecem no backlog. Implantação inicial local; produção exige aceite específico.
 
 - [x] **REL-01 — Escopo congelado:** PABX puro; CC e IA fora da release. **Estado:** CONCLUÍDO (escopo confirmado nesta release).
 - [x] **REL-02 — Inventário da release:** Inventário verificável em docs/release-inventario-pr311.md. **Estado:** CONCLUÍDO.
-- [ ] **REL-03 — Auditoria de duplicidade:** Reconciliar roadmap de 100 candidatos com funcionalidades existentes. **Estado:** PENDENTE.
+- [x] **REL-03 — Auditoria de duplicidade:** Matriz 100/100 candidatos reconciliados documentalmente contra o código e manuais já identificados; 6 EXISTENTE, 24 PARCIAL e 70 SEM_EVIDENCIA_DIRETA, sem nenhum item anunciado como NOVA ou implementado. Evidência `docs/rel03-auditoria-100-candidatos.csv`, `docs/rel03-auditoria-100-candidatos-20261101.md`, testes `tests/test_rel03_roadmap_audit.py`, PR #338 integrada (squash `90ea60bc777fb5da3593cd38c7a4fb6c8214fed2`) e CI 41324056505/41324056484 (16/16 SUCCESS). **Estado:** CONCLUÍDO no escopo de triagem e bloqueio de contagem duplicada; análise exaustiva de código de candidatos sem evidência continua condição de implementação futura.
 - [ ] **REL-04 — Correção de discagem internacional:** Validar prefixos e regra AstDB por tenant. **Estado:** PENDENTE.
 - [x] **REL-05 — Rota alternativa:** Verificação de autorização e blocklist antes de selecionar o gateway primário e revalidação do destino final antes do secundário; isolamento t2. PR #321 integrada (squash 52e30d3e071b1dacc7e5e7775ada900da1e1a38f), CI de política 41310515449, estática 41310515556 e laboratório geral 41310515588, 17/17 SUCCESS. **Estado:** CONCLUÍDO no escopo de proteção do dialplan e regressão estática; ensaio de troncos SIP específicos permanece REL-14.
 - [x] **REL-06 — Tenant dinâmico:** O wizard gera para t3/t4/t99 o contexto de saída com TENANT explícito, Gosub(politica-externa,s,1), validação de GOSUB_RETVAL e Dial apenas após autorização. Testes executáveis de geração/validação aprovados na PR #312 (CI de política 41257306083; CI estática 41257306065). Laboratório Asterisk da mesma PR validou SIP geral com t3, mas não chamadas SIP específicas de bloqueio internacional. **Estado:** CONCLUÍDO no escopo de integração do wizard.
@@ -27,7 +27,7 @@
 
 ## Barra de progresso — 2026-11-01 (meta intermediária)
 
-`[########################----------------] 60% (12/20)`
+`[##########################--------------] 65% (13/20)`
 
 **Parcial em código, não homologado:** REL-04 e REL-17; REL-05 concluída para proteção estática de rotas, não para chamadas reais de troncos; REL-08 concluída apenas para entradas e preflight, não para chamadas SIP de política internacional. **CI específica, CI geral e laboratório automatizado aprovados (REL-19); homologação SIP específica ainda pendente:** REL-12 a REL-14. Não contar itens parciais como entregues.
 
@@ -45,3 +45,6 @@ Cada entrega exige referência a commit/PR, evidência de teste aplicável e apr
 
 
 **Fechamento de 60% (2026-11-01):** REL-16 concluída somente no escopo de snapshot validado e restauração de arquivos e dados sintéticos em sandbox. PR #331 com CI 16/16 aprovada, integrada à `main` em `5421de19`. A cobertura de dados nomeados na composição Docker foi verificada no código, **não** em snapshots transacionais de volumes em operação. REL-17, prova completa de restauração de volumes e RTO/RPO continuam pendentes. Produção segue NO-GO.
+
+
+**Fechamento de 65% (2026-11-01):** REL-03 — reconciliação conservadora dos 100 itens (6 existentes, 24 parciais, 70 sem evidência direta). PR #338 integrada após 16/16 CI SUCCESS (41324056505/41324056484). Não afirmar inexistência em código dos 70 não comprovados; bloquear contagem como nova função até conferência caso a caso. REL-17 permanece pendente de prova Docker isolada; produção NO-GO.
