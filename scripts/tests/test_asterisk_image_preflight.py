@@ -72,3 +72,13 @@ def test_preflight_symlink_nao_autoriza(tmp_path):
     shutil.copyfile(ROOT / "lab/asterisk_lab.py", tmp_path / "lab/asterisk_lab.py")
     (tmp_path / "docker-compose.yml").symlink_to(ROOT / "docker-compose.yml")
     assert not inspect(tmp_path)["ok"]
+
+
+def test_latest_com_digest_tambem_e_bloqueado(tmp_path):
+    (tmp_path / "lab").mkdir()
+    shutil.copyfile(ROOT / "lab/asterisk_lab.py", tmp_path / "lab/asterisk_lab.py")
+    latest_digest = "andrius/asterisk:latest@sha256:" + EXPECTED.rsplit(":", 1)[-1]
+    (tmp_path / "docker-compose.yml").write_text(
+        "services:\n  asterisk:\n    image: " + latest_digest + "\n"
+    )
+    assert inspect(tmp_path)["reason"] == "tag latest mutável não permitida para RC operacional"
