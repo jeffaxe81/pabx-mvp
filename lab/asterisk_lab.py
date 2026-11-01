@@ -26,8 +26,12 @@ def load_file(name, path):
     return module
 
 
-def prepare(root, destination, source_commit="HEAD"):
+def prepare(root, destination, source_commit="HEAD", *, stage_report=None):
     """Copia de forma privada; nunca roda gerador de segredos no checkout."""
+    def stage(label):
+        if stage_report is not None:
+            stage_report['phase'] = 'staging:' + label
+    stage('source_archive')
     root, destination = Path(root), Path(destination)
     destination.mkdir(mode=0o700, parents=True, exist_ok=False)
     conf = destination / 'asterisk'
@@ -51,7 +55,9 @@ def prepare(root, destination, source_commit="HEAD"):
     for filename in ('admin-api/tenants.py', 'scripts/secrets_generator.py'):
         body = command(['git', '-C', str(root), 'show', source_commit+':'+filename]).stdout
         (helpers/Path(filename).name).write_text(body)
+    stage('credentials')
     generator = load_file('lab_secrets_generator', helpers/'secrets_generator.py')
+    tenants = load_file('lab_tenants', helpers/'tenants.py')
     content = (conf/'pjsip.conf').read_text()
     placeholders = generator.find_placeholders(content)
     secret_map = {p: generator.generate_strong_secret() for p in placeholders}
@@ -63,38 +69,39 @@ def prepare(root, destination, source_commit="HEAD"):
     (conf/'pjsip.conf').write_text(content)
     # PINs estáticos do voicemail também são substituídos somente na
     # cópia efêmera de laboratório, sem segredos no checkout ou relatório.
+    stage('voicemail_pin_generation')
     vm_path = conf/'voicemail.conf'
     vm_text = vm_path.read_text()
     vm_placeholders = sorted(p for p in generator.find_placeholders(vm_text)
                              if p.startswith('troque_esta_senha_vm_'))
-    vm_pin_map = {}
-    used_vm_pins = set()
-    for placeholder in vm_placeholders:
-        pin = generator.generate_voicemail_pin()
-        while pin in used_vm_pins:
-            pin = generator.generate_voicemail_pin()
-        used_vm_pins.add(pin)
-        vm_pin_map[placeholder] = pin
+    from .voicemail_pin_checks import generate_verified_lab_pin_map
+    # Uma única seleção impede PIN fraco e colisão entre t1/t2/t3.
+    t3_names = ('t3-1001', 't3-recepcao', 't3-recepcao-2')
+    pin_map = generate_verified_lab_pin_map(
+        [*vm_placeholders, *t3_names], generator.generate_voicemail_pin)
+    vm_pin_map = {name: pin_map[name] for name in vm_placeholders}
+    dynamic_vm_pins = {name: pin_map[name] for name in t3_names}
     vm_path.write_text(generator.replace_all_placeholders(vm_text, vm_pin_map))
     credentials = {}
     for section, text in re.findall(r'(?m)^\[([^\]]+)\][^\n]*\n((?:(?!^\[).|\n)*)', content):
         if re.search(r'(?m)^type=auth$', text):
             match = re.search(r'(?m)^password=(.+)$', text)
             credentials[section] = match[1]
-    tenants = load_file('lab_tenants', helpers/'tenants.py')
+    stage('dynamic_tenant')
     dynamic = tenants.generate_tenant_credentials('t3')
     credentials.update(dynamic)
     for folder, body in (
         ('pjsip_tenants', tenants.render_tenant_pjsip('t3', dynamic)),
         ('extensions_tenants', tenants.render_tenant_extensions('t3')),
         ('queues_tenants', tenants.render_tenant_queues('t3')),
-        ('voicemail_tenants', tenants.render_tenant_voicemail('t3')),
+        ('voicemail_tenants', tenants.render_tenant_voicemail('t3', dynamic_vm_pins)),
         ('parking_tenants', tenants.render_tenant_parking('t3')),
     ):
         (conf/folder).mkdir(exist_ok=True)
         (conf/folder/'t3.conf').write_text(body)
     # Falha antes da inicialização se um PIN efêmero for fraco/repetido
     # ou se houver mailbox de outra empresa. Não publica PINs em logs.
+    stage('voicemail_validation')
     from .voicemail_pin_checks import validate_prepared_voicemail
     vm_check = validate_prepared_voicemail(
         (conf/'voicemail.conf').read_text(),
@@ -123,6 +130,7 @@ debug = 0
 ''')
     (conf/'modules.conf').write_text('[modules]\nautoload=yes\n')
     (conf/'logger.conf').write_text('[logfiles]\nconsole => error,warning\n')
+    stage('tls_certificate_generation')
     certs = conf/'certs'
     certs.mkdir()
     command(['openssl', 'req', '-x509', '-newkey', 'rsa:2048', '-nodes',
@@ -311,7 +319,8 @@ def run(root, report, *, calls=False, webrtc=False, dids=False, isolation=False,
     folder = Path(tempfile.mkdtemp(prefix='axe-pabx-lab-'))
     prepared = None
     try:
-        prepared = prepare(root, folder/'private', source)
+        report['phase'] = 'staging:source_archive'
+        prepared = prepare(root, folder/'private', source, stage_report=report)
         # Preparar o overflow antes de salvar o snapshot das rotas diretas:
         # restore_direct_route_checks precisa preservar 9987 para --queues.
         if queues:
@@ -532,7 +541,9 @@ def main(argv=None):
                         'DTMF resposta: diálogo divergente': 'dtmf_dialog_mismatch',
                         'DTMF resposta: CSeq divergente': 'dtmf_cseq_mismatch',
                         'DTMF resposta: Via divergente': 'dtmf_via_mismatch',
-                        'DTMF resposta: tag divergente': 'dtmf_tag_mismatch'}
+                        'DTMF resposta: tag divergente': 'dtmf_tag_mismatch',
+                         'não foi possível gerar PIN seguro único no laboratório': 'voicemail_pin_entropy_exhausted',
+                         'configuração de PINs do voicemail no laboratório é insegura': 'voicemail_pin_validation_failed'}
         report['error_reason'] = known_errors.get(str(exc), 'other')
         if re.fullmatch(r'chamada SIP rejeitada: [0-9]{3}', str(exc)):
             report['error_reason'] = 'call_rejected_'+str(exc)[-3:]
