@@ -51,3 +51,6 @@ Cada entrega exige referência a commit/PR, evidência de teste aplicável e apr
 
 
 **Fechamento de 70% (2026-11-01):** REL-17 — backup e rollback por `restore.sh` com arquivos, teste de restauração offline dos dois diretórios de volume e prova de restauração com **volumes Docker efêmeros** na PR #337 (laboratório específico). Somente concluir o merge deste marco após CI da PR #337 integralmente verde e PR integrada. Nenhum volume real de clientes ou chamadas com operadora foi usado; testes não autorizam produção. Permanecem REL-04, REL-12 a REL-14, REL-18 e REL-20, além das demais pendências não concluídas.
+
+
+**Fechamento de 70% (2026-11-01):** REL-17 aceita para rollback automatizado em laboratório com volumes Docker efêmeros, PR #337 integrada e CI 17/17 aprovada. REL-04, REL-12, REL-13, REL-14, REL-18 e REL-20 permanecem pendentes. Sem autorização de produção.
