@@ -38,6 +38,15 @@ def command(args, **kwargs):
             "image" if "image" in stderr else
             "other"
         )
+        if args[0] == "docker":
+            # Laboratório totalmente sintético: mostrar apenas classe + primeira linha
+            # do erro do daemon, ocultando caminhos/IDs e dados do cenário.
+            import re
+            first = (result.stderr or "").splitlines()
+            summary = first[0][:180] if first else ""
+            summary = re.sub(r"(/[A-Za-z0-9._-]+)+", "[PATH]", summary)
+            summary = re.sub(r"\\b[0-9a-f]{12,}\\b", "[ID]", summary)
+            print("REL17_DOCKER_ERROR:", category, summary, flush=True)
         raise RuntimeError("etapa isolada falhou: " + str(args[0]) + ":" + category)
     return result.stdout
 
