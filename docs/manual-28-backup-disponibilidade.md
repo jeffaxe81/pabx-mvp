@@ -93,10 +93,7 @@ real. Defina um número de dias (ex: `"30"`) pra ativar o expurgo.
 ## Limitações conhecidas (honestidade técnica)
 - **Não é alta disponibilidade** (ver aviso no topo) — é backup +
   restauração mais rápida, não failover automático
-- **`backup.sh`/`restore.sh` não têm teste de integração real** — a
-  mesma situação já documentada pro resto dos scripts de
-  infraestrutura deste projeto (mail_relay.py, os clientes AMI): só
-  dá pra validar de fato rodando o ambiente Docker completo
+- **Scripts exercitados em sandbox:** `backup.sh` é executado em filesystem temporário, com validação de conteúdo e extração dos dados sintéticos de `admin_data`/`queue_api_data` (PR #331). `restore.sh` restaura arquivos sintéticos em sandbox (PR #330). **Esses testes não equivalem a restauração dos volumes Docker reais nem a consistência transacional em operação.**
 - **Restauração dos volumes nomeados é manual** (decisão deliberada
   de segurança, ver seção acima) — não é "um comando só"
 - **Backup roda uma vez por dia, sem horário configurável** — não dá
@@ -107,6 +104,4 @@ real. Defina um número de dias (ex: `"30"`) pra ativar o expurgo.
   falha junto. Copiar `./backups/` pra outro lugar (outro servidor,
   armazenamento em nuvem) é responsabilidade de quem opera, fora do
   escopo deste projeto
-- **Sem teste automático de restauração** — o passo 5-8 do teste
-  manual acima precisa ser feito por uma pessoa; não há verificação
-  automática de que um backup realmente restaura com sucesso
+- **Restauração operacional não homologada** — existe teste automático isolado de arquivos e dados sintéticos, mas o fluxo completo com volumes Docker e retorno dos serviços descrito nos passos 5–8 continua exigindo ensaio real de laboratório; sem comprovante desse ensaio, o gate produtivo permanece fechado.
