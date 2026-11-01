@@ -280,3 +280,98 @@ def test_tls_real_certificado_e_restricao_tenant_mac(tmp_path):
         server.shutdown()
         server.server_close()
         thread.join(timeout=3)
+
+
+# Controles de ciclo de vida do certificado — cadastro v2; NO-GO operacional.
+def test_schema_antigo_v1_nao_pode_eludir_expiracao(tmp_path):
+    registry, devices, _ = config(tmp_path)
+    payload = json.loads(registry.read_text(encoding="utf-8"))
+    payload["schema_version"] = 1
+    registry.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(ValueError, match="schema"):
+        pv.load_policy(registry, devices)
+
+
+@pytest.mark.parametrize("field,value", [
+    ("valid_from", 0),
+    ("valid_from", True),
+    ("valid_from", "2026-11-01"),
+    ("valid_until", 0),
+    ("valid_until", False),
+    ("valid_until", 1.5),
+    ("revoked", "false"),
+    ("revoked", 0),
+    ("revoked", None),
+])
+def test_janela_e_recurso_de_revogacao_malformados_falham_fechado(tmp_path, field, value):
+    registry, devices, _ = config(tmp_path)
+    payload = json.loads(registry.read_text(encoding="utf-8"))
+    payload["devices"][0][field] = value
+    registry.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(ValueError, match="validade|revogacao"):
+        pv.load_policy(registry, devices)
+
+
+def test_janela_maxima_30_dias_e_sem_campos_extras(tmp_path):
+    registry, devices, _ = config(tmp_path)
+    payload = json.loads(registry.read_text(encoding="utf-8"))
+    payload["devices"][0]["valid_until"] = payload["devices"][0]["valid_from"] + 31 * 86400
+    registry.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(ValueError, match="validade"):
+        pv.load_policy(registry, devices)
+    payload["devices"][0]["valid_until"] = payload["devices"][0]["valid_from"] + 3600
+    payload["devices"][0]["production_go_authorized"] = True
+    registry.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(ValueError, match="invalido"):
+        pv.load_policy(registry, devices)
+
+
+def test_autorizacao_nao_aceita_antes_ou_no_instante_do_vencimento(tmp_path):
+    registry, devices, _ = config(tmp_path)
+    payload = json.loads(registry.read_text(encoding="utf-8"))
+    start = payload["devices"][0]["valid_from"]
+    end = payload["devices"][0]["valid_until"]
+    policy = pv.load_policy(registry, devices)
+    assert not pv.authorized(policy, MAC1, CLIENT1, now=start - 1)
+    assert pv.authorized(policy, MAC1, CLIENT1, now=start)
+    assert pv.authorized(policy, MAC1, CLIENT1, now=end - 1)
+    assert not pv.authorized(policy, MAC1, CLIENT1, now=end)
+    assert not pv.authorized(policy, MAC1, CLIENT1, now=end + 1)
+
+
+def test_revogacao_no_cadastro_e_aplicada_no_proximo_get_sem_restart(tmp_path):
+    registry, devices, folder = config(tmp_path)
+    path = "/" + MAC1 + ".cfg"
+    expected = [(200, b"user=t1-1001\npassword=secret-t1")]
+    assert handler_request(path, CLIENT1, folder, registry, devices) == expected
+
+    payload = json.loads(registry.read_text(encoding="utf-8"))
+    payload["devices"][0]["revoked"] = True
+    registry.write_text(json.dumps(payload), encoding="utf-8")
+    assert handler_request(path, CLIENT1, folder, registry, devices) == [(404, b"")]
+    # O segundo tenant nao e revogado por engano.
+    assert handler_request("/" + MAC2 + ".cfg", CLIENT2, folder, registry, devices)[0][0] == 200
+
+
+def test_expiracao_e_cadastro_indisponivel_falham_fechado_sem_restart(tmp_path):
+    registry, devices, folder = config(tmp_path)
+    path = "/" + MAC1 + ".cfg"
+    assert handler_request(path, CLIENT1, folder, registry, devices)[0][0] == 200
+    payload = json.loads(registry.read_text(encoding="utf-8"))
+    now = int(time.time())
+    payload["devices"][0]["valid_from"] = now - 100
+    payload["devices"][0]["valid_until"] = now - 1
+    registry.write_text(json.dumps(payload), encoding="utf-8")
+    assert handler_request(path, CLIENT1, folder, registry, devices) == [(404, b"")]
+    registry.unlink()
+    assert handler_request(path, CLIENT1, folder, registry, devices) == [(404, b"")]
+
+
+def test_replay_de_fingerprint_revogado_em_outro_tenant_e_rejeitado(tmp_path):
+    registry, devices, _ = config(tmp_path)
+    payload = json.loads(registry.read_text(encoding="utf-8"))
+    payload["devices"][0]["revoked"] = True
+    payload["devices"][1]["client_sha256"] = payload["devices"][0]["client_sha256"]
+    registry.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(ValueError, match="duplicado"):
+        pv.load_policy(registry, devices)
