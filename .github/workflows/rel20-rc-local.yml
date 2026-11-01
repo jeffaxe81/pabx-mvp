@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: pabx-rel20-rc-\${{ github.event.pull_request.number || github.ref }}
+  group: pabx-rel20-rc-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -39,8 +39,8 @@ jobs:
           test "$(cat VERSION)" = "0.1.0-rc.1"
           mkdir -p dist
           SHA="$(git rev-parse --verify HEAD)"
-          SHORT="\${SHA:0:12}"
-          FILE="axe-pabx-0.1.0-rc.1-\${SHORT}.tar.gz"
+          SHORT="${SHA:0:12}"
+          FILE="axe-pabx-0.1.0-rc.1-${SHORT}.tar.gz"
           git archive --format=tar HEAD | gzip -n > "dist/$FILE"
           (
             cd dist
@@ -51,7 +51,7 @@ jobs:
       - name: Publicar artefato do laboratorio por periodo limitado
         uses: actions/upload-artifact@v4
         with:
-          name: axe-pabx-rc-local-0.1.0-rc.1-\${{ github.sha }}
+          name: axe-pabx-rc-local-0.1.0-rc.1-${{ github.sha }}
           path: dist/
           if-no-files-found: error
           retention-days: 14
