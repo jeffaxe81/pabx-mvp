@@ -255,3 +255,25 @@ jobs:
           path: lab-results/rel12-policy.json
           if-no-files-found: error
           retention-days: 14
+
+  rel04-outbound-route-policy:
+    name: Asterisk | rotas externas e AstDB em sandbox
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Exercitar dialplan com canais Local sem contato com operadoras
+        run: python3 -m lab.asterisk_lab --routes --report lab-results/rel04-routes.json
+      - name: Salvar evidência restrita a decisões e rotas sintéticas
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rel04-routes-asterisk-${{ github.sha }}
+          path: lab-results/rel04-routes.json
+          if-no-files-found: error
+          retention-days: 14
