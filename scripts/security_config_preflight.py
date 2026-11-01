@@ -111,10 +111,10 @@ def inspect(root):
         effective = [line.strip().lower() for line in raw.splitlines()
                      if line.strip() and not line.lstrip().startswith((";", "#"))]
         # Exigir negação geral e permissão de loopback, sem aceitar valores em comentário.
-        if not any(re.fullmatch(r"deny\\s*=\\s*0\\.0\\.0\\.0/0\\.0\\.0\\.0", line)
+        if not any(re.fullmatch(r"deny\s*=\s*0\.0\.0\.0/0\.0\.0\.0", line)
                    for line in effective):
             findings.append("asterisk/manager.conf: ACL AMI sem deny geral")
-        if not any(re.fullmatch(r"permit\\s*=\\s*127\\.0\\.0\\.1/255\\.255\\.255\\.255", line)
+        if not any(re.fullmatch(r"permit\s*=\s*127\.0\.0\.1/255\.255\.255\.255", line)
                    for line in effective):
             findings.append("asterisk/manager.conf: ACL AMI sem permit loopback")
     _sensitive_permissions(manager, "asterisk/manager.conf", findings)
