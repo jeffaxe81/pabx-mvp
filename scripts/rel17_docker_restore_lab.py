@@ -20,6 +20,7 @@ DIRS = ("asterisk", "admin", "webphone", "provisioning", "recordings")
 DATA = {"admin_data": "cadastro-sintetico-t1", "queue_api_data": "historico-sintetico-t2"}
 FILES = ("docker-compose.yml", "prompt-base-pabx.md")
 IMAGE = "alpine:3.21.4"
+PHASE = "initial"
 
 
 def command(args, **kwargs):
@@ -52,6 +53,7 @@ def restore_volume(name, source):
 
 
 def run_lab():
+    global PHASE
     if os.environ.get("GITHUB_ACTIONS") != "true":
         raise RuntimeError("execução restrita ao runner GitHub Actions")
     # Identificadores não coincidem com os volumes reais do docker-compose.
@@ -74,12 +76,15 @@ def run_lab():
             for filename in FILES:
                 (source / filename).write_text("original-" + filename, encoding="utf-8")
             for label, value in DATA.items():
+                PHASE = "create_volume"
                 docker("volume", "create", "--label", "io.axe.pabx.lab=rel17", names[label])
                 created.append(names[label])
+                PHASE = "write_volume"
                 docker("run", "--rm", "-v", names[label] + ":/data", IMAGE,
                        "sh", "-c", "printf '%s' '" + value + "' > /data/proof.txt")
                 folder = source / label
                 folder.mkdir()
+                PHASE = "snapshot_volume"
                 copy_volume_to_host(names[label], folder)
                 if (folder / "proof.txt").read_text() != value:
                     raise RuntimeError("snapshot não corresponde ao volume original")
@@ -94,11 +99,13 @@ def run_lab():
                 "PABX_BACKUP_RETENTION": str(ROOT / "backup/retention.py"),
                 "BACKUP_RETENTION_DAYS": "0",
             })
+            PHASE = "backup_generate"
             command(["sh", str(ROOT / "backup/backup.sh")], env=env)
             archives = list(backups.glob("*.tar.gz"))
             if len(archives) != 1:
                 raise RuntimeError("snapshot não publicado unicamente")
             archive = archives[0]
+            PHASE = "backup_validate"
             command([sys.executable, str(ROOT / "backup/validate_archive.py"), str(archive)])
             status["backup_validated"] = True
 
@@ -114,6 +121,7 @@ def run_lab():
             restore_env = dict(env, TMPDIR=str(tmpdir))
 
             # Confirmação negativa: não pode sobrescrever arquivo algum.
+            PHASE = "restore_decline"
             deny = subprocess.run(
                 ["sh", str(ROOT / "backup/restore.sh"), str(archive)],
                 cwd=target, input="nao\n", text=True, stdout=subprocess.PIPE,
@@ -125,6 +133,7 @@ def run_lab():
             )
             if not status["negative_confirmation"]:
                 raise RuntimeError("cancelamento do rollback falhou")
+            PHASE = "restore_confirm"
             command(["sh", str(ROOT / "backup/restore.sh"), str(archive)],
                     cwd=target, input="sim\n", env=restore_env)
             status["files_restored"] = all(
@@ -139,16 +148,19 @@ def run_lab():
 
             # Os volumes reais são zerados e restaurados com comandos Docker,
             # reproduzindo a etapa MANUAL documentada, sem usar nomes reais.
+            PHASE = "volume_mutate"
             for label, value in DATA.items():
                 docker("run", "--rm", "-v", names[label] + ":/data", IMAGE,
                        "sh", "-c", "printf '%s' 'estado-novo' > /data/proof.txt")
             staging = temp / "staging"
             staging.mkdir()
+            PHASE = "archive_extract"
             with tarfile.open(archive, "r:gz") as tar:
                 tar.extractall(staging, filter="data")
             for label, value in DATA.items():
                 if volume_marker(names[label]) != "estado-novo":
                     raise RuntimeError("mutação de volume não ocorreu")
+                PHASE = "volume_restore"
                 restore_volume(names[label], staging / "pabx" / label)
                 if volume_marker(names[label]) != value:
                     raise RuntimeError("restauração de volume divergente")
@@ -184,9 +196,10 @@ def main():
     except (OSError, ValueError, RuntimeError, subprocess.TimeoutExpired) as exc:
         # Saída sanitizada: não incluir saída de comando nem nomes de volume.
         report["error_type"] = type(exc).__name__
+        report["failed_phase"] = PHASE
     args.report.parent.mkdir(parents=True, exist_ok=True)
     args.report.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
-    print("REL-17 volumes Docker isolados:", "OK" if report["success"] else "FALHOU")
+    print("REL-17 volumes Docker isolados:", "OK" if report["success"] else "FALHOU", report.get("failed_phase", ""))
     return 0 if report["success"] else 1
 
 
