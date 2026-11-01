@@ -1,0 +1,27 @@
+name: AXE PABX | auditoria do roadmap
+on:
+  pull_request:
+    paths:
+      - 'docs/roadmap-100-funcionalidades-candidatas.md'
+      - 'scripts/auditar_roadmap_pabx.py'
+      - 'tests/test_auditoria_roadmap_pabx.py'
+      - '.github/workflows/pabx-auditoria-roadmap.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  auditar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install pytest
+      - run: python -m pytest -q tests/test_auditoria_roadmap_pabx.py
+      - run: python scripts/auditar_roadmap_pabx.py --saida auditoria-roadmap.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: auditoria-roadmap-pabx
+          path: auditoria-roadmap.json

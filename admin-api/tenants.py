@@ -303,6 +303,9 @@ exten => *97,1,Set(VM_ENDPOINT=${{CHANNEL(endpoint)}})
 
 exten => _0.,1,Set(DESTINO=${{EXTEN:1}})
  same => n,GotoIf($["${{DB(blocklist-{tenant_id}/${{DESTINO}})}}" = "1"]?numero-bloqueado,1)
+ same => n,Set(TENANT={tenant_id})
+ same => n,Gosub(politica-externa,s,1)
+ same => n,GotoIf($["${{GOSUB_RETVAL}}" != "ALLOW"]?numero-bloqueado,1)
  same => n,Dial(PJSIP/${{DESTINO}}@gateway-tdm,30)
  same => n,Hangup()
 
