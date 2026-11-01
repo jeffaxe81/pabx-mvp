@@ -188,7 +188,7 @@ def cleanup_owned(name, ownership):
     return result
 
 
-def summarize(checks, *, calls=False, webrtc=False, dids=False, isolation=False, voicemail=False, voicemail_dtmf=False, ami=False, queues=False, policy=False, routes=False, trunks=False):
+def summarize(checks, *, calls=False, webrtc=False, dids=False, isolation=False, voicemail=False, voicemail_dtmf=False, ami=False, queues=False, policy=False, routes=False, trunks=False, transfers=False):
     required = {'real_runtime', 'tls_transport', 'wss_transport', 'container_removed',
                 'checkout_clean', 'runtime_mounts', 'source_label'}
     required.update(name+':'+tid for tid in ('t1', 't2', 't3')
@@ -228,12 +228,15 @@ def summarize(checks, *, calls=False, webrtc=False, dids=False, isolation=False,
     if trunks:
         from .trunk_sip_loopback_checks import required_trunk_checks
         required.update(required_trunk_checks())
+    if transfers:
+        from .transfer_checks import required_transfer_checks
+        required.update(required_transfer_checks())
     passed = sum(value is True for value in checks.values())
     return {'passed': passed, 'total': len(checks),
             'success': set(checks) == required and passed == len(required)}
 
 
-def run(root, report, *, calls=False, webrtc=False, dids=False, isolation=False, voicemail=False, voicemail_dtmf=False, ami=False, queues=False, policy=False, routes=False, trunks=False):
+def run(root, report, *, calls=False, webrtc=False, dids=False, isolation=False, voicemail=False, voicemail_dtmf=False, ami=False, queues=False, policy=False, routes=False, trunks=False, transfers=False):
     if webrtc and not calls:
         raise ValueError('WebRTC requer o modo de chamadas')
     if dids and not calls:
@@ -244,6 +247,8 @@ def run(root, report, *, calls=False, webrtc=False, dids=False, isolation=False,
         raise ValueError('voicemail real requer modo de chamadas')
     if queues and not calls:
         raise ValueError('filas reais requerem modo de chamadas')
+    if transfers and not calls:
+        raise ValueError('transferencias reais requerem modo de chamadas')
     if voicemail_dtmf and (not voicemail or not calls):
         raise ValueError('DTMF do voicemail exige --calls e --voicemail')
     source = command(['git', '-C', str(root), 'rev-parse', 'HEAD']).stdout.strip()
@@ -289,6 +294,9 @@ def run(root, report, *, calls=False, webrtc=False, dids=False, isolation=False,
         report.update(schema_version=12, kind='real_asterisk_sip_trunks_loopback_lab',
                       sip_loopback_gateway_routing_tested=False,
                       real_operator_gateway_tested=False)
+    if transfers:
+        report.update(schema_version=13, kind='real_asterisk_sip_refer_transfer_lab',
+                      sip_refer_blind_transfer_tested=False, operator_transfer_tested=False)
     clean = command(['git', '-C', str(root), 'diff', '--quiet', 'HEAD', '--',
                      'asterisk', 'admin-api/tenants.py', 'admin-api/conf_generator.py',
                      'scripts/secrets_generator.py', 'lab','webphone','package.json','package-lock.json',
@@ -414,6 +422,9 @@ def run(root, report, *, calls=False, webrtc=False, dids=False, isolation=False,
         if calls:
             from .call_checks import exercise_calls
             exercise_calls(container_id, prepared, report)
+        if transfers:
+            from .transfer_checks import exercise_transfers
+            exercise_transfers(container_id, prepared, report)
         if webrtc:
             from .webrtc_checks import exercise_webrtc
             exercise_webrtc(root,container_id,prepared,report)
@@ -446,7 +457,7 @@ def run(root, report, *, calls=False, webrtc=False, dids=False, isolation=False,
         report['private_staging_retained'] = retain_staging
         if not retain_staging:
             shutil.rmtree(folder)
-    report.update(summarize(report['checks'], calls=calls,webrtc=webrtc,dids=dids,isolation=isolation,voicemail=voicemail,voicemail_dtmf=voicemail_dtmf,ami=ami,queues=queues,policy=policy,routes=routes,trunks=trunks))
+    report.update(summarize(report['checks'], calls=calls,webrtc=webrtc,dids=dids,isolation=isolation,voicemail=voicemail,voicemail_dtmf=voicemail_dtmf,ami=ami,queues=queues,policy=policy,routes=routes,trunks=trunks,transfers=transfers))
     return report['success']
 
 
@@ -465,6 +476,7 @@ def main(argv=None):
     parser.add_argument('--policy', action='store_true', help='validar GOSUB e AstDB com Local/ descartável')
     parser.add_argument('--routes', action='store_true', help='validar bloqueio e seleção de rota com Dial interceptado em sandbox')
     parser.add_argument('--trunks', action='store_true', help='validar INVITE SIP real a dois troncos no loopback')
+    parser.add_argument('--transfers', action='store_true', help='validar transferencia SIP REFER em laboratorio')
     args = parser.parse_args(argv)
     if args.webrtc and not args.calls:
         parser.error('--webrtc requer --calls')
@@ -476,6 +488,8 @@ def main(argv=None):
         parser.error('--voicemail requer --calls')
     if args.queues and not args.calls:
         parser.error('--queues requer --calls')
+    if args.transfers and not args.calls:
+        parser.error('--transfers requer --calls')
     if args.voicemail_dtmf and not (args.calls and args.voicemail):
         parser.error('--voicemail-dtmf requer --calls --voicemail')
     report = {}
@@ -497,6 +511,8 @@ def main(argv=None):
             kwargs['routes'] = True
         if args.trunks:
             kwargs['trunks'] = True
+        if args.transfers:
+            kwargs['transfers'] = True
         success = run(Path(__file__).resolve().parents[1], report, **kwargs)
     except Exception as exc:
         success = False
