@@ -162,3 +162,22 @@ def test_preflight_rejeita_cabecalho_de_outro_contexto(tmp_path):
     )
     assert result.returncode == 1
     assert "contexto politica-externa ausente" in result.stderr
+
+
+def test_preflight_rejeita_contexto_em_linha_de_diagnostico(tmp_path):
+    fake = tmp_path / "asterisk"
+    fake.write_text(
+        '#!/usr/bin/env bash\n'
+        'case "$2" in\n'
+        '  "dialplan show politica-externa") printf "NOTICE: contexto encontrado\\n[ Context \'politica-externa\' created by \'pbx_config\' ] extra\\n" ;;\n'
+        '  *) echo "[t1-internal]"; echo "[t2-internal]" ;;\n'
+        'esac\n'
+    )
+    fake.chmod(0o755)
+    result = subprocess.run(
+        ["bash", str(SCRIPT)],
+        env={**os.environ, "ASTERISK_BIN": str(fake)},
+        text=True, capture_output=True, check=False, timeout=10,
+    )
+    assert result.returncode == 1
+    assert "contexto politica-externa ausente" in result.stderr
