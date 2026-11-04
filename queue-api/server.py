@@ -60,6 +60,7 @@ from monitoring_access import extension_tenant, channel_tenant
 from monitoring_access import monitoring_event_tenant, scoped_monitoring_entries
 from supervision_summary import build_supervision_summary
 from supervision_diagnostics import evaluate_supervision_diagnostics
+from call_center_cockpit import build_call_center_cockpit
 from outbound_safety import outbound_lock, atomic_write_json
 from outbound_correlation import matches_dial_event, matches_originate_response
 
@@ -393,6 +394,7 @@ class Handler(BaseHTTPRequestHandler):
                 "/api/queue", "/api/queue/pickup", "/api/queue/pause",
                 "/api/supervision/queue-health",
                 "/api/supervision/summary",
+                "/api/supervision/cockpit",
                 "/api/presence", "/api/reports/pauses", "/api/reports",
                 "/api/metrics/today", "/api/metrics/sla", "/api/metrics/sla/history",
                 "/api/missed-calls", "/api/fraud-alerts", "/api/quality",
@@ -526,6 +528,8 @@ class Handler(BaseHTTPRequestHandler):
             self._handle_queue_health()
         elif urlparse(self.path).path == "/api/supervision/summary":
             self._handle_supervision_summary()
+        elif urlparse(self.path).path == "/api/supervision/cockpit":
+            self._handle_call_center_cockpit()
         elif urlparse(self.path).path == "/api/queue":
             identity = self._require_queue_identity()
             if identity is None:
@@ -648,6 +652,38 @@ class Handler(BaseHTTPRequestHandler):
             self._send_queue_json(503, {"error": "estado da fila indisponivel"})
             return
         self._send_queue_json(200, snapshot)
+
+    def _handle_call_center_cockpit(self):
+        """50 indicadores somente de leitura, com autorização por tenant."""
+        identity = self._require_queue_identity()
+        if identity is None:
+            return
+        if identity.get("role") not in {"supervisor", "admin"}:
+            self._send_queue_json(403, {"error": "supervisao restrita"})
+            return
+        tenant = identity["tenant"]
+        try:
+            waiting = state.waiting_list(tenant=tenant)
+            summary = build_supervision_summary(
+                tenant,
+                waiting=waiting,
+                extensions=extension_states.snapshot(),
+                sla=queue_sla_tracker.snapshot(),
+                missed=missed_calls_log.list(limit=100),
+                fraud=fraud_alerts_log.list(limit=100),
+                quality=quality_log.list(limit=100, only_poor=True),
+                pauses=agent_pause_store.snapshot(),
+                presence=load_presence(PRESENCE_PATH),
+                threshold_seconds=SLA_THRESHOLD_SECONDS,
+            )
+            result = build_call_center_cockpit(
+                tenant, summary=summary, waiting=waiting,
+                threshold_seconds=SLA_THRESHOLD_SECONDS,
+            )
+        except (OSError, ValueError, TypeError, KeyError):
+            self._send_queue_json(503, {"error": "cockpit indisponivel"})
+            return
+        self._send_queue_json(200, result)
 
     def _handle_supervision_summary(self):
         # Nunca confiar em tenant informado na query, payload ou rota.
