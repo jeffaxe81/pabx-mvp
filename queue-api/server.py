@@ -51,6 +51,7 @@ from metrics import DailyMetrics, TenantDailyMetrics
 from queue_sla import QueueSLATracker, SLAHistoryStore, summarize_sla_history_by_date, filter_sla_history_by_date_range
 from pickup import validate_pickup_request, pickup_matches_queue, queue_tenant
 from queue_access import load_queue_policy, authenticate_queue, may_pickup
+from queue_membership import QueueMemberTracker, validate_member_change, member_ami_action
 from extension_states import ExtensionStateTracker
 from reports import parse_cdr_for_report, CallLogStore, aggregate, group_by, extract_operator
 from screen_pop import dispatch_screen_pop
@@ -80,6 +81,11 @@ RECORDINGS_ACCESS_POLICY_PATH = os.environ.get("RECORDINGS_ACCESS_POLICY_PATH", 
 RECORDINGS_CORS_ORIGINS = set(filter(None, (v.strip() for v in os.environ.get("RECORDINGS_CORS_ORIGINS", "").split(","))))
 QUEUE_ACCESS_POLICY_PATH = os.environ.get("QUEUE_ACCESS_POLICY_PATH", "/app/data/queue_access.json")
 QUEUE_CORS_ORIGINS = set(filter(None, (v.strip() for v in os.environ.get("QUEUE_CORS_ORIGINS", "").split(","))))
+# Mutações de membros mudam o roteamento de chamadas: opt-in somente após homologação.
+QUEUE_MEMBER_MUTATIONS_ENABLED = os.environ.get("QUEUE_MEMBER_MUTATIONS_ENABLED", "false").lower() == "true"
+QUEUE_MEMBER_ALLOWED_EXTENSIONS = tuple(filter(None, (
+    v.strip() for v in os.environ.get("QUEUE_MEMBER_ALLOWED_EXTENSIONS",
+        os.environ.get("PICKUP_ALLOWED_EXTENSIONS", "t1-recepcao,t1-recepcao-2,t2-recepcao,t2-recepcao-2")).split(","))))
 # Retenção de gravações (backlog #15) - 0 (padrão) = desabilitado.
 # Apagar gravação é irreversível, então isso é opt-in de propósito.
 RECORDINGS_RETENTION_DAYS = int(os.environ.get("RECORDINGS_RETENTION_DAYS", "0"))
@@ -154,6 +160,7 @@ PRESENCE_PATH = os.environ.get("PRESENCE_PATH", "/app/data/presence.json")
 PAUSE_HISTORY_PATH = os.environ.get("PAUSE_HISTORY_PATH", "/app/data/pause_history.jsonl")
 
 state = QueueStateTracker()
+queue_member_tracker = QueueMemberTracker()
 missed_calls_log = MissedCallsLog()
 daily_metrics = DailyMetrics()
 tenant_daily_metrics = TenantDailyMetrics()
@@ -177,6 +184,7 @@ CTI_ADMISSION = OriginateAdmission()
 def handle_ami_event(event: dict):
     """Callback único do AMI: alimenta fila, chamadas perdidas, métricas, estado dos ramais, relatórios, fraude e qualidade."""
     state.apply_event(event)
+    queue_member_tracker.apply_event(event)
     daily_metrics.apply_cdr_event(event)
     tenant_daily_metrics.apply_cdr_event(event)
     queue_sla_tracker.apply_event(event)
@@ -392,6 +400,8 @@ class Handler(BaseHTTPRequestHandler):
         return (
             path in {
                 "/api/queue", "/api/queue/pickup", "/api/queue/pause",
+                "/api/queue/members", "/api/queue/members/join",
+                "/api/queue/members/leave", "/api/queue/members/pause",
                 "/api/supervision/queue-health",
                 "/api/supervision/summary",
                 "/api/supervision/cockpit",
@@ -530,6 +540,8 @@ class Handler(BaseHTTPRequestHandler):
             self._handle_supervision_summary()
         elif urlparse(self.path).path == "/api/supervision/cockpit":
             self._handle_call_center_cockpit()
+        elif urlparse(self.path).path == "/api/queue/members":
+            self._handle_list_queue_members()
         elif urlparse(self.path).path == "/api/queue":
             identity = self._require_queue_identity()
             if identity is None:
@@ -838,8 +850,90 @@ class Handler(BaseHTTPRequestHandler):
             self._handle_set_presence()
         elif self.path == "/api/queue/pause":
             self._handle_set_pause()
+        elif self.path in ("/api/queue/members/join", "/api/queue/members/leave", "/api/queue/members/pause"):
+            self._handle_queue_member_change(self.path.rsplit("/", 1)[-1])
         else:
             self._send_json(404, {"error": "not found"})
+
+    def _handle_list_queue_members(self):
+        identity = self._require_queue_identity()
+        if identity is None:
+            return
+        try:
+            self._send_queue_json(200, queue_member_tracker.snapshot(identity))
+        except (TypeError, ValueError):
+            self._send_queue_json(503, {"error": "estado de membros indisponivel"})
+
+    def _handle_queue_member_change(self, operation):
+        identity = self._require_queue_identity()
+        if identity is None:
+            return
+        if not QUEUE_MEMBER_MUTATIONS_ENABLED:
+            self._send_queue_json(503, {"error": "alteracoes de membros desabilitadas"})
+            return
+        if self.headers.get("Transfer-Encoding") is not None:
+            self.close_connection = True
+            self._send_queue_json(400, {"error": "enquadramento HTTP invalido"})
+            return
+        lengths = self.headers.get_all("Content-Length", [])
+        if len(lengths) != 1 or not lengths[0].isascii() or not lengths[0].isdecimal():
+            self.close_connection = True
+            self._send_queue_json(400, {"error": "Content-Length invalido"})
+            return
+        length = int(lengths[0])
+        if not 1 <= length <= 4096:
+            self.close_connection = True
+            self._send_queue_json(400, {"error": "corpo de membro fora dos limites"})
+            return
+        if self.headers.get("Content-Type", "").split(";")[0].strip().lower() != "application/json":
+            self.close_connection = True
+            self._send_queue_json(415, {"error": "Content-Type deve ser application/json"})
+            return
+        try:
+            body = self.rfile.read(length)
+            if len(body) != length:
+                raise ValueError("incomplete")
+            def pairs(items):
+                output = {}
+                for key, value in items:
+                    if key in output:
+                        raise ValueError("duplicate")
+                    output[key] = value
+                return output
+            payload = json.loads(
+                body, object_pairs_hook=pairs,
+                parse_constant=lambda _: (_ for _ in ()).throw(ValueError("nonfinite")),
+            )
+        except (UnicodeError, ValueError, OSError):
+            self.close_connection = True
+            self._send_queue_json(400, {"error": "JSON de membro invalido"})
+            return
+        ok, error, change = validate_member_change(
+            payload, identity, QUEUE_MEMBER_ALLOWED_EXTENSIONS, operation,
+        )
+        if not ok:
+            self._send_queue_json(403 if "autorizado" in error or "cadastrado" in error
+                                  else 400, {"error": error})
+            return
+        if ami is None:
+            self._send_queue_json(503, {"error": "AMI indisponivel"})
+            return
+        try:
+            action = member_ami_action(change, operation)
+            response = ami.send_action(action)
+        except (ConnectionError, TimeoutError, OSError, ValueError):
+            self._send_queue_json(503, {"error": "AMI indisponivel"})
+            return
+        if not isinstance(response, dict) or response.get("Response") != "Success":
+            self._send_queue_json(502, {"error": "Asterisk rejeitou alteracao de membro"})
+            return
+        # ACK do comando nao prova estado da fila. O snapshot so muda
+        # quando QueueMemberAdded/Removed/Pause/Status vier pelo AMI.
+        self._send_queue_json(202, {
+            "accepted": True, "ami_event_confirmed": False,
+            "operation": operation, "queue": change["queue"],
+            "extension": change["extension"],
+        })
 
     def _handle_set_pause(self):
         identity = self._require_queue_identity()

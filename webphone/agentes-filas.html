@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>AXE PABX | Agentes em Filas</title>
+<style>
+:root {color-scheme:dark;font-family:system-ui,-apple-system,Segoe UI,Arial,sans-serif}
+*{box-sizing:border-box}
+body{margin:0;background:#0d1423;color:#edf4ff}
+main{max-width:1120px;padding:28px 18px;margin:auto}
+h1{font-size:clamp(1.5rem,4vw,2rem);margin:8px 0}
+h2{font-size:1.1rem;margin-top:0}
+p,small{color:#bad0eb;line-height:1.5}
+a{color:#8ec3ff}
+.panel{border:1px solid #425776;background:#192840;border-radius:16px;padding:20px;margin:16px 0}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(205px,1fr));gap:14px}
+label{display:block;font-size:.87rem;margin-bottom:7px}
+input,select,button{font:inherit;width:100%;padding:11px 12px;min-height:44px;border:1px solid #617892;border-radius:9px;background:#0b192c;color:#fff}
+input:focus-visible,select:focus-visible,button:focus-visible{outline:3px solid #68bbff;outline-offset:2px}
+button{font-weight:650;cursor:pointer;background:#72b5ee;color:#07192b;border:0}
+button.secondary{background:#263f60;color:#fff;border:1px solid #6682a2}
+button.danger{background:#f4a5a5;color:#371111}
+button:disabled{opacity:.55;cursor:progress}
+.status{min-height:26px}
+.error{color:#ffb5ba}
+table{border-collapse:collapse;width:100%;font-size:.9rem}
+th,td{text-align:left;border-bottom:1px solid #435977;padding:10px}
+.table-container{overflow-x:auto}
+#tenant{border:1px solid #506b8b;padding:6px 10px;border-radius:999px}
+.help{border-left:3px solid #72b5ee;padding-left:13px}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<main>
+<a href="call-center.html">Voltar ao cockpit</a>
+<header>
+<h1>Agentes em filas de atendimento</h1>
+<p>Login, logout, penalty e pausa por fila individual. Alterações bloqueadas por padrão até habilitação controlada no servidor.</p>
+</header>
+<section class="panel">
+<h2>Conexão autenticada</h2>
+<form id="authForm" class="grid">
+<div><label for="apiUrl">URL da API de filas (HTTPS)</label><input id="apiUrl" type="url" placeholder="https://pabx.exemplo.com" required></div>
+<div><label for="accessToken">Token Bearer pessoal</label><input id="accessToken" type="password" autocomplete="off" required></div>
+<div><label for="connect">Autenticação</label><button id="connect" type="submit">Conectar e consultar</button></div>
+</form>
+<p class="help">O token fica somente na memória da página; não use computador compartilhado. Configure QUEUE_CORS_ORIGINS e não habilite operações de membros sem homologação do Asterisk.</p>
+<p id="status" class="status" role="status" aria-live="polite">Informe as credenciais.</p>
+</section>
+<section class="panel" id="control" hidden>
+<h2>Operações do agente <small id="tenant"></small></h2>
+<form id="memberForm" class="grid">
+<div><label for="queue">Fila exata</label><input id="queue" required autocomplete="off" placeholder="fila-t1"></div>
+<div><label for="extension">Ramal autorizado</label><input id="extension" required autocomplete="off" placeholder="t1-recepcao"></div>
+<div><label for="penalty">Prioridade penalty (0–10)</label><input id="penalty" type="number" value="0" min="0" max="10" step="1"></div>
+<div><label for="reason">Motivo para pausa</label><input id="reason" maxlength="80" autocomplete="off" placeholder="treinamento"></div>
+<div><label for="pausedAtJoin">Entrada na fila</label><select id="pausedAtJoin"><option value="false">Inicialmente disponível</option><option value="true">Inicialmente pausado</option></select></div>
+<div><label for="pauseAction">Pausa por fila</label><select id="pauseAction"><option value="true">Pausar na fila</option><option value="false">Retomar na fila</option></select></div>
+</form>
+<div class="grid" style="margin-top:14px">
+<button id="join" type="button">Entrar na fila</button>
+<button id="leave" class="danger" type="button">Sair da fila</button>
+<button id="applyPause" class="secondary" type="button">Aplicar pausa/retorno</button>
+<button id="refresh" class="secondary" type="button">Consultar membros</button>
+</div>
+<p class="help">O HTTP 202 confirma apenas que a ação foi aceita pela AMI. O estado real deve ser observado em evento do Asterisk; membros estáticos podem não permitir saída dinâmica.</p>
+</section>
+<section class="panel" id="listing" hidden>
+<h2>Membros observados pelo backend</h2>
+<p>Estado parcial dos eventos AMI desde a inicialização, não um inventário completo do Asterisk.</p>
+<div class="table-container"><table><thead><tr><th>Fila</th><th>Ramal</th><th>Tipo</th><th>Pausa</th><th>Penalty</th></tr></thead><tbody id="members"></tbody></table></div>
+<p id="lastUpdated"></p>
+</section>
+</main>
+<script>
+(() => {
+  "use strict";
+  const e = id => document.getElementById(id);
+  const state = {api:"",token:"",tenant:"",busy:false};
+  function showStatus(message, bad=false) { e("status").textContent=message; e("status").classList.toggle("error",bad); }
+  function apiUrl() {
+    const u = new URL(e("apiUrl").value.trim());
+    if (u.username || u.password || u.search || u.hash || !["https:","http:"].includes(u.protocol) ||
+        (u.protocol==="http:" && !["localhost","127.0.0.1","[::1]"].includes(u.hostname))) throw Error("Use HTTPS (HTTP somente localhost) sem query ou credenciais na URL.");
+    return u.href.replace(/\/$/, "");
+  }
+  async function call(path, method="GET", body) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 9000);
+    try {
+      const response=await fetch(state.api+path, {
+        method,
+        headers: {"Authorization":"Bearer "+state.token, ...(body?{"Content-Type":"application/json"}:{})},
+        body:body?JSON.stringify(body):undefined,
+        credentials:"omit",cache:"no-store",signal:controller.signal,
+      });
+      const json=await response.json().catch(() => ({}));
+      if (!response.ok) throw Error(json.error || ("Falha HTTP "+response.status));
+      return json;
+    } finally {clearTimeout(timeout);}
+  }
+  async function refresh() {
+    const data=await call("/api/queue/members");
+    if (!data.tenant || !Array.isArray(data.members)) throw Error("Resposta de membros inválida");
+    state.tenant=data.tenant; e("tenant").textContent=data.tenant;
+    const tbody=e("members");
+    tbody.replaceChildren();
+    for (const item of data.members) {
+      const tr=document.createElement("tr");
+      for (const value of [item.queue,item.extension,item.membership,item.paused===null?"Sem dados":item.paused?"Pausado":"Ativo",item.penalty===null?"Sem dados":String(item.penalty)]) {
+        const td=document.createElement("td"); td.textContent=String(value ?? ""); tr.append(td);
+      }
+      tbody.append(tr);
+    }
+    e("listing").hidden=false;
+    e("lastUpdated").textContent="Última consulta: "+new Date().toLocaleString("pt-BR")+" | "+data.tracked_members+" membro(s) observado(s)";
+    showStatus("Consulta autenticada do tenant "+data.tenant+".");
+  }
+  async function execute(path,body) {
+    if (state.busy) return;
+    state.busy=true;
+    for (const button of document.querySelectorAll("#control button")) button.disabled=true;
+    try {
+      const result=await call(path,"POST",body);
+      showStatus(result.accepted?"Comando aceito pelo Asterisk. Aguardando confirmação por eventos AMI.":"Comando não confirmado.");
+      await refresh();
+    } catch(error) {showStatus(error.message,true);}
+    finally {state.busy=false; for(const button of document.querySelectorAll("#control button"))button.disabled=false;}
+  }
+  function fields() {
+    return {queue:e("queue").value.trim(),extension:e("extension").value.trim()};
+  }
+  e("authForm").addEventListener("submit",async ev=>{
+    ev.preventDefault();
+    try {
+      state.api=apiUrl();
+      state.token=e("accessToken").value.trim().replace(/^Bearer\s+/i,"");
+      e("accessToken").value="";
+      if(state.token.length<16)throw Error("Token inválido.");
+      await refresh(); e("control").hidden=false;
+      if(!e("queue").value)e("queue").value="fila-"+state.tenant;
+    } catch(error) {
+      state.token="";state.tenant="";
+      e("control").hidden=true;e("listing").hidden=true;
+      showStatus(error.message,true);
+    }
+  });
+  e("join").addEventListener("click",()=>execute("/api/queue/members/join",{
+    ...fields(),penalty:Number(e("penalty").value),paused:e("pausedAtJoin").value==="true",
+  }));
+  e("leave").addEventListener("click",()=>execute("/api/queue/members/leave",fields()));
+  e("applyPause").addEventListener("click",()=>execute("/api/queue/members/pause",{
+    ...fields(),paused:e("pauseAction").value==="true",
+    reason:e("pauseAction").value==="true"?e("reason").value.trim():"",
+  }));
+  e("refresh").addEventListener("click",()=>refresh().catch(error=>showStatus(error.message,true)));
+})();
+</script>
+</body>
+</html>

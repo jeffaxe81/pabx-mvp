@@ -193,3 +193,4 @@ registrado como regra permanente no prompt master
 
 140. [Ciclo de vida do áudio WebRTC e cache PWA](manual-140-audio-webrtc-lifecycle.md)
 141. [Cockpit de voz — 50 indicadores de call center](manual-141-cockpit-voz-50-indicadores.md)
+142. [Membros dinâmicos de fila e agentes (QueueAdd/Remove/Pause)](manual-142-membros-dinamicos-fila.md)
