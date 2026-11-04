@@ -92,6 +92,10 @@ services:
       # Catálogo privado modo 0600, criado com queue_credentials.py.
       # Sem catálogo, GET /api/queue e POST /api/queue/pickup retornam 401.
       QUEUE_ACCESS_POLICY_PATH: "/app/data/queue_access.json"
+      # Habilitar somente após teste Asterisk de QueueAdd/Remove/Pause.
+      # false mantém endpoint de leitura, mas bloqueia qualquer mutação.
+      QUEUE_MEMBER_MUTATIONS_ENABLED: "false"
+      QUEUE_MEMBER_ALLOWED_EXTENSIONS: "t1-recepcao,t1-recepcao-2,t2-recepcao,t2-recepcao-2"
       # Apenas origens exatas HTTPS do Webphone/painel (localhost em testes).
       # Vazio impede acesso a partir de browsers cross-origin.
       QUEUE_CORS_ORIGINS: ""
