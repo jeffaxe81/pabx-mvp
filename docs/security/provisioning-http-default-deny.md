@@ -30,6 +30,12 @@ sem relação com contas/ramais reais. Não usar telefones externos, túnel,
 port-forward, proxy reverso ou redes compartilhadas para alcançar 8080.
 Logs e backups locais também precisam de proteção.
 
+O gerador agora cria a saída com diretório 0700 e `.cfg` 0600; o Nginx
+legado não deve receber acesso às configurações reais. Não reduzir essas
+permissões para contornar 403. Para o laboratório HTTPS autenticado, usar
+o [procedimento mTLS](provisioning-mtls-laboratorio.md), com a mesma
+identidade local do gerador e sem publicar portas externas.
+
 ## Limitação de migração e implantação
 
 Esta PR **não executa deploy nem encerra containers antigos**. Uma instância

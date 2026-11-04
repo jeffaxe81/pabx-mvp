@@ -16,6 +16,7 @@ Este lote adiciona `provisioning/mtls_server.py`: serviço HTTPS com certificado
 - Autorização fail-closed por SHA-256 de certificado cliente DER, MAC canônico de 12 hexadecimais e tenant confirmado por `ramal` do gerador; MAC e certificado não podem ser duplicados.
 - Apenas `GET /<mac-lowercase>.cfg`, com método, rota e query estritamente validados; não há listagem de diretório.
 - Diretório aberto em POSIX com `O_DIRECTORY | O_NOFOLLOW`; arquivos abertos relativamente ao FD do diretório, com `O_NOFOLLOW`; somente arquivo regular de até 512 KiB.
+- Pasta e `.cfg` devem pertencer à identidade local do servidor, sem acesso por grupo/outros (gerador: 0700/0600). Arquivos com hardlinks são recusados. Permissões abertas produzem 404 mesmo com certificado cliente válido.
 - Erros genéricos 404 sem divulgar existência do MAC, corpo da configuração ou metadados de outro tenant.
 - Respostas `Cache-Control: no-store, private, max-age=0`, `Pragma: no-cache` e `X-Content-Type-Options: nosniff`.
 - Sem registros de URLs, senhas SIP ou certificados no servidor HTTP de laboratório.
@@ -25,7 +26,7 @@ Este lote adiciona `provisioning/mtls_server.py`: serviço HTTPS com certificado
 
 1. Gere **fora do repositório** uma CA de teste e certificados para o servidor e cada telefone/simulador; mantenha cada chave privada com permissão 0600. A autoridade de certificação do cliente usada aqui **não** pode ser a CA pública não relacionada ao provisioning.
 2. Em diretório privado (0600), crie o cadastro com `schema_version:2` e entradas com `mac`, `tenant`, `client_sha256`, `valid_from`, `valid_until` e `revoked`. O hash é o SHA-256 dos bytes DER do certificado cliente. O MAC em minúsculas deve constar em `devices.json` com `ramal` do mesmo tenant. Cadastros antigos v1 **não são aceitos**; migrar explicitamente antes de iniciar o laboratório.
-3. Gere arquivos no `provisioning/files` como de costume; certifique-se de que os nomes estejam em minúsculas, correspondendo aos MACs cadastrados.
+3. Gere arquivos no `provisioning/files` com `python3 provisioning/generate.py`. O gerador publica nomes MAC em minúsculas, diretório 0700 e arquivos 0600, inclusive os `.cfg` antigos seguros. Execute o servidor mTLS com a mesma identidade local; não abra permissões para acomodar o Nginx legado.
 4. Execute a ferramenta **somente na máquina de testes**, com chaves e cadastro fora da pasta pública:
 
 ```bash
@@ -43,9 +44,9 @@ O laboratório é acessível apenas em loopback; qualquer uso externo, túnel, r
 
 ## Restrições e itens NÃO concluídos
 
-**Produção NO-GO**. A configuração `.cfg` continua sendo gerada por padrão com modo 0644 por compatibilidade legada e pode ser lida por usuários locais autorizados ao sistema de arquivos; antes de produção, migrar a saída para diretório privado com permissões/identidade de serviço restritas. Não há token de uso único, CRL/OCSP, rotação automática de certificado, proteção contra negação de serviço, política de expiração de credenciais SIP, integração com rede corporativa nem gestão operacional de chaves. Revogação por marcação `revoked=true`, exclusão do dispositivo ou expiração do cadastro **não exige reiniciar**; é efetiva nos próximos GETs. Não substitui revogação de certificados pela CA em outros sistemas e não interrompe transferência já iniciada. Não foi homologado se o firmware Yealink disponibiliza certificado de cliente mTLS no fluxo de provisioning HTTPS.
+**Produção NO-GO**. A saída `.cfg` é privada por padrão: diretório 0700 e arquivos 0600, exigidos também pelo leitor mTLS. A identidade do gerador deve ser a mesma do servidor local. O catálogo de entrada com senhas SIP, backups e chaves continuam exigindo proteção independente; não versionar credenciais reais. Não há token de uso único, CRL/OCSP, rotação automática de certificado, proteção contra negação de serviço, política de expiração de credenciais SIP, integração com rede corporativa nem gestão operacional de chaves. Revogação por marcação `revoked=true`, exclusão do dispositivo ou expiração do cadastro **não exige reiniciar**; é efetiva nos próximos GETs. Não substitui revogação de certificados pela CA em outros sistemas e não interrompe transferência já iniciada. Não foi homologado se o firmware Yealink disponibiliza certificado de cliente mTLS no fluxo de provisioning HTTPS.
 
-O serviço não é incluído no `docker-compose.yml` nem publicado remotamente. A issue #344 permanece **aberta** até evidência com aparelho físico, autenticação/ACL operacional por tenant/MAC, segredos não expostos no host e revisão de suporte do fabricante.
+O serviço não é incluído no `docker-compose.yml` nem publicado remotamente. A issue #344 permanece **aberta** até evidência com aparelho físico, autenticação/ACL operacional por tenant/MAC, proteção integral dos segredos no host e revisão de suporte do fabricante.
 
 **Não utilizar os resultados automáticos para elevar a homologação operacional ou autorizar deployment.**
 
@@ -114,3 +115,26 @@ de repetir. A CLI nunca desfaz uma revogação para tentar compensar esse erro.
 Erros operacionais retornam código 2 com categoria genérica, sem caminho
 ou conteúdo privado. Não modifica a configuração `.cfg`, não reinicia o
 servidor e não substitui revogação por CRL/OCSP ou homologação Yealink físico.
+
+## Migração local da pasta de saída
+
+Em Linux/POSIX, com o catálogo validado e a pasta pertencente ao operador,
+executar o gerador restringe a pasta para 0700 e todos os arquivos
+`<MAC>.cfg` existentes para 0600, incluindo MACs fora do lote atual.
+O conteúdo dos arquivos fora do lote não é alterado e nenhum arquivo é
+excluído. Links simbólicos, hardlinks, FIFOs, diretórios com nome `.cfg`
+e arquivos de outra identidade bloqueiam a publicação. Resolver essas
+ocorrências com revisão local; não contornar o bloqueio abrindo permissões.
+
+As gravações usam descritor de diretório, lock e temporários privados;
+renomear a pasta não redireciona o conteúdo para um symlink. Cada arquivo
+é substituído atomicamente. Uma falha no meio do lote pode deixar arquivos
+anteriores já atualizados e permissões já restritas; não há rollback global.
+O lock só coordena processos que usam o mesmo inode do diretório.
+O umask precisa preservar acesso do proprietário (por exemplo 0022/0077).
+Uma máscara 0777 pode criar pasta 0000 e bloquear a abertura inicial;
+essa configuração exige ajuste local e falha sem publicar arquivos.
+
+Alterar o código não migra instalações existentes automaticamente.
+Permissões privadas não revogam arquivos já copiados, descritores abertos,
+senhas previamente expostas ou acesso privilegiado de administrador.

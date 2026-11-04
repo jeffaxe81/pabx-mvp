@@ -83,9 +83,11 @@ Chamadas de saída: qualquer ramal disca `0` + número
 Fluxo:
 1. Cadastre o telefone (MAC, ramal, senha) em `provisioning/devices.json`
 2. Rode `python3 provisioning/generate.py` → gera `provisioning/files/<MAC>.cfg`
-3. O telefone físico, ao ser configurado para buscar provisionamento em
-   `http://<ip-do-servidor>:8080/`, baixa seu arquivo automaticamente
-   pelo MAC e já sobe configurado (conta SIP, senha, TLS, SRTP)
+3. A saída é privada: diretório 0700 e arquivos 0600, com MAC em minúsculas.
+   O [laboratório HTTPS/mTLS](docs/security/provisioning-mtls-laboratorio.md)
+   exige a mesma identidade local, certificado cliente e vínculo tenant/MAC.
+   A homologação com telefone físico continua pendente. O HTTP legado fica
+   desativado por padrão; não usar para entregar senhas SIP reais.
 
 Hoje só existe template para **Yealink**. Para outro fabricante
 (Grandstream, Cisco, Snom...), crie um novo arquivo em
@@ -109,7 +111,7 @@ Serviços expostos:
 - `5060/udp` — SIP sem criptografia (compatibilidade/testes)
 - `5061/tcp` — SIP com TLS
 - `10000-10200/udp` — RTP (mídia de áudio)
-- `8080/tcp` — servidor de provisionamento
+- `8080/tcp` — HTTP legado de provisionamento, desativado por padrão e apenas em loopback no perfil de laboratório
 
 ## Testando
 

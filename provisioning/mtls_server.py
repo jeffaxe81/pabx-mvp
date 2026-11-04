@@ -159,10 +159,15 @@ def read_cfg(directory, mac):
     file_flags = os.O_RDONLY | os.O_NOFOLLOW | getattr(os, "O_NONBLOCK", 0)
     root_fd = os.open(directory, root_flags)
     try:
+        root = os.fstat(root_fd)
+        if root.st_mode & 0o077 or root.st_uid != os.geteuid():
+            raise ValueError("diretorio de configuracoes deve ser privado e do servico")
         fd = os.open(mac + ".cfg", file_flags, dir_fd=root_fd)
         try:
             stats = os.fstat(fd)
-            if not stat.S_ISREG(stats.st_mode) or stats.st_size > MAX_CFG:
+            if (not stat.S_ISREG(stats.st_mode) or stats.st_size > MAX_CFG
+                    or stats.st_mode & 0o077 or stats.st_uid != os.geteuid()
+                    or stats.st_nlink != 1):
                 raise ValueError("configuracao de aparelho invalida")
             with os.fdopen(fd, "rb", closefd=False) as stream:
                 content = stream.read(MAX_CFG + 1)
