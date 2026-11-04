@@ -196,7 +196,7 @@ def cleanup_owned(name, ownership):
     return result
 
 
-def summarize(checks, *, calls=False, webrtc=False, dids=False, isolation=False, voicemail=False, voicemail_dtmf=False, ami=False, queues=False, policy=False, routes=False, trunks=False, transfers=False, members=False):
+def summarize(checks, *, calls=False, webrtc=False, dids=False, isolation=False, voicemail=False, voicemail_dtmf=False, ami=False, queues=False, policy=False, routes=False, trunks=False, transfers=False, members=False, multidevice=False):
     required = {'real_runtime', 'tls_transport', 'wss_transport', 'container_removed',
                 'checkout_clean', 'runtime_mounts', 'source_label'}
     required.update(name+':'+tid for tid in ('t1', 't2', 't3')
@@ -225,6 +225,9 @@ def summarize(checks, *, calls=False, webrtc=False, dids=False, isolation=False,
     if members:
         from .queue_member_checks import required_member_checks
         required.update(required_member_checks())
+    if multidevice:
+        from .multidevice_checks import required_multidevice_checks
+        required.update(required_multidevice_checks())
     if queues:
         from .queue_tenant_checks import required_queue_runtime_checks
         from .queue_overflow_checks import required_queue_overflow_checks
@@ -247,7 +250,7 @@ def summarize(checks, *, calls=False, webrtc=False, dids=False, isolation=False,
             'success': set(checks) == required and passed == len(required)}
 
 
-def run(root, report, *, calls=False, webrtc=False, dids=False, isolation=False, voicemail=False, voicemail_dtmf=False, ami=False, queues=False, policy=False, routes=False, trunks=False, transfers=False, members=False):
+def run(root, report, *, calls=False, webrtc=False, dids=False, isolation=False, voicemail=False, voicemail_dtmf=False, ami=False, queues=False, policy=False, routes=False, trunks=False, transfers=False, members=False, multidevice=False):
     if ami and members:
         raise ValueError('modos AMI mutuamente exclusivos')
     if webrtc and not calls:
@@ -293,6 +296,9 @@ def run(root, report, *, calls=False, webrtc=False, dids=False, isolation=False,
     if members:
         report.update(schema_version=14, kind='real_asterisk_queue_members_ami_lab',
                       queue_members_ami_control_tested=False)
+    if multidevice:
+        report.update(schema_version=15, kind='real_asterisk_sip_multidevice_lab',
+                      multidevice_sip_registration_tested=False)
     if ami:
         report.update(schema_version=7, kind='real_asterisk_ami_originate_response_lab',
                       live_ami_originate_response_tested=False,
@@ -358,6 +364,9 @@ def run(root, report, *, calls=False, webrtc=False, dids=False, isolation=False,
         if members:
             from .queue_member_checks import prepare_members
             prepare_members(prepared)
+        if multidevice:
+            from .multidevice_checks import prepare_multidevice
+            prepare_multidevice(prepared)
         command(['docker', 'pull', IMAGE], timeout=180)
         image_data = json.loads(command(['docker', 'image', 'inspect', IMAGE]).stdout)[0]
         report['image_id'] = image_data['Id']
@@ -463,6 +472,9 @@ def run(root, report, *, calls=False, webrtc=False, dids=False, isolation=False,
         if members:
             from .queue_member_checks import exercise_members
             exercise_members(container_id,prepared,report)
+        if multidevice:
+            from .multidevice_checks import exercise_multidevice
+            exercise_multidevice(container_id,prepared,report)
         if queues:
             from .queue_tenant_checks import exercise_queues
             from .queue_overflow_checks import exercise_queue_overflow
@@ -480,7 +492,8 @@ def run(root, report, *, calls=False, webrtc=False, dids=False, isolation=False,
         report['private_staging_retained'] = retain_staging
         if not retain_staging:
             shutil.rmtree(folder)
-    report.update(summarize(report['checks'], calls=calls,webrtc=webrtc,dids=dids,isolation=isolation,voicemail=voicemail,voicemail_dtmf=voicemail_dtmf,ami=ami,queues=queues,policy=policy,routes=routes,trunks=trunks,transfers=transfers,members=members))
+    report.update(summarize(report['checks'], calls=calls,webrtc=webrtc,dids=dids,isolation=isolation,voicemail=voicemail,voicemail_dtmf=voicemail_dtmf,ami=ami,queues=queues,policy=policy,routes=routes,trunks=trunks,transfers=transfers,
+                            members=members,multidevice=multidevice))
     return report['success']
 
 
@@ -496,6 +509,7 @@ def main(argv=None):
                         help='enviar DTMF sintético por SRTP no *97 (não autentica PIN)')
     parser.add_argument('--ami', action='store_true', help='verificar OriginateResponse no AMI real isolado')
     parser.add_argument('--members', action='store_true', help='validar membros dinamicos via AMI real isolado')
+    parser.add_argument('--multidevice', action='store_true', help='validar 1 a 3 registros SIP/TLS por AOR')
     parser.add_argument('--queues', action='store_true', help='validar fila exata t1/t2/t3 via SIP real')
     parser.add_argument('--policy', action='store_true', help='validar GOSUB e AstDB com Local/ descartável')
     parser.add_argument('--routes', action='store_true', help='validar bloqueio e seleção de rota com Dial interceptado em sandbox')
@@ -529,6 +543,8 @@ def main(argv=None):
             kwargs['ami'] = True
         if args.members:
             kwargs['members'] = True
+        if args.multidevice:
+            kwargs['multidevice'] = True
         if args.queues:
             kwargs['queues'] = True
         if args.policy:
