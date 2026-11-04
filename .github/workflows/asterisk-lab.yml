@@ -344,3 +344,24 @@ jobs:
           path: lab-results/queue-members.json
           if-no-files-found: error
           retention-days: 14
+  sip-multidevice:
+    name: Asterisk | 1 a 3 contatos SIP/TLS por ramal
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Provar de 1 a 3 registros por ramal no Asterisk descartável
+        run: python3 -m lab.asterisk_lab --multidevice --report lab-results/multidevice.json
+      - name: Preservar resultado sanitizado de contatos SIP
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: asterisk-real-sip-multidevice-${{ github.sha }}
+          path: lab-results/multidevice.json
+          if-no-files-found: error
+          retention-days: 14
