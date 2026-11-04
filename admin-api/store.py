@@ -91,6 +91,8 @@ def validate_extension_input(data: dict, existing: list, editing_name: str = Non
         )
         or (e.get("tenant") is not None and not isinstance(e["tenant"], str))
         or (e.get("voicemail_pin") is not None and not isinstance(e["voicemail_pin"], str))
+        or (e.get("max_contacts") is not None and
+            (type(e["max_contacts"]) is not int or not 1 <= e["max_contacts"] <= 3))
         for e in existing
     ):
         return False, "cadastro de ramais existente é inválido", None
@@ -180,6 +182,11 @@ def validate_extension_input(data: dict, existing: list, editing_name: str = Non
         ):
             return False, "e-mail inválido para configuração de voicemail", None
 
+    # Um ramal pode registrar de 1 a 3 dispositivos SIP; ausente = modo legado.
+    raw_contacts = data.get("max_contacts", 1)
+    if type(raw_contacts) is not int or not 1 <= raw_contacts <= 3:
+        return False, "max_contacts deve ser inteiro de 1 a 3", None
+
     # O PIN de voicemail não pode ser escolhido por JSON externo.
     # Cadastro legado sem PIN forte exige rotação administrada explícita;
     # nunca atribuir uma senha previsível ao atualizar o ramal.
@@ -204,7 +211,7 @@ def validate_extension_input(data: dict, existing: list, editing_name: str = Non
         if not isinstance(voicemail_pin, str) or not re.fullmatch(r"[1-9][0-9]{7}", voicemail_pin):
             return False, "ramal legado requer migração autorizada do PIN de voicemail", None
 
-    return True, None, {
+    cleaned = {
         "name": name,
         "number": number,
         "display_name": display_name,
@@ -213,6 +220,11 @@ def validate_extension_input(data: dict, existing: list, editing_name: str = Non
         "tenant": tenant,
         "voicemail_pin": voicemail_pin,
     }
+    # O legado mantém exatamente o mesmo schema quando o valor é 1;
+    # a configuração superior fica explícita somente onde solicitada.
+    if raw_contacts > 1:
+        cleaned["max_contacts"] = raw_contacts
+    return True, None, cleaned
 
 
 def add_extension(path, data: dict, allowed_tenants=None):
