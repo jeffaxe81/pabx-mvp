@@ -7,7 +7,8 @@ controles proprios de autenticacao/rede; esta rotina nao os implementa.
 import json
 import os
 import re
-import tempfile
+import secrets
+import stat
 from pathlib import Path
 
 BASE = os.path.dirname(os.path.abspath(__file__))
@@ -127,33 +128,67 @@ def _stage(devices):
         data = rendered.encode("utf-8")
         if len(data) > MAX_RENDERED_BYTES:
             raise ValueError("PV-26: configuracao excede limite")
-        staged.append((device["mac"] + ".cfg", data))
+        staged.append((device["mac"].lower() + ".cfg", data))
     return staged
 
 
 def _publish(staged):
+    if os.name != "posix" or not hasattr(os, "O_NOFOLLOW"):
+        raise ValueError("PV-30: publicacao privada requer Linux/POSIX")
+    import fcntl
     output = Path(OUTPUT_DIR)
     if output.is_symlink() or (output.exists() and not output.is_dir()):
         raise ValueError("PV-30: destino invalido ou link simbolico")
-    for filename, _ in staged:
-        if (output / filename).is_symlink():
-            raise ValueError("PV-30: arquivo de destino e link simbolico")
-    output.mkdir(parents=True, exist_ok=True)
-    for filename, data in staged:
-        fd, temp_name = tempfile.mkstemp(prefix=".axe-pv-", suffix=".tmp", dir=output)
-        try:
-            # Permissao compativel com servidor HTTP de provisioning atual.
-            # Nao equivale a autenticacao HTTP para acesso ao arquivo.
-            os.fchmod(fd, 0o644)
-            with os.fdopen(fd, "wb") as handle:
-                handle.write(data)
-                handle.flush()
-                os.fsync(handle.fileno())
-            os.replace(temp_name, output / filename)
-        finally:
-            if os.path.exists(temp_name):
-                os.unlink(temp_name)
-        print(f"[OK] gerado: {output / filename}")
+    output.mkdir(mode=0o700, parents=True, exist_ok=True)
+    root_fd = os.open(output, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        if os.fstat(root_fd).st_uid != os.geteuid():
+            raise ValueError("PV-30: diretorio deve pertencer ao operador")
+        # O inode do diretorio e estavel durante renomeacoes; escritores
+        # cooperantes se serializam sem um lockfile substituivel.
+        fcntl.flock(root_fd, fcntl.LOCK_EX)
+        with os.scandir(root_fd) as entries:
+            existing = [entry.name for entry in entries if entry.name.endswith(".cfg")]
+        # Validar TODO o legado antes de restringir permissoes/publicar.
+        for filename in existing:
+            info = os.stat(filename, dir_fd=root_fd, follow_symlinks=False)
+            if (not MAC_PATTERN.fullmatch(filename[:-4])
+                    or not stat.S_ISREG(info.st_mode) or info.st_nlink != 1
+                    or info.st_uid != os.geteuid()):
+                raise ValueError("PV-30: configuracao existente insegura")
+        os.fchmod(root_fd, 0o700)
+        for filename in existing:
+            fd = os.open(filename, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=root_fd)
+            try:
+                info = os.fstat(fd)
+                if (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1
+                        or info.st_uid != os.geteuid()):
+                    raise ValueError("PV-30: configuracao existente insegura")
+                os.fchmod(fd, 0o600)
+                os.fsync(fd)
+            finally:
+                os.close(fd)
+        for filename, data in staged:
+            temporary = ".axe-pv-" + secrets.token_hex(12) + ".tmp"
+            fd = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+                         0o600, dir_fd=root_fd)
+            try:
+                os.fchmod(fd, 0o600)
+                with os.fdopen(fd, "wb", closefd=False) as handle:
+                    handle.write(data)
+                    handle.flush()
+                    os.fsync(fd)
+                os.replace(temporary, filename, src_dir_fd=root_fd, dst_dir_fd=root_fd)
+            finally:
+                os.close(fd)
+                try:
+                    os.unlink(temporary, dir_fd=root_fd)
+                except FileNotFoundError:
+                    pass
+            print(f"[OK] gerado: {filename}")
+        os.fsync(root_fd)
+    finally:
+        os.close(root_fd)  # tambem libera flock, inclusive em falhas.
 
 
 def main():

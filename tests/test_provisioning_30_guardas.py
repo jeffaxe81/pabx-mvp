@@ -143,7 +143,7 @@ def test_falha_de_replace_preserva_versao_anterior(tmp_path, monkeypatch):
     output.mkdir()
     old = output / "aabbccddeeff.cfg"
     old.write_text("antigo")
-    def fail(*_args):
+    def fail(*_args, **_kwargs):
         raise OSError("falha simulada")
     monkeypatch.setattr(mod.os, "replace", fail)
     with pytest.raises(OSError):

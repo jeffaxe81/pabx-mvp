@@ -1,44 +1,67 @@
 # Manual 05 — Auto-provisionamento
 
-## O que é
-Um telefone físico (Yealink, por enquanto) liga, busca sua própria
-configuração num servidor HTTP pelo MAC address, e já sobe registrado
-— sem digitar nada manualmente no aparelho.
+O gerador prepara a configuração de cada telefone pelo MAC. Os arquivos
+contêm senhas SIP e são privados por padrão. A distribuição para aparelho
+físico depende de homologação; o HTTP legado está desativado por padrão.
 
-## Como configurar
-1. Cadastre o telefone em `provisioning/devices.json`: MAC, fabricante
-   (`vendor`), ramal, nome, senha e servidor
-2. Rode `python3 provisioning/generate.py` — gera
-   `provisioning/files/<MAC>.cfg` a partir do template do fabricante
-   em `provisioning/templates/`
-3. Configure o telefone físico para buscar o arquivo de provisionamento
-   em `http://<ip-do-servidor>:8080/` (o mecanismo de descoberta - DHCP
-   option 66, PnP multicast, ou digitar a URL manualmente - depende do
-   fabricante e é feito no próprio aparelho)
+## Geração em laboratório local
 
-Para suportar um fabricante novo (Grandstream, Cisco, Snom...):
-1. Crie um template em `provisioning/templates/<fabricante>.cfg.tpl`
-   no formato que aquele fabricante espera
-2. Adicione a entrada em `TEMPLATE_EXT` dentro de `generate.py`
+1. Prepare um catálogo com MAC, `vendor`, `ramal`, `nome`, `senha` e
+   `servidor`. Os dados versionados em `provisioning/devices.json` são
+   exemplos; não gravar credenciais reais no Git. O catálogo real também
+   exige controle local de acesso e backup privado.
+2. Em Linux/POSIX, execute `python3 provisioning/generate.py` com os
+   caminhos locais configurados para o laboratório. O template do
+   fabricante fica em `provisioning/templates/`.
+3. A saída é `provisioning/files/<mac-minusculo>.cfg`, com modo 0600,
+   em diretório 0700 pertencente ao operador. A senha não aparece no log.
 
-## Como testar manualmente
-1. Rode `python3 provisioning/generate.py`
-2. Confira o arquivo gerado em `provisioning/files/<MAC>.cfg` — as
-   variáveis `{{RAMAL}}`, `{{SENHA}}` etc. devem ter sido todas
-   substituídas
-3. Com o container `provisioning` rodando (`docker compose up -d`),
-   acesse `http://localhost:8080/<MAC>.cfg` no navegador e confirme
-   que o conteúdo aparece
+O umask deve preservar o acesso do próprio proprietário, como nas máscaras
+usuais 0022/0077. Uma máscara como 0777 pode criar a pasta sem acesso e
+bloquear a geração antes do ajuste de permissões. Nesse caso, revisar a
+configuração local; a operação falha sem publicar configurações.
 
-## Teste automatizado
-`tests/test_provisioning.py` — roda o gerador de verdade contra um
-`devices.json` de teste e garante que nenhum `{{placeholder}}` sobra,
-e que um fabricante desconhecido não derruba o script.
+MACs maiúsculos na entrada são normalizados no nome do arquivo; o manifesto
+usado pelo servidor mTLS continua exigindo MACs em minúsculas. Os arquivos
+de empresas distintas mantêm as credenciais separadas por MAC. Isso não
+substitui a autorização de distribuição por tenant/certificado.
 
-## Limitações conhecidas
-- Só existe template para Yealink
-- Os arquivos `.cfg` gerados contêm senha em texto plano — por isso
-  ficam fora do Git (`.gitignore`); em produção, considere servir via
-  HTTPS para não trafegar a senha em texto plano na rede também
-- Não há interface web pra cadastrar dispositivos — é editar o
-  `devices.json` na mão
+## Arquivos existentes
+
+O gerador valida os `.cfg` antigos antes de publicar e restringe suas
+permissões, inclusive os que não pertencem ao lote atual, sem excluir
+arquivos. Recusa symlinks, hardlinks, objetos não regulares, nomes `.cfg`
+inválidos ou arquivos de outra identidade. Não altera pastas superiores.
+Uma entrada inválida no catálogo não modifica a pasta de saída.
+
+Cada arquivo é publicado atomicamente por descritor de diretório,
+com temporário privado e lock entre geradores cooperantes. Uma falha
+posterior pode deixar parte do lote atualizada e permissões já restritas;
+não há transação ou rollback global do lote.
+
+## Distribuição autenticada
+
+O [laboratório HTTPS/mTLS](security/provisioning-mtls-laboratorio.md)
+exige certificado cliente vinculado ao tenant/MAC. Execute o servidor
+com a mesma identidade local do gerador. Arquivo ou pasta com acesso por
+grupo/outros, propriedade divergente ou hardlink recebe 404 genérico.
+O serviço permanece em loopback e a compatibilidade com firmware Yealink
+físico continua pendente.
+
+O perfil HTTP `insecure-lab-provisioning` não inicia com o Compose
+padrão. Não usar URL HTTP para provisionar aparelhos reais e não tornar
+arquivos públicos para acomodar o Nginx legado.
+
+## Verificação automatizada
+
+```bash
+python3 -m pytest -q tests/test_provisioning.py tests/test_provisioning_30_guardas.py tests/test_provisioning_private_files.py tests/test_provisioning_mtls.py
+```
+
+Os testes executam geração isolada, permissões, links, falha de escrita,
+troca de pasta, lock e HTTPS/mTLS com certificados efêmeros.
+
+Somente o fabricante Yealink possui template. Adicionar outro fabricante
+requer template próprio, entrada em `TEMPLATE_EXT` e homologação. Os
+modelos atuais não constituem prova de configuração aceita por telefone
+físico. Produção permanece NO-GO (issue #344).

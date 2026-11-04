@@ -3,8 +3,10 @@ import hashlib
 from http.server import ThreadingHTTPServer
 import io
 import json
+import os
 from pathlib import Path
 import shutil
+import stat
 import ssl
 import subprocess
 import sys
@@ -29,7 +31,7 @@ def config(tmp_path):
     cert_registry = tmp_path / "private-registry.json"
     device_registry = tmp_path / "devices.json"
     folder = tmp_path / "cfg"
-    folder.mkdir()
+    folder.mkdir(mode=0o700)
     now = int(time.time())
     cert_registry.write_text(json.dumps({"schema_version": 2, "devices": [
         {"mac": MAC1, "tenant": "t1", "client_sha256": hashlib.sha256(CLIENT1).hexdigest(),
@@ -39,11 +41,15 @@ def config(tmp_path):
     ]}), encoding="utf-8")
     cert_registry.chmod(0o600)
     device_registry.write_text(json.dumps({"devices": [
-        {"mac": MAC1, "vendor": "yealink", "ramal": "t1-1001"},
-        {"mac": MAC2, "vendor": "yealink", "ramal": "t2-1001"},
+        {"mac": MAC1, "vendor": "yealink", "ramal": "t1-1001",
+         "nome": "Lab T1", "senha": "secret-t1", "servidor": "pabx.local"},
+        {"mac": MAC2, "vendor": "yealink", "ramal": "t2-1001",
+         "nome": "Lab T2", "senha": "secret-t2", "servidor": "pabx.local"},
     ]}), encoding="utf-8")
     (folder / (MAC1 + ".cfg")).write_bytes(b"user=t1-1001\npassword=secret-t1")
     (folder / (MAC2 + ".cfg")).write_bytes(b"user=t2-1001\npassword=secret-t2")
+    for mac in (MAC1, MAC2):
+        (folder / (mac + ".cfg")).chmod(0o600)
     return cert_registry, device_registry, folder
 
 
@@ -217,9 +223,13 @@ def test_resposta_impede_cache_publico_e_never_logs():
 
 
 @pytest.mark.skipif(shutil.which("openssl") is None, reason="openssl nao instalado")
-def test_tls_real_certificado_e_restricao_tenant_mac(tmp_path):
+def test_tls_real_certificado_e_restricao_tenant_mac(tmp_path, monkeypatch):
     """Handshake mTLS de verdade com CA local e dois certificados temporarios."""
     registry, devices, folder = config(tmp_path)
+    from provisioning import generate
+    monkeypatch.setattr(generate, "DEVICES_FILE", str(devices))
+    monkeypatch.setattr(generate, "OUTPUT_DIR", str(folder))
+    generate.main()  # saida real do gerador, sem publicar credenciais reais.
     def run(*args):
         subprocess.run(["openssl", *args], cwd=tmp_path, check=True,
                        capture_output=True, timeout=12)
@@ -270,6 +280,17 @@ def test_tls_real_certificado_e_restricao_tenant_mac(tmp_path):
         body, headers = get(MAC1 + ".cfg", "client1")
         assert b"secret-t1" in body and b"secret-t2" not in body
         assert headers["Cache-Control"] == "no-store, private, max-age=0"
+        file = folder / (MAC1 + ".cfg")
+        for path, public_mode, private_mode in ((file, 0o644, 0o600), (folder, 0o755, 0o700)):
+            path.chmod(public_mode)
+            try:
+                with pytest.raises(urllib.error.HTTPError) as public:
+                    get(MAC1 + ".cfg", "client1")
+                assert public.value.code == 404
+            finally:
+                path.chmod(private_mode)
+        body, _ = get(MAC1 + ".cfg", "client1")
+        assert b"secret-t1" in body
         with pytest.raises(urllib.error.HTTPError) as ex:
             get(MAC2 + ".cfg", "client1")
         assert ex.value.code == 404
@@ -427,3 +448,38 @@ def test_leitura_json_nao_segue_troca_para_symlink_apos_stat(tmp_path, monkeypat
     except (ValueError, OSError):
         return  # Rejeitar a troca tambem e seguro.
     assert result == {"source": "registry"}
+
+
+@pytest.mark.parametrize("target,mode", [("directory", 0o755), ("file", 0o644), ("file", 0o640)])
+def test_mtls_denies_cfg_with_public_or_group_permissions(tmp_path, target, mode):
+    registry, devices, folder = config(tmp_path)
+    folder.chmod(0o700)
+    file = folder / (MAC1 + ".cfg")
+    file.chmod(0o600)
+    (folder if target == "directory" else file).chmod(mode)
+    assert handler_request("/" + MAC1 + ".cfg", CLIENT1, folder, registry, devices) == [(404, b"")]
+
+
+def test_mtls_denies_hardlinked_cfg_even_when_private(tmp_path):
+    registry, devices, folder = config(tmp_path)
+    folder.chmod(0o700)
+    file = folder / (MAC1 + ".cfg")
+    file.chmod(0o600)
+    (tmp_path / "outside-hardlink").hardlink_to(file)
+    assert handler_request("/" + MAC1 + ".cfg", CLIENT1, folder, registry, devices) == [(404, b"")]
+
+
+@pytest.mark.parametrize("target", ["directory", "file"])
+def test_mtls_denies_cfg_owned_by_another_service_identity(tmp_path, monkeypatch, target):
+    registry, devices, folder = config(tmp_path)
+    original = os.fstat
+    def foreign_owner(fd):
+        info = original(fd)
+        matches = stat.S_ISDIR(info.st_mode) if target == "directory" else stat.S_ISREG(info.st_mode)
+        if matches:
+            fields = list(info)
+            fields[4] = info.st_uid + 1
+            return os.stat_result(fields)
+        return info
+    monkeypatch.setattr(pv.os, "fstat", foreign_owner)
+    assert handler_request("/" + MAC1 + ".cfg", CLIENT1, folder, registry, devices) == [(404, b"")]
