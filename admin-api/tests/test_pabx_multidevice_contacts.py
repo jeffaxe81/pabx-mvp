@@ -119,7 +119,7 @@ def test_invariant_de22_rejects_extra_or_mismatched_contact_limit():
     with pytest.raises(ValueError, match="DE-22"):
         validate_dynamic_extensions([row], {"t1", "t2"}, damaged)
     damaged["pjsip_dynamic.conf"] = generated["pjsip_dynamic.conf"].replace(
-        "max_contacts=3", "max_contacts=3\\nmax_contacts=2"
+        "max_contacts=3", "max_contacts=3\nmax_contacts=2"
     )
     with pytest.raises(ValueError, match="DE-22"):
         validate_dynamic_extensions([row], {"t1", "t2"}, damaged)
