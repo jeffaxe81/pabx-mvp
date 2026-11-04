@@ -6,6 +6,7 @@ clientes validos, com SHA256 explicitamente autorizado a UM MAC/tenant,
 sao obrigatorios. Nao substitui homologacao em telefone fisico.
 """
 import argparse
+import errno
 import hashlib
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
@@ -35,28 +36,51 @@ def unique_keys(pairs):
     return result
 
 
-def read_json(path, *, private=False):
-    path = Path(path)
-    if path.is_symlink() or not path.is_file():
-        raise ValueError("arquivo ausente ou link simbolico")
-    stats = path.stat()
-    if stats.st_size > MAX_JSON:
-        raise ValueError("JSON excede limite")
-    if private and os.name == "posix" and stats.st_mode & 0o077:
-        raise ValueError("permissoes inseguras do cadastro privado")
+def read_json(path, *, private=False, dir_fd=None):
+    # Validar e ler o MESMO inode, mesmo durante substituicao atomica.
+    # O_NONBLOCK impede bloqueio se um pathname for trocado por FIFO.
+    if os.name != "posix" or not hasattr(os, "O_NOFOLLOW"):
+        raise ValueError("leitura segura requer Linux/POSIX O_NOFOLLOW")
+    flags = os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK
     try:
-        return json.loads(path.read_text(encoding="utf-8"),
+        fd = os.open(path, flags, dir_fd=dir_fd)
+    except OSError as exc:
+        if exc.errno == errno.ELOOP:
+            raise ValueError("arquivo ausente ou link simbolico") from exc
+        raise
+    try:
+        stats = os.fstat(fd)
+        if not stat.S_ISREG(stats.st_mode):
+            raise ValueError("arquivo JSON deve ser regular")
+        if stats.st_size > MAX_JSON:
+            raise ValueError("JSON excede limite")
+        if private and stats.st_mode & 0o077:
+            raise ValueError("permissoes inseguras do cadastro privado")
+        with os.fdopen(fd, "rb", closefd=False) as stream:
+            content = stream.read(MAX_JSON + 1)
+        if len(content) > MAX_JSON:
+            raise ValueError("JSON excede limite")
+        return json.loads(content.decode("utf-8"),
                           object_pairs_hook=unique_keys,
                           parse_constant=lambda _: (_ for _ in ()).throw(ValueError("constante JSON invalida")))
-    except (UnicodeError, json.JSONDecodeError) as exc:
+    except (UnicodeError, json.JSONDecodeError, RecursionError) as exc:
         raise ValueError("cadastro JSON invalido") from exc
+    finally:
+        os.close(fd)
 
 
 def load_policy(registry_path, devices_path):
     """Vincula o certificado cliente ao MAC e ao tenant dos dados de origem."""
     registry = read_json(registry_path, private=True)
     devices = read_json(devices_path)
-    if not isinstance(registry, dict) or registry.get("schema_version") != 2:
+    return validate_policy(registry, devices)
+
+
+def validate_policy(registry, devices):
+    """Valida a mesma politica v2 na leitura HTTP e na administracao local."""
+    if (not isinstance(registry, dict)
+            or type(registry.get("schema_version")) is not int
+            or registry["schema_version"] != 2):
         raise ValueError("schema do cadastro de certificados invalido")
     bindings = registry.get("devices")
     if not isinstance(bindings, list) or not 1 <= len(bindings) <= MAX_DEVICES:

@@ -70,3 +70,47 @@ O exemplo abaixo não contém credenciais reais e usa campos de validade ilustra
 ```
 
 A alteração do arquivo deve ser atômica e restrita ao responsável pelo laboratório; guardar backup protegido e nunca versionar esses dados no GitHub. O serviço lê o arquivo a cada requisição e retorna 404 genérico diante de revogação, expiração, cadastro faltante ou inválido. O acesso a certificados e chaves de cliente ainda requer controles operacionais independentes.
+
+## Operação local: inventário e revogação
+
+Na raiz do projeto, use a CLI sobre o cadastro **v2 existente**. O console
+deve pertencer ao operador que já tem acesso aos arquivos privados; a CLI
+não oferece login remoto nem cria ou emite certificados.
+
+```bash
+python3 -m provisioning.certificates \
+  --registry /diretorio-privado/certificados-dispositivos.json \
+  --devices provisioning/devices.json list --tenant t1
+
+python3 -m provisioning.certificates \
+  --registry /diretorio-privado/certificados-dispositivos.json \
+  --devices provisioning/devices.json revoke --tenant t1 --mac aabbccddeeff
+```
+
+O inventário retorna somente tenant, MAC, datas Unix e `status`: `pending`,
+`active`, `expired` ou `revoked`. O filtro é exato (`t1` não inclui `t10`).
+Não imprime fingerprint, certificado, chave ou senha SIP. `active` significa
+apenas janela vigente e vínculo não revogado no cadastro; não verifica
+expiração X.509, cadeia da CA, existência do `.cfg` ou disponibilidade do telefone.
+
+A revogação exige tenant e MAC exatos, preserva as demais entradas e é
+idempotente. Não há comando de reativação. O próximo GET autorizado pelo
+servidor passa a retornar 404; downloads já iniciados não são interrompidos.
+
+O diretório do cadastro deve ter modo 0700 (ou mais restritivo), pertencer
+ao operador e não ser link simbólico. O cadastro deve permanecer privado
+0600. A CLI usa um arquivo `<cadastro>.lock` privado e estável: **não o
+apague ou substitua durante a operação**. Todos os escritores precisam
+respeitar esse lock; editores externos não participam da serialização.
+A leitura valida tipo, permissões e tamanho no descritor aberto com
+`O_NOFOLLOW`; JSON excessivamente aninhado é rejeitado sem traceback.
+A publicação usa JSON compacto (inclusive para os 5.000 dispositivos
+suportados), temporário 0600, fsync e replace atômico.
+
+Se a gravação falhar antes do replace, o cadastro original é preservado.
+Uma falha de fsync do diretório depois do replace retorna erro e pode
+significar que a revogação já foi publicada: consulte o inventário antes
+de repetir. A CLI nunca desfaz uma revogação para tentar compensar esse erro.
+Erros operacionais retornam código 2 com categoria genérica, sem caminho
+ou conteúdo privado. Não modifica a configuração `.cfg`, não reinicia o
+servidor e não substitui revogação por CRL/OCSP ou homologação Yealink físico.
