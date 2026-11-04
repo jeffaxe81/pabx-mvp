@@ -21,6 +21,9 @@ def render_pjsip_dynamic(extensions: list) -> str:
     for ext in extensions:
         name = ext["name"]
         tenant = ext.get("tenant", "t1")
+        contacts = ext.get("max_contacts", 1)
+        if type(contacts) is not int or not 1 <= contacts <= 3:
+            raise ValueError("limite SIP de contatos invalido")
         blocks.append(f"""[{name}](endpoint-secure)
 context={tenant}-internal
 subscribe_context={tenant}-hints
@@ -37,7 +40,7 @@ password={ext['password']}
 
 [{name}]
 type=aor
-max_contacts=1
+max_contacts={contacts}
 remove_existing=yes
 """)
     return "\n".join(blocks)
@@ -109,6 +112,9 @@ def validate_persisted_extensions(extensions: list, tenant_ids: set) -> None:
         tenant = ext.get("tenant", "t1")
         if not isinstance(tenant, str) or tenant not in tenant_ids:
             raise ValueError("ramal pertence a tenant não provisionado")
+        contacts = ext.get("max_contacts", 1)
+        if type(contacts) is not int or not 1 <= contacts <= 3:
+            raise ValueError("max_contacts persistido invalido")
         name = ext.get("name")
         if not isinstance(name, str) or not _NAME.fullmatch(name):
             raise ValueError("identificador de ramal invalido")
