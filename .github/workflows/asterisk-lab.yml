@@ -323,3 +323,24 @@ jobs:
           path: lab-results/rel13-transfer.json
           if-no-files-found: error
           retention-days: 14
+  queue-members:
+    name: Asterisk | membros dinâmicos QueueAdd/Remove/Pause reais
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Homologar ações AMI de fila t1, t2 e t3 no Asterisk descartável
+        run: python3 -m lab.asterisk_lab --members --report lab-results/queue-members.json
+      - name: Preservar exclusivamente indicadores sanitizados de membriasia
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: asterisk-real-queue-members-${{ github.sha }}
+          path: lab-results/queue-members.json
+          if-no-files-found: error
+          retention-days: 14
