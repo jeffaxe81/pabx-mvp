@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>AXE PABX | Cockpit do Call Center de Voz</title>
+  <style>
+    :root {color-scheme: dark; font-family:system-ui,-apple-system,Segoe UI,Arial,sans-serif}
+    * {box-sizing:border-box}
+    body {margin:0;background:#0d1423;color:#edf4ff;line-height:1.5}
+    main {max-width:1360px;margin:auto;padding:28px 20px}
+    h1 {font-size:clamp(1.5rem,3vw,2.3rem);margin:0}
+    h2 {font-size:1.13rem;margin:10px 0}
+    p {color:#b2c4db}
+    header {display:flex;flex-wrap:wrap;gap:20px;align-items:center;justify-content:space-between;margin-bottom:24px}
+    .pill {display:inline-block;border:1px solid #344d6a;border-radius:999px;padding:5px 12px;color:#c9d9ef;font-size:.85rem}
+    .panel {background:#172339;border:1px solid #34445e;padding:22px;border-radius:16px;margin:16px 0}
+    form {display:grid;grid-template-columns:repeat(auto-fit,minmax(225px,1fr));gap:12px;align-items:end}
+    label {display:block;color:#c8d5e8;font-weight:600;font-size:.85rem;margin-bottom:7px}
+    input,select,button {width:100%;height:44px;border-radius:9px;border:1px solid #586a82;font:inherit}
+    input,select {background:#0d182b;color:#fff;padding:9px 12px}
+    input:focus-visible,button:focus-visible,select:focus-visible {outline:3px solid #6ab6ff;outline-offset:2px}
+    button {cursor:pointer;background:#478fdf;border:0;color:#061329;font-weight:700}
+    button.secondary {background:#243751;color:#e9f5ff;border:1px solid #647590}
+    button:disabled {opacity:.55;cursor:not-allowed}
+    .toolbar {display:grid;grid-template-columns:repeat(auto-fit,minmax(175px,1fr));gap:10px;margin:20px 0}
+    .grid {display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:13px}
+    article {background:#1a2942;border:1px solid #364e71;border-radius:12px;padding:17px;min-height:122px}
+    article small {color:#a3bddd;display:block;font-size:.75rem}
+    article .name {font-size:.88rem;color:#ccdaed;margin:6px 0}
+    article strong {font-size:clamp(1.35rem,2vw,1.75rem);font-variant-numeric:tabular-nums}
+    .muted {color:#a8bdd6}
+    .status {min-height:26px;color:#b9d7f6}
+    .error {color:#ffb4b4}
+    .callout {border-left:3px solid #79b9ed;padding-left:13px;color:#c1d3ec;font-size:.9rem}
+    footer {font-size:.85rem;margin:26px 0}
+    [hidden] {display:none!important}
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <div>
+      <span class="pill">AXE PABX • Atendimento de voz</span>
+      <h1>Cockpit do Call Center</h1>
+      <p>50 indicadores operacionais | Isolamento por cliente | Acesso exclusivo à supervisão</p>
+    </div>
+    <span id="tenant" class="pill" aria-live="polite">Não autenticado</span>
+  </header>
+  <section class="panel" aria-labelledby="auth-title">
+    <h2 id="auth-title">Conectar ao serviço de filas</h2>
+    <form id="connect-form">
+      <div><label for="api">URL da API de filas</label><input id="api" type="url" autocomplete="url" spellcheck="false" required placeholder="https://pabx.exemplo.com"></div>
+      <div><label for="bearer">Token de supervisão</label><input id="bearer" type="password" autocomplete="off" spellcheck="false" required placeholder="Bearer pessoal, não compartilhado"></div>
+      <div><button id="connect" type="submit">Conectar e atualizar</button></div>
+    </form>
+    <p class="callout">O token permanece somente na memória desta página, não é salvo no navegador nem enviado na URL. Em produção, use HTTPS e publique a API por reverse proxy com origem autorizada em QUEUE_CORS_ORIGINS.</p>
+    <p id="status" class="status" role="status" aria-live="polite">Aguardando conexão.</p>
+  </section>
+  <section class="panel" id="results" hidden aria-labelledby="results-title">
+    <h2 id="results-title">Indicadores atuais <span class="muted" id="count"></span></h2>
+    <p class="muted">Amostra em memória do backend; ausência de dados não significa desempenho adequado. Nenhum alerta altera chamadas ou agentes.</p>
+    <div class="toolbar">
+      <div><label for="group">Área</label><select id="group"><option value="">Todas as áreas</option><option value="fila">Filas</option><option value="equipe">Equipe</option><option value="sla">SLA</option><option value="qualidade">Qualidade</option><option value="diagnostico">Alertas</option></select></div>
+      <div><label for="query">Buscar indicador</label><input id="query" type="search" placeholder="Ex.: espera, pausa, SLA"></div>
+      <div><label for="refresh">Atualização</label><button id="refresh" class="secondary" type="button">Atualizar agora</button></div>
+      <div><label for="export">Relatório</label><button id="export" class="secondary" type="button">Exportar CSV</button></div>
+    </div>
+    <div class="grid" id="cards" aria-live="polite"></div>
+    <p class="muted" id="updated"></p>
+  </section>
+  <footer class="muted">Referências de SLA e dimensionamento são indicativas. Homologação de tráfego, gravações, WFM e operação real do Asterisk requer testes próprios.</footer>
+</main>
+<script>
+(() => {
+  "use strict";
+  const el = id => document.getElementById(id);
+  const state = { token: "", base: "", metrics: [], tenant: "" };
+  const fmt = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 2 });
+  const allowedLocal = url => ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname);
+  let busy = false;
+  function status(message, error=false) {
+    el("status").textContent = message;
+    el("status").classList.toggle("error", error);
+  }
+  function formatValue(metric) {
+    if (metric.value === null) return "Sem dados";
+    return fmt.format(metric.value) + (metric.unit === "%" ? "%" : metric.unit === "p.p." ? " p.p." : metric.unit === "s" ? " s" : "");
+  }
+  function draw() {
+    const group = el("group").value;
+    const query = el("query").value.trim().toLocaleLowerCase("pt-BR");
+    const visible = state.metrics.filter(metric =>
+      (!group || metric.category === group) &&
+      (!query || (metric.label + " " + metric.key).toLocaleLowerCase("pt-BR").includes(query))
+    );
+    el("count").textContent = "(" + visible.length + " de " + state.metrics.length + ")";
+    const cards = el("cards");
+    cards.replaceChildren();
+    for (const metric of visible) {
+      const card = document.createElement("article");
+      const code = document.createElement("small");
+      code.textContent = metric.id + " | " + metric.category;
+      const label = document.createElement("div");
+      label.className = "name";
+      label.textContent = metric.label;
+      const value = document.createElement("strong");
+      value.textContent = formatValue(metric);
+      card.append(code, label, value);
+      cards.appendChild(card);
+    }
+  }
+  async function refresh() {
+    if (!state.token || busy) return;
+    busy = true;
+    el("refresh").disabled = true;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+    try {
+      const response = await fetch(state.base + "/api/supervision/cockpit", {
+        method: "GET", headers: {Authorization: "Bearer " + state.token},
+        cache: "no-store", credentials: "omit", signal: controller.signal,
+      });
+      if (!response.ok) throw new Error("Falha na API (HTTP " + response.status + "). Verifique permissões, token e CORS.");
+      const payload = await response.json();
+      if (payload.metric_count !== 50 || !Array.isArray(payload.metrics) ||
+          payload.metrics.length !== 50 || typeof payload.tenant !== "string") {
+        throw new Error("Contrato dos 50 indicadores não reconhecido.");
+      }
+      state.metrics = payload.metrics;
+      state.tenant = payload.tenant;
+      el("tenant").textContent = state.tenant;
+      el("results").hidden = false;
+      el("updated").textContent = "Atualizado: " + new Date().toLocaleString("pt-BR");
+      draw();
+      status("Dados recebidos: 50 indicadores da operação " + state.tenant + ".");
+    } catch (error) {
+      status(error.name === "AbortError" ? "Tempo limite de leitura da API." : error.message, true);
+    } finally {
+      clearTimeout(timeout);
+      el("refresh").disabled = false;
+      busy = false;
+    }
+  }
+  el("connect-form").addEventListener("submit", event => {
+    event.preventDefault();
+    try {
+      const url = new URL(el("api").value.trim());
+      if (url.username || url.password || url.search || url.hash ||
+          (url.protocol !== "https:" && !(url.protocol === "http:" && allowedLocal(url)))) {
+        throw new Error("Use endereço HTTPS sem usuário, senha ou query (HTTP somente em localhost).");
+      }
+      state.base = url.href.replace(/\/$/, "");
+      state.token = el("bearer").value.trim().replace(/^Bearer\s+/i, "");
+      el("bearer").value = "";
+      if (state.token.length < 16) throw new Error("Token de supervisão inválido.");
+      refresh();
+    } catch (error) {
+      state.token = "";
+      status(error.message, true);
+    }
+  });
+  el("group").addEventListener("change", draw);
+  el("query").addEventListener("input", draw);
+  el("refresh").addEventListener("click", refresh);
+  el("export").addEventListener("click", () => {
+    if (!state.metrics.length) return;
+    const quote = value => '"' + String(value ?? "").replaceAll('"', '""') + '"';
+    const rows = [["id","area","indicador","valor","unidade"], ...state.metrics.map(
+      m => [m.id, m.category, m.label, m.value, m.unit]
+    )];
+    const csv = "\uFEFF" + rows.map(row => row.map(quote).join(";")).join("\r\n");
+    const blob = new Blob([csv], {type:"text/csv;charset=utf-8"});
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "axe-call-center-" + state.tenant + ".csv";
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  });
+  setInterval(() => { if (!document.hidden && state.token) refresh(); }, 15000);
+})();
+</script>
+</body>
+</html>
