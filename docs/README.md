@@ -192,3 +192,4 @@ registrado como regra permanente no prompt master
 139. [Timeout e transbordo real de filas por empresa](manual-139-queue-overflow-runtime.md)
 
 140. [Ciclo de vida do áudio WebRTC e cache PWA](manual-140-audio-webrtc-lifecycle.md)
+141. [Cockpit de voz — 50 indicadores de call center](manual-141-cockpit-voz-50-indicadores.md)
