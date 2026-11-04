@@ -21,6 +21,9 @@ def render_pjsip_dynamic(extensions: list) -> str:
     for ext in extensions:
         name = ext["name"]
         tenant = ext.get("tenant", "t1")
+        contacts = ext.get("max_contacts", 1)
+        if type(contacts) is not int or not 1 <= contacts <= 3:
+            raise ValueError("limite SIP de contatos invalido")
         blocks.append(f"""[{name}](endpoint-secure)
 context={tenant}-internal
 subscribe_context={tenant}-hints
@@ -37,7 +40,7 @@ password={ext['password']}
 
 [{name}]
 type=aor
-max_contacts=1
+max_contacts={contacts}
 remove_existing=yes
 """)
     return "\n".join(blocks)
@@ -109,6 +112,9 @@ def validate_persisted_extensions(extensions: list, tenant_ids: set) -> None:
         tenant = ext.get("tenant", "t1")
         if not isinstance(tenant, str) or tenant not in tenant_ids:
             raise ValueError("ramal pertence a tenant não provisionado")
+        contacts = ext.get("max_contacts", 1)
+        if type(contacts) is not int or not 1 <= contacts <= 3:
+            raise ValueError("max_contacts persistido invalido")
         name = ext.get("name")
         if not isinstance(name, str) or not _NAME.fullmatch(name):
             raise ValueError("identificador de ramal invalido")
@@ -238,7 +244,7 @@ _RULE_DESCRIPTIONS = (
     "SIP auth username matches the endpoint",
     "SIP auth secret matches the persisted record",
     "SIP AOR block is present once",
-    "SIP AOR permits exactly one contact",
+    "SIP AOR permits exactly configured 1..3 contacts",
     "SIP AOR removes previous registration",
     "exact dynamic dialed extension numbers",
     "per-extension MixMonitor enabled",
@@ -394,7 +400,10 @@ def inspect_dynamic_extensions(records, tenants, files):
         matches_field(auth_blocks, lambda e, s: s.count(f"username={e['name']}") == 1),
         matches_field(auth_blocks, lambda e, s: s.count(f"password={e['password']}") == 1),
         record_ok and len(aor_blocks) == len(rows) and all(bool(x) for x in aor_blocks),
-        matches_field(aor_blocks, lambda e, s: s.count("max_contacts=1") == 1),
+        matches_field(aor_blocks, lambda e, s: (type(e.get("max_contacts", 1)) is int
+            and 1 <= e.get("max_contacts", 1) <= 3
+            and s.count(f"max_contacts={e.get('max_contacts', 1)}") == 1
+            and sum(line.startswith("max_contacts=") for line in s) == 1)),
         matches_field(aor_blocks, lambda e, s: s.count("remove_existing=yes") == 1),
         record_ok and all(sorted(actual_dial[t]) == sorted(expected_dial[t]) for t in scoped),
         record_ok and all(dial_matches(e, chunk, "MixMonitor(/var/spool/asterisk/monitor/")
