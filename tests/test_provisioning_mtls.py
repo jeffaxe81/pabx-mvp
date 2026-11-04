@@ -7,6 +7,7 @@ from pathlib import Path
 import shutil
 import ssl
 import subprocess
+import sys
 import threading
 import time
 from types import SimpleNamespace
@@ -275,9 +276,14 @@ def test_tls_real_certificado_e_restricao_tenant_mac(tmp_path):
         body, _ = get(MAC2 + ".cfg", "client2")
         assert b"secret-t2" in body
         # Revogar com servidor TLS ativo: proximo GET nao libera o .cfg.
-        updated = json.loads(registry.read_text(encoding="utf-8"))
-        updated["devices"][0]["revoked"] = True
-        registry.write_text(json.dumps(updated), encoding="utf-8")
+        result = subprocess.run([
+            sys.executable, "-m", "provisioning.certificates",
+            "--registry", str(registry), "--devices", str(devices),
+            "revoke", "--tenant", "t1", "--mac", MAC1,
+        ], cwd=Path(__file__).resolve().parents[1], capture_output=True,
+            text=True, timeout=10)
+        assert result.returncode == 0, result.stderr
+        assert json.loads(result.stdout)["revoked"] is True
         with pytest.raises(urllib.error.HTTPError) as revoked:
             get(MAC1 + ".cfg", "client1")
         assert revoked.value.code == 404
@@ -384,3 +390,40 @@ def test_replay_de_fingerprint_revogado_em_outro_tenant_e_rejeitado(tmp_path):
     registry.write_text(json.dumps(payload), encoding="utf-8")
     with pytest.raises(ValueError, match="duplicado"):
         pv.load_policy(registry, devices)
+
+
+def test_schema_float_nao_e_uma_versao_inteira(tmp_path):
+    registry, devices, _ = config(tmp_path)
+    payload = json.loads(registry.read_text(encoding="utf-8"))
+    payload["schema_version"] = 2.0
+    registry.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(ValueError, match="schema"):
+        pv.load_policy(registry, devices)
+
+
+def test_leitura_json_nao_segue_troca_para_symlink_apos_stat(tmp_path, monkeypatch):
+    """Uma validacao por pathname nao pode autorizar a abertura de outro inode."""
+    registry = tmp_path / "registry.json"
+    registry.write_text('{"source":"registry"}', encoding="utf-8")
+    registry.chmod(0o600)
+    outside = tmp_path / "outside.json"
+    outside.write_text('{"source":"outside-secret"}', encoding="utf-8")
+    outside.chmod(0o600)
+    original_stat = Path.stat
+    replaced = False
+
+    def racing_stat(path, *args, **kwargs):
+        nonlocal replaced
+        result = original_stat(path, *args, **kwargs)
+        if path == registry and kwargs.get("follow_symlinks", True) and not replaced:
+            replaced = True
+            registry.unlink()
+            registry.symlink_to(outside)
+        return result
+
+    monkeypatch.setattr(Path, "stat", racing_stat)
+    try:
+        result = pv.read_json(registry, private=True)
+    except (ValueError, OSError):
+        return  # Rejeitar a troca tambem e seguro.
+    assert result == {"source": "registry"}
