@@ -66,7 +66,10 @@ def inspected_voicemail_channel(raw, endpoint, tenant):
             observed_endpoint = identity.group(1)
             observed_tenant = observed_endpoint.split("-", 1)[0]
             if (observed[6] != observed_endpoint + "@" + observed_tenant
-                    or observed[1] != observed_tenant + "-internal"):
+                    or observed[1] != observed_tenant + "-internal"
+                    or observed[2] != "*97" or observed[4] != "Up"):
+                # Um canal estrangeiro em VoiceMailMain ou sem origem *97
+                # legítima invalida a prova mesmo quando a caixa tN está certa.
                 foreign_access = True
                 break
     exact = (row[1] == tenant + "-internal" and row[2] == "*97"

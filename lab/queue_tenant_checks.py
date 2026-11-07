@@ -48,7 +48,29 @@ def inspected_queue_channel(raw, endpoint, tenant):
         and in_queue
         and queue == expected
     )
-    return {"exact": exact, "no_foreign": in_queue and queue == expected}
+    # A única fila correta do chamador não mascara um SEGUNDO canal de
+    # outra empresa encaminhado à fila errada no mesmo snapshot Asterisk.
+    foreign = False
+    for observed in rows:
+        if len(observed) < 7 or observed[5] != "Queue":
+            continue
+        identity = re.fullmatch(
+            r"PJSIP/(t[1-9][0-9]*-[a-z0-9_-]+)-[0-9a-f]+", observed[0]
+        )
+        if identity is None:
+            foreign = True
+            break
+        other_tenant = identity.group(1).split("-", 1)[0]
+        other_queue = observed[6].split(",", 1)[0]
+        if (observed[1] != other_tenant + "-internal"
+                or other_queue not in {
+                    "fila-" + other_tenant,
+                    "fila-" + other_tenant + "-en",
+                    "fila-" + other_tenant + "-es",
+                }):
+            foreign = True
+            break
+    return {"exact": exact, "no_foreign": exact and not foreign}
 
 
 def exercise_queues(container, prepared, report):

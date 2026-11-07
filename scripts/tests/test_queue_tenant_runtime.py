@@ -73,3 +73,34 @@ def test_queues_mode_requires_calls(tmp_path):
     with pytest.raises(SystemExit) as error:
         main(["--queues", "--report", str(tmp_path / "queue-report.json")])
     assert error.value.code != 0
+
+
+def test_correct_caller_does_not_hide_another_tenant_in_foreign_queue():
+    good = line()
+    swapped = line(
+        endpoint="t2-1001", context="t2-internal",
+        args="fila-t1,c,,,15",
+    )
+    assert inspected_queue_channel(good + "\n" + swapped, "t1-1001", "t1") == {
+        "exact": True, "no_foreign": False,
+    }
+    correct_other = line(
+        endpoint="t2-1001", context="t2-internal",
+        args="fila-t2,c,,,15",
+    )
+    assert inspected_queue_channel(good + "\n" + correct_other, "t1-1001", "t1") == {
+        "exact": True, "no_foreign": True,
+    }
+
+
+def test_queue_snapshot_rejects_prefix_collision_and_unknown_channel():
+    good = line()
+    wrong_prefix = line(
+        endpoint="t10-1001", context="t10-internal",
+        args="fila-t1,c,,,15",
+    )
+    assert not inspected_queue_channel(good + "\n" + wrong_prefix,
+                                       "t1-1001", "t1")["no_foreign"]
+    unknown = "PJSIP/ambiguous-00000001!t1-internal!1000!3!Up!Queue!fila-t1,c,,,15"
+    assert not inspected_queue_channel(good + "\n" + unknown,
+                                       "t1-1001", "t1")["no_foreign"]

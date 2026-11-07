@@ -26,7 +26,7 @@ DISPOSITION_TO_STATUS = {
     "CONGESTION": "falha",
 }
 
-DIAL_STRING_RE = re.compile(r"PJSIP/(\d+)@gateway-tdm")
+DIAL_STRING_RE = re.compile(r"\APJSIP/([0-9]{8,20})@gateway-tdm\Z")
 
 
 _CALLBACK_PHONE = re.compile(r"[+]?[0-9]{8,20}$")
@@ -403,9 +403,20 @@ def mark_callback_result(path, callback_id: str, disposition: str):
 
 
 def extract_dialed_number(event: dict):
-    """Mesma extração usada em campaigns.py - a partir do Dialstring do DialEnd."""
-    dialstring = event.get("Dialstring", "")
-    match = DIAL_STRING_RE.search(dialstring)
-    if match:
-        return match.group(1)
-    return event.get("DestExten") or None
+    """Número exato, nunca substring de DialEnd AMI potencialmente malformado.
+
+    Se Dialstring existe e é inválida, NÃO usar DestExten para evitar
+    alegar desfecho de um destino diferente do realmente discado.
+    """
+    if not isinstance(event, dict):
+        return None
+    dialstring = event.get("Dialstring")
+    if dialstring is not None:
+        if not isinstance(dialstring, str) or len(dialstring) > 128:
+            return None
+        match = DIAL_STRING_RE.fullmatch(dialstring)
+        return match.group(1) if match else None
+    value = event.get("DestExten")
+    if not isinstance(value, str) or re.fullmatch(r"[0-9]{8,20}", value) is None:
+        return None
+    return value
