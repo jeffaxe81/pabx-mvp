@@ -73,6 +73,20 @@ def inspected_queue_channel(raw, endpoint, tenant):
     return {"exact": exact, "no_foreign": exact and not foreign}
 
 
+
+def queue_call_channel_id(raw, endpoint, tenant):
+    """Identifica o canal exato na fila; não retorna apenas o ramal."""
+    if not inspected_queue_channel(raw, endpoint, tenant)["exact"]:
+        return None
+    candidates = [
+        row.split("!", 1)[0] for row in raw.splitlines()
+        if re.fullmatch(r"PJSIP/" + re.escape(endpoint) + r"-[0-9a-f]+",
+                        row.split("!", 1)[0]) is not None
+    ]
+    return candidates[0] if len(candidates) == 1 else None
+
+
+
 def exercise_queues(container, prepared, report):
     from .asterisk_lab import cli
 
@@ -102,24 +116,33 @@ def exercise_queues(container, prepared, report):
                 checks["queue_answered:" + tenant] = True
                 deadline = time.monotonic() + 7
                 first_wait = None
+                waited_channel = None
+                foreign_observed = False
+                good_queue_observed = False
                 while time.monotonic() < deadline:
-                    observation = inspected_queue_channel(
-                        cli(container, "core show channels concise"), endpoint, tenant
-                    )
+                    capture = cli(container, "core show channels concise")
+                    observation = inspected_queue_channel(capture, endpoint, tenant)
+                    channel = queue_call_channel_id(capture, endpoint, tenant)
                     now = time.monotonic()
                     checks["queue_exact_tenant:" + tenant] |= observation["exact"]
-                    checks["queue_no_foreign:" + tenant] |= (
-                        observation["exact"] and observation["no_foreign"]
-                    )
                     if observation["exact"]:
-                        if first_wait is None:
+                        good_queue_observed = True
+                        if not observation["no_foreign"]:
+                            foreign_observed = True
+                    checks["queue_no_foreign:" + tenant] = (
+                        good_queue_observed and not foreign_observed
+                    )
+                    if observation["exact"] and channel is not None:
+                        if channel != waited_channel:
                             first_wait = now
-                        # Continuidade da MESMA chamada por >= 1 segundo
-                        # na aplicação Queue, com fila e contexto exatos.
-                        if now - first_wait >= 1.0:
+                            waited_channel = channel
+                        # Espera contínua de >= 1 s na MESMA instância de
+                        # canal, não em dois PJSIP diferentes do mesmo ramal.
+                        if now - first_wait >= 1.0 and not foreign_observed:
                             checks["queue_wait_observed:" + tenant] = True
                     else:
                         first_wait = None
+                        waited_channel = None
                     if (checks["queue_exact_tenant:" + tenant]
                             and checks["queue_no_foreign:" + tenant]
                             and checks["queue_wait_observed:" + tenant]):

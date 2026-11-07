@@ -33,6 +33,11 @@ def matches_dial_event(event, record):
     hint = event.get("AttemptID")
     if hint is not None and hint != attempt_id:
         return False
+    # DialEnd geralmente não inclui ActionID; se o fornecer, não pode
+    # contradizer a tentativa AXE exata que originou esta ligação.
+    action = event.get("ActionID")
+    if action is not None and action != attempt_id:
+        return False
     channel_ids = [event.get(key) for key in ("Uniqueid", "DestUniqueid")
                    if event.get(key) is not None]
     if channel_ids:

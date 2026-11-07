@@ -370,8 +370,16 @@ def summarize_sla_history_by_date(records: list) -> dict:
     histórico bruto por dia, e dentro de cada dia por fila, pra dar
     pra comparar "hoje vs. ontem vs. semana passada" olhando as datas.
     """
+    if not isinstance(records, list):
+        raise ValueError("histórico SLA inválido")
     by_date = {}
-    for r in records:
+    for raw in records:
+        # O endpoint HTTP normalmente carrega entradas já validadas,
+        # mas o agregador também precisa falhar fechado se chamado por
+        # outro fluxo com dados alterados em memória.
+        r = _valid_history_row(raw)
+        if r is None:
+            raise ValueError("linha SLA inválida para agregação")
         queues = by_date.setdefault(r["date"], {})
         stats = queues.setdefault(r["queue"], {"offered": 0, "within_sla": 0})
         stats["offered"] += r["offered"]

@@ -41,3 +41,16 @@ def test_matching_hint_never_substitutes_foreign_channel():
         "Uniqueid": CHANNEL, "DestUniqueid": OTHER, "AttemptID": ATTEMPT,
     }, RECORD)
     assert not matches_dial_event({}, RECORD)
+
+
+def test_dialend_actionid_is_optional_but_must_not_contradict_attempt():
+    assert matches_dial_event({"Uniqueid": CHANNEL, "ActionID": ATTEMPT}, RECORD)
+    assert matches_dial_event({"Uniqueid": CHANNEL}, RECORD)
+    for action in ("b" * 32, "invalid", 1, [], {"id": ATTEMPT}):
+        assert not matches_dial_event({
+            "Uniqueid": CHANNEL, "DestUniqueid": "1792670400.1",
+            "AttemptID": ATTEMPT, "ActionID": action,
+        }, RECORD)
+    assert not matches_dial_event({
+        "ActionID": "b" * 32, "AttemptID": ATTEMPT
+    }, RECORD)

@@ -527,3 +527,35 @@ def test_sla_date_range_accepts_exact_same_day_and_open_end():
     assert filter_sla_history_by_date_range(
         records, end="2026-11-07"
     ) == records[:1]
+
+
+@pytest.mark.parametrize("bad", [
+    None, {}, "not-a-list", True,
+    [None], [3], [{"date": "2026-02-30", "queue": "fila-t1",
+                    "offered": 1, "within_sla": 1}],
+    [{"date": "2026-11-07", "queue": "fila-t1",
+      "offered": True, "within_sla": 1}],
+    [{"date": "2026-11-07", "queue": "fila-t10",
+      "offered": 1, "within_sla": 2}],
+    [{"date": "2026-11-07", "queue": "fila-t1\nInjected",
+      "offered": 1, "within_sla": 1}],
+])
+def test_sla_aggregation_rejects_invalid_rows_even_without_store(bad):
+    with pytest.raises(ValueError, match="SLA"):
+        summarize_sla_history_by_date(bad)
+
+
+def test_sla_aggregation_recomputes_percent_without_trusting_payload():
+    raw = [
+        {"date": "2026-11-07", "queue": "fila-t1",
+         "offered": 3, "within_sla": 2, "sla_percent": 100},
+        {"date": "2026-11-07", "queue": "fila-t1",
+         "offered": 2, "within_sla": 0, "sla_percent": 999},
+        {"date": "2026-11-07", "queue": "fila-t10",
+         "offered": 1, "within_sla": 1, "sla_percent": 0},
+    ]
+    result = summarize_sla_history_by_date(raw)
+    assert result["2026-11-07"]["fila-t1"] == {
+        "offered": 5, "within_sla": 2, "sla_percent": 40.0
+    }
+    assert result["2026-11-07"]["fila-t10"]["sla_percent"] == 100.0

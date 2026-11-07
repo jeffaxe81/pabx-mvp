@@ -104,13 +104,18 @@ def validate_voicemail_login_limit(content):
     if not isinstance(content, str) or len(content) > 1024 * 1024:
         return False
     section = None
+    general_count = 0
     limits = []
     for raw in content.splitlines():
         line = raw.strip()
         if not line or line.startswith((";", "#")):
             continue
-        if line.startswith("[") and line.endswith("]"):
-            section = line[1:-1].strip()
+        if line.startswith("["):
+            if not re.fullmatch(r"\[[A-Za-z0-9_-]+\]", line):
+                return False
+            section = line[1:-1]
+            if section == "general":
+                general_count += 1
             continue
         if "=" not in line:
             continue
@@ -121,4 +126,4 @@ def validate_voicemail_login_limit(content):
             if section != "general" or not re.fullmatch(r"[1-3]", value):
                 return False
             limits.append(int(value))
-    return len(limits) == 1 and limits[0] <= 3
+    return general_count == 1 and len(limits) == 1 and limits[0] <= 3

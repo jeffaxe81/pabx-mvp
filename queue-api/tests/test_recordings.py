@@ -246,3 +246,35 @@ def test_retention_fails_closed_on_invalid_types_and_clock(tmp_path):
     for now in (None, "2026", False, float("nan"), float("inf")):
         assert delete_expired_recordings(tmp_path, 30, clock=lambda x=now: x) == []
     assert old.exists()
+
+
+def test_authorized_recordings_are_limited_only_after_own_tenant_filter(tmp_path):
+    # Simula muitos WAVs mais novos de outra empresa que antes ocupavam
+    # toda a paginação global antes de aplicar a ACL.
+    own = ("t1-older.wav", "t1-newer.wav")
+    for index in range(130):
+        path = tmp_path / f"other-{index:03d}.wav"
+        _touch(path, mtime_offset=1000 + index)
+    _touch(tmp_path / own[0], mtime_offset=-200)
+    _touch(tmp_path / own[1], mtime_offset=-100)
+    assert all(r["filename"].startswith("other-")
+               for r in list_recordings(tmp_path, limit=2))
+    records = list_recordings(
+        tmp_path, limit=2, allowed_filenames=set(own)
+    )
+    assert [r["filename"] for r in records] == list(reversed(own))
+    assert list_recordings(tmp_path, limit=2, allowed_filenames=set()) == []
+
+
+def test_allowed_filenames_deny_invalid_scope_and_never_follow_symlink(tmp_path):
+    real = tmp_path / "private.wav"
+    _touch(real)
+    symlink = tmp_path / "linked.wav"
+    symlink.symlink_to(real)
+    assert list_recordings(tmp_path, allowed_filenames={"private.wav"})[0]["filename"] == "private.wav"
+    assert list_recordings(tmp_path, allowed_filenames={"linked.wav"}) == []
+    for invalid in ("private.wav", ["private.wav"], {"private.wav": True},
+                    {123}, None):
+        if invalid is None:
+            continue  # None intentionally preserves legacy unrestricted API
+        assert list_recordings(tmp_path, allowed_filenames=invalid) == []

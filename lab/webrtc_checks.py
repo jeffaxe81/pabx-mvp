@@ -118,6 +118,7 @@ def unique_webrtc_cdr_checks(raw):
     if rows is None:
         return results
     unique = {}
+    channels = {}
     for tenant in TENANTS:
         for direction in DIRECTIONS:
             source, destination = (('1010', '1011') if direction == 'forward'
@@ -140,10 +141,14 @@ def unique_webrtc_cdr_checks(raw):
             if len(matches) == 1:
                 key = f'webrtc_cdr:{tenant}:{direction}'
                 unique[key] = matches[0][8]
+                channels[key] = (matches[0][4], matches[0][5])
+    all_channels = [value for pair in channels.values() for value in pair]
     for key, uniqueid in unique.items():
         results[key] = (
             list(unique.values()).count(uniqueid) == 1
             and sum(row[8] == uniqueid for row in rows) == 1
+            and all(all_channels.count(channel) == 1
+                    for channel in channels[key])
         )
     return results
 

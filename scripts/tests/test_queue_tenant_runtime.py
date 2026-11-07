@@ -104,3 +104,26 @@ def test_queue_snapshot_rejects_prefix_collision_and_unknown_channel():
     unknown = "PJSIP/ambiguous-00000001!t1-internal!1000!3!Up!Queue!fila-t1,c,,,15"
     assert not inspected_queue_channel(good + "\n" + unknown,
                                        "t1-1001", "t1")["no_foreign"]
+
+
+def test_queue_wait_identity_is_full_channel_not_same_extension():
+    from lab.queue_tenant_checks import queue_call_channel_id
+    first = line()
+    later = first.replace("00000001", "00000002")
+    assert queue_call_channel_id(first, "t1-1001", "t1") == "PJSIP/t1-1001-00000001"
+    assert queue_call_channel_id(later, "t1-1001", "t1") == "PJSIP/t1-1001-00000002"
+    assert queue_call_channel_id(first, "t10-1001", "t10") is None
+    assert queue_call_channel_id(first + "\n" + later, "t1-1001", "t1") is None
+
+
+def test_queue_wait_channel_identity_never_uses_partial_fields():
+    from lab.queue_tenant_checks import queue_call_channel_id
+    for invalid in (
+        line(args="fila-t10,c,,,15"),
+        line(context="t2-internal"),
+        line(extension="1010"),
+        line(app="Dial"),
+        "bad",
+        None,
+    ):
+        assert queue_call_channel_id(invalid, "t1-1001", "t1") is None

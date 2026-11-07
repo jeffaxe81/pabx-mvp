@@ -154,3 +154,33 @@ def test_six_webrtc_calls_require_six_unique_cdr_origins():
     assert not unique_webrtc_cdr_checks(
         raw.replace('"t2-internal"', '"t1-internal"')
     )["webrtc_cdr:t2:forward"]
+
+
+def test_webrtc_cdr_cannot_reuse_sip_channel_between_browser_calls():
+    from lab.webrtc_checks import unique_webrtc_cdr_checks
+    rows = []
+    for index, (tenant, src, dst) in enumerate(
+        (t, a, b) for t in ("t1", "t2", "t3")
+        for a, b in (("1010", "1011"), ("1011", "1010"))
+    ):
+        left = "recepcao" if src == "1010" else "recepcao-2"
+        right = "recepcao" if dst == "1010" else "recepcao-2"
+        rows.append(
+            f'{tenant},' + ','.join((
+                src, dst, tenant + "-internal",
+                f"PJSIP/{tenant}-{left}-{index:08x}",
+                f"PJSIP/{tenant}-{right}-{index + 100:08x}",
+                "ANSWERED", "2", f"1792670400.{200 + index}"
+            ))
+        )
+    raw = "\n".join(rows) + "\n"
+    assert all(unique_webrtc_cdr_checks(raw).values())
+    # A perna B da primeira chamada não pode ser reutilizada como
+    # perna A da chamada seguinte do MESMO tenant.
+    original = "PJSIP/t1-recepcao-2-00000001"
+    recycled = "PJSIP/t1-recepcao-2-00000064"
+    assert raw.count(original) == raw.count(recycled) == 1
+    collisions = unique_webrtc_cdr_checks(raw.replace(original, recycled))
+    assert not collisions["webrtc_cdr:t1:forward"]
+    assert not collisions["webrtc_cdr:t1:reverse"]
+    assert sum(collisions.values()) == 4
