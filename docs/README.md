@@ -198,3 +198,4 @@ registrado como regra permanente no prompt master
 144. [Persistência segura do histórico de SLA (JSONL)](manual-144-historico-sla-seguro.md)
 145. [Quatro frentes: filas, callbacks, voicemail e SLA](manual-145-qa-quatro-frentes-contato.md)
 146. [Quatro frentes: CDR WebRTC, callbacks, voicemail e SLA concorrente](manual-146-quatro-frentes-integridade.md)
+147. [Seis frentes: WebRTC, filas, callbacks, voicemail, SLA e gravações](manual-147-seis-frentes-integridade.md)
