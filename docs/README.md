@@ -195,3 +195,4 @@ registrado como regra permanente no prompt master
 141. [Cockpit de voz — 50 indicadores de call center](manual-141-cockpit-voz-50-indicadores.md)
 142. [Membros dinâmicos de fila e agentes (QueueAdd/Remove/Pause)](manual-142-membros-dinamicos-fila.md)
 143. [Ramal com até três dispositivos SIP](manual-143-multiplos-dispositivos-sip.md)
+140. [Persistência segura do histórico de SLA (JSONL)](manual-140-historico-sla-seguro.md)
