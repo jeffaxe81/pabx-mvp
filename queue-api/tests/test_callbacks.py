@@ -527,3 +527,33 @@ def test_30_callback_summary_oldest_wait_excludes_other_tenant_and_future():
         summarize_callbacks(records, "t1", now=float("nan"))
     with pytest.raises(ValueError, match="data"):
         summarize_callbacks([{**records[0], "requested_at": "bad"}], "t1", now=100)
+
+
+@pytest.mark.parametrize("event", [
+    None, "invalid", [], False, 100,
+    {"Dialstring": 100, "DestExten": "5511999998888"},
+    {"Dialstring": "prefix PJSIP/5511999998888@gateway-tdm"},
+    {"Dialstring": "PJSIP/5511999998888@gateway-tdm;other"},
+    {"Dialstring": "PJSIP/5511999998888@gateway-tdm\nInjected"},
+    {"Dialstring": "PJSIP/5511999998888@gateway-tdm", "DestExten": 1},
+    {"Dialstring": "PJSIP/5511999998888@gateway-other"},
+    {"Dialstring": "PJSIP/1@gateway-tdm"},
+    {"Dialstring": "PJSIP/5511999998888@gateway-tdm" * 2},
+    {"DestExten": "x5511999998888"},
+    {"DestExten": "5511999998888\n"},
+    {"DestExten": True},
+])
+def test_callback_dialed_number_rejects_untrusted_ami_payload(event):
+    # Dialstring can be authoritative even with an unrelated DestExten.
+    if isinstance(event, dict) and event.get("Dialstring") == "PJSIP/5511999998888@gateway-tdm":
+        assert extract_dialed_number(event) == "5511999998888"
+    else:
+        assert extract_dialed_number(event) is None
+
+
+def test_dialed_number_fallback_requires_exact_numeric_destination():
+    assert extract_dialed_number({"DestExten": "5511999998888"}) == "5511999998888"
+    assert extract_dialed_number({"Dialstring": "PJSIP/5511999998888@gateway-tdm",
+                                  "DestExten": "5511988887777"}) == "5511999998888"
+    assert extract_dialed_number({"Dialstring": "invalid",
+                                  "DestExten": "5511999998888"}) is None
