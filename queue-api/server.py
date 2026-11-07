@@ -792,17 +792,21 @@ class Handler(BaseHTTPRequestHandler):
             return
         policy, principal = access
         query = parse_qs(urlparse(self.path).query)
-        all_recordings = list_recordings(
-            RECORDINGS_DIR, limit=10000,
+        # A autorização vem ANTES do limite. Um grande volume de áudios
+        # pertencentes a t2/t10 não pode ocultar arquivos autorizados de t1.
+        catalog = policy.get("recordings", {})
+        authorized_names = {
+            name for name in catalog
+            if can_read_recording(policy, principal, name)
+        }
+        recordings = list_recordings(
+            RECORDINGS_DIR, limit=50,
             caller_number=query.get("caller_number", [None])[0],
             destination=query.get("destination", [None])[0],
             start_date=query.get("start_date", [None])[0],
             end_date=query.get("end_date", [None])[0],
+            allowed_filenames=authorized_names,
         )
-        recordings = [
-            entry for entry in all_recordings
-            if can_read_recording(policy, principal, entry["filename"])
-        ][:50]
         self._send_recordings_json(200, {"recordings": recordings})
 
     def _serve_recording_file(self):
