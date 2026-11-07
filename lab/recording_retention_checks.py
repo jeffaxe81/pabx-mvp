@@ -89,12 +89,14 @@ def exercise_retention(container, prepared, report):
         raise ValueError("arquivos MixMonitor não preparados")
     staging = Path(prepared["conf"]).parent / "retention-private-lab"
     staging.mkdir(mode=0o700, exist_ok=False)
+    sources = staging / "sources"
+    sources.mkdir(mode=0o700)
     now = time.time()
     for tenant in TENANTS:
         report["phase"] = "retention:" + tenant
         sub = staging / tenant
         sub.mkdir(mode=0o700)
-        source = sub / "real-source.wav"
+        source = sources / (tenant + ".wav")
         command(["docker", "cp", container + ":/var/spool/asterisk/monitor/"
                  + tenant + "/" + names[tenant], str(source)], timeout=20)
         source.chmod(0o600)
