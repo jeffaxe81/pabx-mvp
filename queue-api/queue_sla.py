@@ -261,15 +261,14 @@ def _open_history_file(path, *, append=False):
         if append and stat.S_IMODE(metadata.st_mode) & 0o077:
             # Ajuste seguro de arquivos legados após verificar inode e links.
             os.fchmod(fd, 0o600)
-        return fd
+        result, fd = fd, None
+        return result
     except (OSError, NotImplementedError, TypeError) as exc:
         raise ValueError("falha ao abrir histórico de SLA com segurança") from exc
     finally:
-        if directory is not None:
-            os.close(directory)
-        # Sucesso transfere o fd ao chamador; erro exige fechamento.
-        # A rotina abaixo evita depender da conclusão da exceção.
-        # O descritor final é fechado no except da validação acima.
+        if fd is not None:
+            os.close(fd)
+        os.close(directory)
 
 
 class SLAHistoryStore:
