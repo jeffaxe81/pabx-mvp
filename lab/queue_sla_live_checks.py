@@ -36,7 +36,7 @@ GLOBAL = ("sla_ami_login", "sla_unauthorized_denied",
 def required_live_queue_sla_checks():
     return ({f"sla_live_{name}:{tenant}" for name in PER_TENANT
              for tenant in TENANTS}
-            | GLOBAL)
+            | set(GLOBAL))
 
 
 def _add_private_queue_member(path, tenant):
