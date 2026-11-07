@@ -84,6 +84,47 @@
           "ci_job": "Asterisk | Queue atendida e SLA AMI/HTTP reais"
         }
       ]
+    },
+    {
+      "week": 10,
+      "title": "Transferência e gravações: provas parciais separadas",
+      "criteria": [
+        {
+          "id": "blind_refer_real",
+          "description": "REFER cego com 202 e INVITE atendido no alvo de mesmo tenant t1/t2",
+          "state": "verified_lab",
+          "evidence_file": "lab/transfer_checks.py",
+          "ci_job": "Asterisk | REL-13 transferencia SIP REFER em t1/t2"
+        },
+        {
+          "id": "recording_http_acl",
+          "description": "WAV de MixMonitor efetivo, CDR íntegro e download HTTP autenticado, isolamento, revogação",
+          "state": "verified_lab",
+          "evidence_file": "lab/recording_http_checks.py",
+          "ci_job": "Asterisk | chamadas, CDR e SRTP bidirecional"
+        },
+        {
+          "id": "retention_real_wav",
+          "description": "Expurgo opt-in de cópias de WAV reais após 30 dias, fonte recente e original preservados",
+          "state": "verified_lab",
+          "evidence_file": "lab/recording_retention_checks.py",
+          "ci_job": "Asterisk | chamadas, CDR e SRTP bidirecional"
+        },
+        {
+          "id": "assisted_transfer_and_return",
+          "description": "Transferência assistida com consulta, retorno à primeira chamada e áudio posterior",
+          "state": "pending",
+          "evidence_file": "lab/transfer_checks.py",
+          "ci_job": null
+        },
+        {
+          "id": "queue_recording_full",
+          "description": "Gravação da chamada efetivamente atendida em Queue, segregação e acesso HTTP vinculado ao CDR",
+          "state": "pending",
+          "evidence_file": "lab/queue_sla_live_checks.py",
+          "ci_job": null
+        }
+      ]
     }
   ]
 }

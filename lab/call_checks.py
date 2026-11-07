@@ -20,11 +20,12 @@ CHECKS = ('call_register', 'call_established', 'srtp', 'tamper_rejected',
 def required_call_checks():
     from .recording_checks import required_recording_checks
     from .recording_http_checks import required_recording_http_checks
+    from .recording_retention_checks import required_retention_checks
     from .direct_route_recording_checks import required_direct_route_checks
     return ({f'{check}:{tenant}:{direction}' for check in CHECKS
              for tenant in TENANTS for direction in DIRECTIONS}
             | required_recording_checks() | required_recording_http_checks()
-            | required_direct_route_checks())
+            | required_retention_checks() | required_direct_route_checks())
 
 
 def prepare_calls(root, prepared, source_commit):
