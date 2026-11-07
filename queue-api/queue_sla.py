@@ -340,10 +340,26 @@ def filter_sla_history_by_date_range(records: list, start: str = None, end: str 
     porque aqui a data já vem como string pronta no registro, sem
     precisar converter timestamp.
     """
+    # Aceitar apenas datas reais do calendário e limites cronológicos.
+    # Comparações lexicográficas com string arbitrária poderiam produzir
+    # relatórios incorretos sem nenhum erro visível ao supervisor.
+    for bound in (start, end):
+        if bound is None:
+            continue
+        if (not isinstance(bound, str)
+                or re.fullmatch(r"\\d{4}-\\d{2}-\\d{2}", bound) is None):
+            raise ValueError("data de filtro de SLA inválida")
+        try:
+            if date.fromisoformat(bound).isoformat() != bound:
+                raise ValueError("data de filtro de SLA inválida")
+        except ValueError as exc:
+            raise ValueError("data de filtro de SLA inválida") from exc
+    if start is not None and end is not None and start > end:
+        raise ValueError("período de SLA invertido")
     filtered = records
-    if start:
+    if start is not None:
         filtered = [r for r in filtered if r["date"] >= start]
-    if end:
+    if end is not None:
         filtered = [r for r in filtered if r["date"] <= end]
     return filtered
 
