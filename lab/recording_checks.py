@@ -183,3 +183,7 @@ def exercise_recordings(container, prepared, report):
     cdr = command(["docker", "exec", container, "cat",
                    "/var/log/asterisk/cdr-custom/Lab.csv"])
     exercise_recording_http(container, prepared, report, cdr.stdout)
+    # A fonte é um WAV realmente gravado. Somente cópias separadas
+    # passam por retenção/expurgo no filesystem privado do laboratório.
+    from .recording_retention_checks import exercise_retention
+    exercise_retention(container, prepared, report)
