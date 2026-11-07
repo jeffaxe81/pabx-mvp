@@ -260,9 +260,10 @@ def _open_history_file(path, *, append=False):
                 return None
             raise
         metadata = os.fstat(fd)
-        if (not stat.S_ISREG(metadata.st_mode) or metadata.st_nlink != 1
-                or metadata.st_size > MAX_HISTORY_BYTES):
+        if not stat.S_ISREG(metadata.st_mode) or metadata.st_nlink != 1:
             raise ValueError("histórico de SLA não é arquivo regular seguro")
+        if metadata.st_size > MAX_HISTORY_BYTES:
+            raise ValueError("histórico de SLA excede o limite de armazenamento")
         if append and stat.S_IMODE(metadata.st_mode) & 0o077:
             # Ajuste seguro de arquivos legados após verificar inode e links.
             os.fchmod(fd, 0o600)
