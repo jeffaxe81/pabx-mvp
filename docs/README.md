@@ -200,3 +200,4 @@ registrado como regra permanente no prompt master
 146. [Quatro frentes: CDR WebRTC, callbacks, voicemail e SLA concorrente](manual-146-quatro-frentes-integridade.md)
 147. [Seis frentes: WebRTC, filas, callbacks, voicemail, SLA e gravações](manual-147-seis-frentes-integridade.md)
 148. [Atendimento real da Queue com AgentConnect e SLA HTTP](manual-148-queue-sla-real.md)
+149. [Marco 10: REFER, autorização e retenção de WAV real](manual-149-marco10-retencao.md)
