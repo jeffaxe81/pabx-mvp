@@ -581,11 +581,18 @@ class Handler(BaseHTTPRequestHandler):
                 if isinstance(record, dict)
                 and queue_tenant(record.get("queue")) == identity["tenant"]
             ]
-            records = filter_sla_history_by_date_range(
-                tenant_records,
-                start=query.get("start", [None])[0],
-                end=query.get("end", [None])[0],
-            )
+            if len(query.get("start", [])) > 1 or len(query.get("end", [])) > 1:
+                self._send_queue_json(400, {"error": "período de SLA ambíguo"})
+                return
+            try:
+                records = filter_sla_history_by_date_range(
+                    tenant_records,
+                    start=query.get("start", [None])[0],
+                    end=query.get("end", [None])[0],
+                )
+            except ValueError:
+                self._send_queue_json(400, {"error": "período de SLA inválido"})
+                return
             self._send_queue_json(200, {"by_date": summarize_sla_history_by_date(records)})
         elif urlparse(self.path).path == "/api/metrics/sla":
             identity = self._require_queue_identity()
