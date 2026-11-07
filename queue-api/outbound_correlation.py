@@ -36,6 +36,13 @@ def matches_dial_event(event, record):
     channel_ids = [event.get(key) for key in ("Uniqueid", "DestUniqueid")
                    if event.get(key) is not None]
     if channel_ids:
+        # Não aceitar um ID correto ao lado de um segundo identificador
+        # forjado de OUTRA tentativa AXE no mesmo evento DialEnd.
+        if any(not isinstance(value, str) or len(value) > 96
+               or re.fullmatch(r"[A-Za-z0-9._-]+", value) is None
+               or (value.startswith("axe-") and value != channel_id)
+               for value in channel_ids):
+            return False
         return channel_id in channel_ids
     return hint == attempt_id
 
