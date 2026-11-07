@@ -491,3 +491,39 @@ def test_30_sla_history_recomputes_percentage_and_aggregates_same_day(tmp_path):
     assert summary["2026-10-29"]["fila-t1"] == {
         "offered": 5, "within_sla": 3, "sla_percent": 60.0}
     assert summary["2026-10-29"]["fila-t10"]["sla_percent"] == 100.0
+
+
+@pytest.mark.parametrize("start,end", [
+    ("2026-02-30", None),
+    ("2026-01-01", "2025-12-31"),
+    ("2026-1-01", None),
+    ("2026-01-1", None),
+    ("2026-11-07\nInjected", None),
+    ("2026-11-07x", None),
+    ("", None),
+    ([], None),
+    (False, None),
+    (None, 100),
+    (None, "NaN"),
+])
+def test_sla_date_range_rejects_invalid_or_reversed_bounds(start, end):
+    with pytest.raises(ValueError, match="SLA|período"):
+        filter_sla_history_by_date_range([], start=start, end=end)
+
+
+def test_sla_date_range_accepts_exact_same_day_and_open_end():
+    records = [
+        {"date": "2026-11-07", "queue": "fila-t1", "offered": 1,
+         "within_sla": 1, "sla_percent": 100.0},
+        {"date": "2026-11-08", "queue": "fila-t10", "offered": 3,
+         "within_sla": 0, "sla_percent": 0.0},
+    ]
+    assert filter_sla_history_by_date_range(
+        records, start="2026-11-07", end="2026-11-07"
+    ) == records[:1]
+    assert filter_sla_history_by_date_range(
+        records, start="2026-11-08"
+    ) == records[1:]
+    assert filter_sla_history_by_date_range(
+        records, end="2026-11-07"
+    ) == records[:1]
