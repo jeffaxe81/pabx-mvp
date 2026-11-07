@@ -71,7 +71,7 @@ def parse_recording_filename(filename: str):
     }
 
 
-def list_recordings(directory, limit=50, caller_number=None, destination=None, start_date=None, end_date=None):
+def list_recordings(directory, limit=50, caller_number=None, destination=None, start_date=None, end_date=None, *, allowed_filenames=None):
     """
     Retorna uma lista de dicts {filename, size_bytes, modified_at,
     caller_number, destination}, ordenada da gravação mais recente pra
@@ -82,6 +82,12 @@ def list_recordings(directory, limit=50, caller_number=None, destination=None, s
     quando nenhum filtro de atendente/número/período é usado.
     """
     if not isinstance(limit, int) or limit <= 0:
+        return []
+    if allowed_filenames is not None and (
+            not isinstance(allowed_filenames, (set, frozenset))
+            or any(not isinstance(name, str) for name in allowed_filenames)):
+        return []
+    if allowed_filenames is not None and not allowed_filenames:
         return []
     directory_fd = _recording_directory_fd(directory)
     if directory_fd is None:
@@ -95,6 +101,11 @@ def list_recordings(directory, limit=50, caller_number=None, destination=None, s
         with os.scandir(directory_fd) as entries:
             for entry in entries:
                 name = entry.name
+                # Filtrar pelo catálogo autorizado antes do sort e do
+                # limite, evitando que arquivos de outros tenants ocupem
+                # as vagas de gravações visíveis ao usuário.
+                if allowed_filenames is not None and name not in allowed_filenames:
+                    continue
                 if (not isinstance(name, str) or len(name) > 240
                         or "/" in name or "\\" in name
                         or any(ord(char) < 32 or ord(char) == 127 for char in name)
