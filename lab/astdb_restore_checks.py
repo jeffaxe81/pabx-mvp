@@ -87,12 +87,9 @@ def exercise_astdb_restore(container, report):
             )
             if not checks[f"astdb_restored_exact:{tenant}"]:
                 raise ValueError("recuperação lógica AstDB divergente")
-            checks[f"astdb_tenant_isolated:{tenant}"] = all(
-                astdb_token_from_cli(cli(
-                    container, "database get " + families[other] + " " + key
-                )) != originals[tenant][key]
-                for other in TENANTS if other != tenant for key in KEYS
-            )
+            # Somente após restaurar todas as famílias é possível
+            # demonstrar isolamento cruzado; não aceitar "ausente" como
+            # prova de um segundo tenant que ainda será criado.
             # Os dados exatos não saem do runner; somente resultados.
             report["astdb_restore_cases"][tenant] = {
                 "write_verified": checks[f"astdb_written:{tenant}"],
@@ -100,6 +97,17 @@ def exercise_astdb_restore(container, report):
                 "logical_restore_verified": checks[f"astdb_restored_exact:{tenant}"],
                 "isolated": checks[f"astdb_tenant_isolated:{tenant}"],
             }
+        for tenant in TENANTS:
+            checks[f"astdb_tenant_isolated:{tenant}"] = all(
+                astdb_token_from_cli(cli(
+                    container, "database get " + families[other] + " " + key
+                )) == originals[other][key]
+                and originals[other][key] != originals[tenant][key]
+                for other in TENANTS if other != tenant for key in KEYS
+            )
+            report["astdb_restore_cases"][tenant]["isolated"] = (
+                checks[f"astdb_tenant_isolated:{tenant}"]
+            )
         channels = cli(container, "core show channels concise")
         checks["astdb_no_external_calls"] = not any(
             line.startswith(("PJSIP/", "Local/"))
