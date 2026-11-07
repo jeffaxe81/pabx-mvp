@@ -241,7 +241,12 @@ def _open_history_file(path, *, append=False):
                     os.mkdir(part, 0o700, dir_fd=directory)
                 except FileExistsError:
                     pass
-            next_directory = os.open(part, flags, dir_fd=directory)
+            try:
+                next_directory = os.open(part, flags, dir_fd=directory)
+            except FileNotFoundError:
+                if not append:
+                    return None
+                raise
             os.close(directory)
             directory = next_directory
         mode = (os.O_WRONLY | os.O_APPEND | os.O_CREAT if append
