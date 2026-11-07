@@ -201,3 +201,4 @@ registrado como regra permanente no prompt master
 147. [Seis frentes: WebRTC, filas, callbacks, voicemail, SLA e gravações](manual-147-seis-frentes-integridade.md)
 148. [Atendimento real da Queue com AgentConnect e SLA HTTP](manual-148-queue-sla-real.md)
 149. [Marco 10: REFER, autorização e retenção de WAV real](manual-149-marco10-retencao.md)
+150. [Marco 11: restauração lógica AstDB real e meta técnica 60%](manual-150-marco11-astdb-60pct.md)

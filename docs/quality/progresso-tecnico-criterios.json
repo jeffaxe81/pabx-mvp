@@ -125,6 +125,47 @@
           "ci_job": null
         }
       ]
+    },
+    {
+      "week": 11,
+      "title": "Backup e recuperação: arquivos, volumes e AstDB em ambiente descartável",
+      "criteria": [
+        {
+          "id": "restored_config_files",
+          "description": "Backup e restore dos arquivos sintéticos de configuração via scripts reais, com confirmação e negativa",
+          "state": "verified_lab",
+          "evidence_file": "scripts/rel17_docker_restore_lab.py",
+          "ci_job": "Docker | rollback de arquivos e volumes isolados"
+        },
+        {
+          "id": "restored_docker_volumes",
+          "description": "Backup e restore de dois volumes efêmeros Docker, com bytes originais conferidos e limpeza",
+          "state": "verified_lab",
+          "evidence_file": "scripts/rel17_docker_restore_lab.py",
+          "ci_job": "Docker | rollback de arquivos e volumes isolados"
+        },
+        {
+          "id": "restored_astdb_logical",
+          "description": "Exportação lógica, remoção e reimportação de chaves AstDB reais em t1/t2/t3 sem acesso cruzado",
+          "state": "verified_lab",
+          "evidence_file": "lab/astdb_restore_checks.py",
+          "ci_job": "Asterisk | recuperacao logica AstDB real por empresa"
+        },
+        {
+          "id": "restored_endpoint_profiles",
+          "description": "Backup/restore dos registros de ramais e perfis PJSIP com checks de autenticação",
+          "state": "pending",
+          "evidence_file": "lab/astdb_restore_checks.py",
+          "ci_job": null
+        },
+        {
+          "id": "restored_recording_archive",
+          "description": "Backup/restore de gravações reais com checksum, permissões e leitura autorizada após recuperação",
+          "state": "pending",
+          "evidence_file": "lab/recording_retention_checks.py",
+          "ci_job": null
+        }
+      ]
     }
   ]
 }
