@@ -93,3 +93,32 @@ def validate_prepared_voicemail(*contents):
         "mailboxes": mailboxes,
         "invalid": invalid + sum(len(EXPECTED[t] - found[t]) for t in EXPECTED),
     }
+
+
+def validate_voicemail_login_limit(content):
+    """Exige limite de tentativas efetivo na seção [general] do staging.
+
+    Conferência de configuração, NÃO teste de autenticação real por PIN.
+    Nunca inclui valores de PIN no retorno.
+    """
+    if not isinstance(content, str) or len(content) > 1024 * 1024:
+        return False
+    section = None
+    limits = []
+    for raw in content.splitlines():
+        line = raw.strip()
+        if not line or line.startswith((";", "#")):
+            continue
+        if line.startswith("[") and line.endswith("]"):
+            section = line[1:-1].strip()
+            continue
+        if "=" not in line:
+            continue
+        key, value = (part.strip() for part in line.split("=", 1))
+        if key.lower() == "maxlogins":
+            # Mesmo se a configuração se repete fora de [general],
+            # invalidar o cenário para não depender de precedência.
+            if section != "general" or not re.fullmatch(r"[1-3]", value):
+                return False
+            limits.append(int(value))
+    return len(limits) == 1 and limits[0] <= 3
