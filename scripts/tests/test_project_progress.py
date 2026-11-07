@@ -8,16 +8,17 @@ import pytest
 from project_progress import ROOT, PLAN, CRITERIA, _read, calculate, main
 
 
-def test_technical_progress_is_fifty_two_five_with_separate_formal_forty_three_eight():
+def test_technical_progress_is_fifty_six_three_with_separate_formal_forty_three_eight():
     report = calculate(_read(PLAN), _read(CRITERIA))
     assert report["formal_completed"] == 7
     assert report["formal_total"] == 16
     assert report["formal_percent"] == 43.8
-    assert report["technical_equivalent_units"] == 8.4
-    assert report["technical_percent"] == 52.5
+    assert report["technical_equivalent_units"] == 9.0
+    assert report["technical_percent"] == 56.3
     assert report["partial_milestones"] == [
         {"week": 8, "verified": 3, "total": 5, "percent": 60.0},
         {"week": 9, "verified": 4, "total": 5, "percent": 80.0},
+        {"week": 10, "verified": 3, "total": 5, "percent": 60.0},
     ]
     assert not report["operational_go_authorized"]
     assert not report["technical_metric_is_operational_homologation"]
@@ -26,7 +27,7 @@ def test_technical_progress_is_fifty_two_five_with_separate_formal_forty_three_e
 
 def test_status_of_pending_proof_cannot_be_forged_without_ci_reference():
     doc = _read(CRITERIA)
-    for week in (8, 9):
+    for week in (8, 9, 10):
         candidate = copy.deepcopy(doc)
         check = next(
             x for x in next(
@@ -69,6 +70,6 @@ def test_duplicate_or_invalid_evidence_rejected(tmp_path):
 def test_cli_publishes_both_metrics_without_go(capsys):
     assert main([]) == 0
     emitted = json.loads(capsys.readouterr().out)
-    assert emitted["technical_percent"] == 52.5
+    assert emitted["technical_percent"] == 56.3
     assert emitted["formal_percent"] == 43.8
     assert emitted["operational_go_authorized"] is False
