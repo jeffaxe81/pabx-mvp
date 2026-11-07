@@ -109,6 +109,9 @@ def prepare(root, destination, source_commit="HEAD", *, stage_report=None):
     )
     if not vm_check['ok']:
         raise ValueError('configuração de PINs do voicemail no laboratório é insegura')
+    from .voicemail_pin_checks import validate_voicemail_login_limit
+    if not validate_voicemail_login_limit((conf/'voicemail.conf').read_text()):
+        raise ValueError('limite de tentativas do voicemail não é seguro')
     # Nenhum AMI fica exposto pelo laboratório de registros.
     (conf/'manager.conf').write_text('[general]\nenabled=no\n')
     http = (conf/'http.conf').read_text().replace('0.0.0.0', '127.0.0.1')

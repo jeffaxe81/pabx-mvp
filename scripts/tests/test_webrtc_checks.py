@@ -117,3 +117,40 @@ def test_webrtc_summary_requires_media_cases_and_cleanup_beyond_prior_calls():
     complete = {**prior,**{name:True for name in required_webrtc_checks()}}
     assert summarize(complete,calls=True,webrtc=True)['success'] is True
     assert summarize({**complete,'webrtc_tone:t3:reverse':False},calls=True,webrtc=True)['success'] is False
+
+
+def test_six_webrtc_calls_require_six_unique_cdr_origins():
+    from lab.webrtc_checks import unique_webrtc_cdr_checks
+
+    records = []
+    for index, (tenant, source, dest) in enumerate(
+        (tenant, src, dst) for tenant in ("t1", "t2", "t3")
+        for src, dst in (("1010", "1011"), ("1011", "1010"))
+    ):
+        left = "recepcao" if source == "1010" else "recepcao-2"
+        right = "recepcao" if dest == "1010" else "recepcao-2"
+        records.append(
+            f'"{tenant}","{source}","{dest}","{tenant}-internal",'
+            f'"PJSIP/{tenant}-{left}-{index:08x}",'
+            f'"PJSIP/{tenant}-{right}-{index + 10:08x}",'
+            f'"ANSWERED","2","1792670400.{100 + index}"'
+        )
+    raw = "\n".join(records) + "\n"
+    result = unique_webrtc_cdr_checks(raw)
+    assert len(result) == 6 and all(result.values())
+    assert all(not ok for ok in unique_webrtc_cdr_checks(None).values())
+
+    # Repetir um CDR não pode multiplicar uma chamada comprovada.
+    duplicated = unique_webrtc_cdr_checks(raw + records[0] + "\n")
+    assert duplicated["webrtc_cdr:t1:forward"] is False
+    assert sum(duplicated.values()) == 5
+    # O CDR completo permanece sintaticamente válido, mas a prova da
+    # chamada duplicada deve falhar se o Uniqueid é de outro caso.
+    reused = raw.replace("1792670400.101", "1792670400.100")
+    collisions = unique_webrtc_cdr_checks(reused)
+    assert collisions["webrtc_cdr:t1:forward"] is False
+    assert collisions["webrtc_cdr:t1:reverse"] is False
+    assert sum(collisions.values()) == 4
+    assert not unique_webrtc_cdr_checks(
+        raw.replace('"t2-internal"', '"t1-internal"')
+    )["webrtc_cdr:t2:forward"]

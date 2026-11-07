@@ -105,6 +105,49 @@ def webrtc_cdr_matches(raw,tenant,source,destination):
     return False
 
 
+
+def unique_webrtc_cdr_checks(raw):
+    """Seis chamadas WebRTC exigem seis CDRs independentes e inequívocos.
+
+    Um único CDR duplicado/reutilizado jamais pode provar duas chamadas.
+    Não devolve identificadores, canais nem informações pessoais.
+    """
+    results = {f'webrtc_cdr:{tenant}:{direction}': False
+               for tenant in TENANTS for direction in DIRECTIONS}
+    rows = cdr_rows(raw)
+    if rows is None:
+        return results
+    unique = {}
+    for tenant in TENANTS:
+        for direction in DIRECTIONS:
+            source, destination = (('1010', '1011') if direction == 'forward'
+                                   else ('1011', '1010'))
+            matches = []
+            for row in rows:
+                fields = cdr_fields(row, tenant, source, destination)
+                # Os endpoints Chromium de produção são "recepcao",
+                # e não o número do destino 1010/1011.
+                fields['origin_channel'] = bool(re.fullmatch(
+                    r'PJSIP/' + tenant
+                    + ('-recepcao-' if source == '1010' else '-recepcao-2-')
+                    + r'[0-9a-f]+', row[4]))
+                fields['destination_channel'] = bool(re.fullmatch(
+                    r'PJSIP/' + tenant
+                    + ('-recepcao-2-' if destination == '1011' else '-recepcao-')
+                    + r'[0-9a-f]+', row[5]))
+                if all(fields.values()):
+                    matches.append(row)
+            if len(matches) == 1:
+                key = f'webrtc_cdr:{tenant}:{direction}'
+                unique[key] = matches[0][8]
+    for key, uniqueid in unique.items():
+        results[key] = (
+            list(unique.values()).count(uniqueid) == 1
+            and sum(row[8] == uniqueid for row in rows) == 1
+        )
+    return results
+
+
 def prepare_webrtc(root,prepared,source):
     from .asterisk_lab import command
     stage=prepared['conf'].parent
@@ -184,10 +227,11 @@ def exercise_webrtc(root,container,prepared,report):
     deadline=time.monotonic()+15
     while True:
         cdr=command(['docker','exec',container,'cat','/var/log/asterisk/cdr-custom/Lab.csv'],check=False)
-        for tenant in TENANTS:
-            for direction in DIRECTIONS:
-                source,destination=('1010','1011') if direction=='forward' else ('1011','1010')
-                checks[f'webrtc_cdr:{tenant}:{direction}']=cdr.returncode==0 and webrtc_cdr_matches(cdr.stdout,tenant,source,destination)
+        # Só aceitar uma origem CDR para cada direção, sem duplicar
+        # Uniqueid entre empresas ou sessões do mesmo navegador.
+        for key, verified in unique_webrtc_cdr_checks(
+                cdr.stdout if cdr.returncode == 0 else None).items():
+            checks[key] = verified
         active=cli(container,'core show channels concise')
         checks['webrtc_channels_cleared']=not any(line.startswith('PJSIP/') for line in active.splitlines())
         contacts=cli(container,'pjsip show contacts')
