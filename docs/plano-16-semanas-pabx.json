@@ -122,7 +122,7 @@
       "title": "Executar backup e restauração integral",
       "area": "resilience",
       "acceptance": "Prova de recuperação de volumes, AstDB, ramais e arquivos",
-      "status": "planned",
+      "status": "in_progress",
       "pr_number": null,
       "ci_run_id": null,
       "requires_lab": true
