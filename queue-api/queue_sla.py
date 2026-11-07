@@ -347,7 +347,7 @@ def filter_sla_history_by_date_range(records: list, start: str = None, end: str 
         if bound is None:
             continue
         if (not isinstance(bound, str)
-                or re.fullmatch(r"\\d{4}-\\d{2}-\\d{2}", bound) is None):
+                or re.fullmatch(r"\d{4}-\d{2}-\d{2}", bound) is None):
             raise ValueError("data de filtro de SLA inválida")
         try:
             if date.fromisoformat(bound).isoformat() != bound:
