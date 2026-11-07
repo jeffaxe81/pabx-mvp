@@ -199,7 +199,7 @@ def cleanup_owned(name, ownership):
     return result
 
 
-def summarize(checks, *, calls=False, webrtc=False, dids=False, isolation=False, voicemail=False, voicemail_dtmf=False, ami=False, queues=False, policy=False, routes=False, trunks=False, transfers=False, members=False, multidevice=False):
+def summarize(checks, *, calls=False, webrtc=False, dids=False, isolation=False, voicemail=False, voicemail_dtmf=False, ami=False, queues=False, queue_sla=False, policy=False, routes=False, trunks=False, transfers=False, members=False, multidevice=False):
     required = {'real_runtime', 'tls_transport', 'wss_transport', 'container_removed',
                 'checkout_clean', 'runtime_mounts', 'source_label'}
     required.update(name+':'+tid for tid in ('t1', 't2', 't3')
@@ -236,6 +236,9 @@ def summarize(checks, *, calls=False, webrtc=False, dids=False, isolation=False,
         from .queue_overflow_checks import required_queue_overflow_checks
         required.update(required_queue_runtime_checks())
         required.update(required_queue_overflow_checks())
+    if queue_sla:
+        from .queue_sla_live_checks import required_live_queue_sla_checks
+        required.update(required_live_queue_sla_checks())
     if policy:
         from .policy_runtime_checks import required_policy_checks
         required.update(required_policy_checks())
@@ -253,7 +256,7 @@ def summarize(checks, *, calls=False, webrtc=False, dids=False, isolation=False,
             'success': set(checks) == required and passed == len(required)}
 
 
-def run(root, report, *, calls=False, webrtc=False, dids=False, isolation=False, voicemail=False, voicemail_dtmf=False, ami=False, queues=False, policy=False, routes=False, trunks=False, transfers=False, members=False, multidevice=False):
+def run(root, report, *, calls=False, webrtc=False, dids=False, isolation=False, voicemail=False, voicemail_dtmf=False, ami=False, queues=False, queue_sla=False, policy=False, routes=False, trunks=False, transfers=False, members=False, multidevice=False):
     if ami and members:
         raise ValueError('modos AMI mutuamente exclusivos')
     if webrtc and not calls:
@@ -266,6 +269,8 @@ def run(root, report, *, calls=False, webrtc=False, dids=False, isolation=False,
         raise ValueError('voicemail real requer modo de chamadas')
     if queues and not calls:
         raise ValueError('filas reais requerem modo de chamadas')
+    if queue_sla and (not calls or queues or ami or members):
+        raise ValueError('SLA real requer chamadas e teste AMI exclusivo')
     if transfers and not calls:
         raise ValueError('transferencias reais requerem modo de chamadas')
     if voicemail_dtmf and (not voicemail or not calls):
@@ -309,6 +314,9 @@ def run(root, report, *, calls=False, webrtc=False, dids=False, isolation=False,
     if queues:
         report.update(schema_version=8, kind='real_asterisk_tenant_queue_lab',
                       live_queue_tenant_routing_tested=False)
+    if queue_sla:
+        report.update(schema_version=16, kind='real_asterisk_queue_sla_http_lab',
+                      live_queue_sla_tested=False)
     if policy:
         report.update(schema_version=10, kind='real_asterisk_policy_local_channel_lab',
                       policy_local_channels_tested=False, operator_trunk_tested=False)
@@ -355,6 +363,9 @@ def run(root, report, *, calls=False, webrtc=False, dids=False, isolation=False,
         if calls:
             from .call_checks import prepare_calls
             prepare_calls(root, prepared, source)
+        if queue_sla:
+            from .queue_sla_live_checks import prepare_live_queue_sla
+            prepare_live_queue_sla(prepared)
         if webrtc:
             from .webrtc_checks import prepare_webrtc
             prepare_webrtc(root,prepared,source)
@@ -483,6 +494,9 @@ def run(root, report, *, calls=False, webrtc=False, dids=False, isolation=False,
             from .queue_overflow_checks import exercise_queue_overflow
             exercise_queues(container_id, prepared, report)
             exercise_queue_overflow(container_id, prepared, report)
+        if queue_sla:
+            from .queue_sla_live_checks import exercise_live_queue_sla
+            exercise_live_queue_sla(container_id, prepared, report)
     finally:
         if trunks:
             from .trunk_sip_loopback_checks import close_trunks
@@ -495,7 +509,7 @@ def run(root, report, *, calls=False, webrtc=False, dids=False, isolation=False,
         report['private_staging_retained'] = retain_staging
         if not retain_staging:
             shutil.rmtree(folder)
-    report.update(summarize(report['checks'], calls=calls,webrtc=webrtc,dids=dids,isolation=isolation,voicemail=voicemail,voicemail_dtmf=voicemail_dtmf,ami=ami,queues=queues,policy=policy,routes=routes,trunks=trunks,transfers=transfers,
+    report.update(summarize(report['checks'], calls=calls,webrtc=webrtc,dids=dids,isolation=isolation,voicemail=voicemail,voicemail_dtmf=voicemail_dtmf,ami=ami,queues=queues,queue_sla=queue_sla,policy=policy,routes=routes,trunks=trunks,transfers=transfers,
                             members=members,multidevice=multidevice))
     return report['success']
 
@@ -514,6 +528,7 @@ def main(argv=None):
     parser.add_argument('--members', action='store_true', help='validar membros dinamicos via AMI real isolado')
     parser.add_argument('--multidevice', action='store_true', help='validar 1 a 3 registros SIP/TLS por AOR')
     parser.add_argument('--queues', action='store_true', help='validar fila exata t1/t2/t3 via SIP real')
+    parser.add_argument('--queue-sla', action='store_true', help='validar AgentConnect e SLA HTTP com Queue atendida no laboratório')
     parser.add_argument('--policy', action='store_true', help='validar GOSUB e AstDB com Local/ descartável')
     parser.add_argument('--routes', action='store_true', help='validar bloqueio e seleção de rota com Dial interceptado em sandbox')
     parser.add_argument('--trunks', action='store_true', help='validar INVITE SIP real a dois troncos no loopback')
@@ -529,6 +544,8 @@ def main(argv=None):
         parser.error('--voicemail requer --calls')
     if args.queues and not args.calls:
         parser.error('--queues requer --calls')
+    if args.queue_sla and (not args.calls or args.ami or args.members or args.queues):
+        parser.error('--queue-sla requer --calls exclusivo de --ami/--members/--queues')
     if args.transfers and not args.calls:
         parser.error('--transfers requer --calls')
     if args.voicemail_dtmf and not (args.calls and args.voicemail):
@@ -550,6 +567,8 @@ def main(argv=None):
             kwargs['multidevice'] = True
         if args.queues:
             kwargs['queues'] = True
+        if args.queue_sla:
+            kwargs['queue_sla'] = True
         if args.policy:
             kwargs['policy'] = True
         if args.routes:

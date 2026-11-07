@@ -188,6 +188,30 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+  queue-sla-answered:
+    name: Asterisk | Queue atendida e SLA AMI/HTTP reais
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Instalar SRTP no cliente de laboratório descartável
+        run: python3 -m pip install -r lab/requirements.txt
+      - name: Comprovar atendimento da Queue por SIP, AgentConnect e SLA HTTP por empresa
+        run: python3 -m lab.asterisk_lab --calls --queue-sla --report lab-results/queue-sla-real.json
+      - name: Preservar somente relatório sanitizado SLA
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: asterisk-real-queue-sla-${{ github.sha }}
+          path: lab-results/queue-sla-real.json
+          if-no-files-found: error
+          retention-days: 14
+
   queue-tenants:
     name: Asterisk | filas por empresa via SIP real
     runs-on: ubuntu-24.04
