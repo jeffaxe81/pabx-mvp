@@ -33,3 +33,24 @@ def test_versioned_staging_template_requires_bounded_login_attempts():
     assert validate_voicemail_login_limit(path.read_text(encoding="utf-8"))
     assert not validate_voicemail_login_limit(None)
     assert not validate_voicemail_login_limit("x" * (1024 * 1024 + 1))
+
+
+def test_voicemail_duplicate_general_sections_cannot_override_login_limit():
+    assert not validate_voicemail_login_limit(
+        "[general]\nmaxlogins=3\n[t1]\n[general]\nformat=wav\n"
+    )
+    assert not validate_voicemail_login_limit(
+        "[general]\nmaxlogins=3\n[general]\nmaxlogins=2\n"
+    )
+
+
+@pytest.mark.parametrize("heading", [
+    "[general] ; override",
+    "[general",
+    "[general] injected",
+    "[general ]",
+    "[ general]",
+])
+def test_voicemail_malformed_general_section_never_accepted(heading):
+    text = "[general]\nmaxlogins=3\n" + heading + "\n"
+    assert not validate_voicemail_login_limit(text)
