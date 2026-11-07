@@ -16,7 +16,9 @@ Lógica pura aqui, sem rede - 100% testável. Reset diário com relógio
 injetável, mesmo padrão de metrics.py.
 """
 import json
+import os
 import re
+import stat
 import time
 from collections import deque
 from datetime import date
@@ -25,6 +27,8 @@ from pathlib import Path
 DEFAULT_SLA_THRESHOLD_SECONDS = 20
 MAX_HOLD_SECONDS = 24 * 3600
 MAX_SLA_DEDUPE_IDS = 10000
+MAX_HISTORY_BYTES = 32 * 1024 * 1024
+MAX_HISTORY_LINE_BYTES = 4096
 _AMI_UNIQUEID = re.compile(r"[A-Za-z0-9._-]{1,96}$")
 
 
@@ -173,56 +177,157 @@ class QueueSLATracker:
         return result
 
 
+def _valid_history_row(record):
+    """Valida os contadores antes de gravar; percentual nunca é confiado."""
+    if not isinstance(record, dict):
+        return None
+    day, queue = record.get("date"), record.get("queue")
+    offered, within = record.get("offered"), record.get("within_sla")
+    if (not isinstance(day, str) or re.fullmatch(r"\d{4}-\d{2}-\d{2}", day) is None
+            or not _valid_queue_name(queue)
+            or type(offered) is not int or type(within) is not int
+            or not 1 <= offered <= 10_000_000
+            or not 0 <= within <= offered):
+        return None
+    try:
+        if date.fromisoformat(day).isoformat() != day:
+            return None
+    except ValueError:
+        return None
+    return {"date": day, "queue": queue, "offered": offered,
+            "within_sla": within,
+            "sla_percent": round(within / offered * 100, 1)}
+
+
+def _unique_history_keys(pairs):
+    parsed = {}
+    for key, value in pairs:
+        if key in parsed:
+            raise ValueError("linha de histórico de SLA com chave duplicada")
+        parsed[key] = value
+    return parsed
+
+
+def _reject_history_constant(_value):
+    raise ValueError("histórico de SLA com número não finito")
+
+
+def _open_history_file(path, *, append=False):
+    """Abre cada pasta via openat e bloqueia symlinks/hardlinks/FIFOs.
+
+    Um O_NOFOLLOW apenas no arquivo final não protege as pastas ancestrais.
+    Os FDs ancoram o caminho; nenhum fallback inseguro é permitido.
+    """
+    if (not all(hasattr(os, option) for option in
+                ("O_NOFOLLOW", "O_DIRECTORY", "O_NONBLOCK", "O_CLOEXEC"))
+            or os.open not in os.supports_dir_fd
+            or os.mkdir not in os.supports_dir_fd):
+        raise ValueError("filesystem sem suporte às garantias de segurança")
+    candidate = Path(path)
+    parts = candidate.parts
+    if candidate.is_absolute():
+        anchor, parts = "/", parts[1:]
+    else:
+        anchor = "."
+    if not parts or any(item in ("", ".", "..") for item in parts):
+        raise ValueError("caminho inseguro para histórico de SLA")
+    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
+    directory = os.open(anchor, flags)
+    fd = None
+    try:
+        for part in parts[:-1]:
+            if append:
+                try:
+                    os.mkdir(part, 0o700, dir_fd=directory)
+                except FileExistsError:
+                    pass
+            try:
+                next_directory = os.open(part, flags, dir_fd=directory)
+            except FileNotFoundError:
+                if not append:
+                    return None
+                raise
+            os.close(directory)
+            directory = next_directory
+        mode = (os.O_WRONLY | os.O_APPEND | os.O_CREAT if append
+                else os.O_RDONLY)
+        try:
+            fd = os.open(parts[-1], mode | os.O_NOFOLLOW |
+                         os.O_NONBLOCK | os.O_CLOEXEC, 0o600,
+                         dir_fd=directory)
+        except FileNotFoundError:
+            if not append:
+                return None
+            raise
+        metadata = os.fstat(fd)
+        if not stat.S_ISREG(metadata.st_mode) or metadata.st_nlink != 1:
+            raise ValueError("histórico de SLA não é arquivo regular seguro")
+        if metadata.st_size > MAX_HISTORY_BYTES:
+            raise ValueError("histórico de SLA excede o limite de armazenamento")
+        if append and stat.S_IMODE(metadata.st_mode) & 0o077:
+            # Ajuste seguro de arquivos legados após verificar inode e links.
+            os.fchmod(fd, 0o600)
+        result, fd = fd, None
+        return result
+    except (OSError, NotImplementedError, TypeError) as exc:
+        raise ValueError("falha ao abrir histórico de SLA com segurança") from exc
+    finally:
+        if fd is not None:
+            os.close(fd)
+        os.close(directory)
+
+
 class SLAHistoryStore:
-    """Persistência do histórico de SLA por dia/fila - mesmo padrão JSONL de survey.py/agent_pause.py."""
+    """Histórico JSONL privado, limitado e protegido contra links."""
 
     def __init__(self, path):
         self.path = Path(path)
 
     def append(self, record: dict):
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        with open(self.path, "a", encoding="utf-8") as f:
-            f.write(json.dumps(record, ensure_ascii=False) + "\n")
+        row = _valid_history_row(record)
+        if row is None:
+            raise ValueError("resumo de SLA inválido")
+        payload = (json.dumps(row, ensure_ascii=False, sort_keys=True) +
+                   "\n").encode("utf-8")
+        if len(payload) > MAX_HISTORY_LINE_BYTES:
+            raise ValueError("resumo de SLA excede o limite")
+        fd = _open_history_file(self.path, append=True)
+        try:
+            metadata = os.fstat(fd)
+            if metadata.st_size + len(payload) > MAX_HISTORY_BYTES:
+                raise ValueError("histórico de SLA atingiu limite de armazenamento")
+            if os.write(fd, payload) != len(payload):
+                raise OSError("escrita incompleta do histórico SLA")
+            os.fsync(fd)
+        finally:
+            os.close(fd)
 
     def load_all(self) -> list:
-        if not self.path.exists():
+        fd = _open_history_file(self.path)
+        if fd is None:
             return []
+        try:
+            with os.fdopen(fd, "rb") as opened:
+                fd = None
+                content = opened.read(MAX_HISTORY_BYTES + 1)
+            if len(content) > MAX_HISTORY_BYTES:
+                raise ValueError("histórico de SLA excede o limite de leitura")
+            text = content.decode("utf-8")
+        finally:
+            if fd is not None:
+                os.close(fd)
         records = []
-        for line in self.path.read_text(encoding="utf-8").splitlines():
-            line = line.strip()
-            if not line:
-                continue
-            if len(line) > 4096:
+        for line in text.splitlines():
+            if not line or len(line.encode("utf-8")) > MAX_HISTORY_LINE_BYTES:
                 continue
             try:
-                record = json.loads(line)
+                record = json.loads(line, object_pairs_hook=_unique_history_keys,
+                                    parse_constant=_reject_history_constant)
             except (ValueError, TypeError):
                 continue
-            if not isinstance(record, dict):
-                continue
-            day = record.get("date")
-            queue = record.get("queue")
-            offered = record.get("offered")
-            within = record.get("within_sla")
-            if (not isinstance(day, str)
-                    or re.fullmatch(r"\d{4}-\d{2}-\d{2}", day) is None
-                    or not _valid_queue_name(queue)
-                    or type(offered) is not int or type(within) is not int
-                    or not (1 <= offered <= 10_000_000)
-                    or not (0 <= within <= offered)):
-                continue
-            try:
-                if date.fromisoformat(day).isoformat() != day:
-                    continue
-            except ValueError:
-                continue
-            # Dados históricos podem trazer percentual adulterado: sempre
-            # recalcular a partir dos contadores válidos, sem aceitar NaN.
-            records.append({
-                "date": day, "queue": queue,
-                "offered": offered, "within_sla": within,
-                "sla_percent": round(within / offered * 100, 1),
-            })
+            validated = _valid_history_row(record)
+            if validated is not None:
+                records.append(validated)
         return records
 
 
