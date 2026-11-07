@@ -52,7 +52,7 @@ def test_daily_rollover_persists_once_with_concurrent_ami_delivery():
     assert tracker.snapshot()["fila-t2"]["offered"] == 1
     clock[0] += 90_000
     with ThreadPoolExecutor(max_workers=12) as pool:
-        list(pool.map(tracker.snapshot, range(90)))
+        list(pool.map(lambda _: tracker.snapshot(), range(90)))
     assert len(store.rows) == 1
     assert store.rows[0]["queue"] == "fila-t2"
     assert store.rows[0]["offered"] == 1
