@@ -196,3 +196,4 @@ registrado como regra permanente no prompt master
 142. [Membros dinâmicos de fila e agentes (QueueAdd/Remove/Pause)](manual-142-membros-dinamicos-fila.md)
 143. [Ramal com até três dispositivos SIP](manual-143-multiplos-dispositivos-sip.md)
 144. [Persistência segura do histórico de SLA (JSONL)](manual-144-historico-sla-seguro.md)
+145. [Quatro frentes: filas, callbacks, voicemail e SLA](manual-145-qa-quatro-frentes-contato.md)
